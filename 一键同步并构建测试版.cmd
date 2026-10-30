@@ -1,0 +1,4 @@
+﻿@echo off
+setlocal
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0tools\quick_sync.ps1" -Mode test
+exit /b %ERRORLEVEL%

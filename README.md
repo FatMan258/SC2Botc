@@ -53,6 +53,16 @@ tools\botc.cmd build --script scripts\BOTC_test.txt --out work\BOTC_test.SC2Map 
 
 成功后得到 `work/BOTC_test.SC2Map`，即可复制到星际 II 测试地图目录。
 
+## 一键同步
+
+日常从 GitHub 同步并构建时，可以直接双击项目根目录：
+
+- `一键同步并构建测试版.cmd`
+- `一键同步并构建正式版.cmd`
+
+它们会自动同步 `main`、运行检查、构建地图，把成品放到星际 II 的
+`Maps\Test` 目录，并只保留最近两张同步产物。
+
 ## 配置
 
 默认构建输入已经放在仓库里：

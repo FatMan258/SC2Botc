@@ -3,9 +3,10 @@ from __future__ import annotations
 import argparse
 import re
 import sys
+import unittest
 from pathlib import Path
 
-from botc_config import MAP_PATH, SCRIPT_PATH
+from botc_config import MAP_PATH, SCRIPT_PATH, TOOL_ROOT
 from build_map import main as build_main
 from env_check import main as doctor_main
 from galaxy_check import main as check_main
@@ -61,11 +62,21 @@ def inspect_map(path: Path) -> int:
     return 0
 
 
+def run_selftest() -> int:
+    suite = unittest.TestLoader().discover(
+        str(TOOL_ROOT / "tests"),
+        top_level_dir=str(TOOL_ROOT),
+    )
+    result = unittest.TextTestRunner(verbosity=2).run(suite)
+    return 0 if result.wasSuccessful() else 1
+
+
 def main(argv: list[str] | None = None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
     if not args or args[0] in {"-h", "--help"}:
-        print("用法：botc.py <doctor|inspect|check|build|test|role|design> [参数]")
+        print("用法：botc.py <doctor|selftest|inspect|check|build|test|role|design> [参数]")
         print("  doctor   检查脚本、基线地图、LFS 文件和本地运行环境")
+        print("  selftest 运行 tools/tests 全部单元测试")
         print("  inspect  检查 SC2Map 包结构")
         print("  check    检查正式 Galaxy 脚本")
         print("  build    直接构建 SC2Map")
@@ -85,6 +96,8 @@ def main(argv: list[str] | None = None) -> int:
             return inspect_map(parsed.map)
         if command == "doctor":
             return doctor_main(args)
+        if command == "selftest":
+            return run_selftest()
         if command == "check":
             return check_main(args)
         if command == "build":
