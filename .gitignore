@@ -7,30 +7,24 @@ venv/
 .mypy_cache/
 .ruff_cache/
 
-# Local StarCraft II maps and generated artifacts
+# StarCraft II maps, banks and generated builds
 *.SC2Map
 *.SC2Mod
 *.SC2Bank
 *.bank
 build/
 dist/
-Test/
-BOTC_build/
 
-# Local backups, extracted maps and private project notes
-botc_图标导入/
-pg_src_*.txt
-_存档备份/
-BOTC_项目记忆*.md
-BOTC_开发手册.md
-_全员追忆*.png
-*_备份_*
-*素材临时/
-codex_full_access.ps1
-开启完全访问.bat
-fix_snakecharmer_align.ps1
+# User-provided local source and game assets
+BOTC_脚本_*.txt
+*.dds
+*.png
+*.jpg
+*.jpeg
+*.ogg
+*.m3
 
-# Local configuration and editor files
+# Local configuration and IDE files
 .env
 .env.*
 *.local.json

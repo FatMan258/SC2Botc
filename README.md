@@ -2,13 +2,12 @@
 
 星际争霸 II《血染钟楼》真人说书辅助地图的源码、角色规则工具和构建工具。
 
-项目目标是把角色规则、地图构建和测试流程维护成可审查、可复现的工程，而不是依赖编辑器里的一次性手工修改。
+项目目标是为角色作者提供可审查、可复现的角色规则设计、地图构建和测试工具，而不是依赖编辑器里的一次性手工修改。
 
 本仓库只发布编写的源码和工具，不包含角色图片、DDS、官方规则原文、地图文件或 Bank。构建地图时需要在本地自行提供基础地图、UI 资源和图标资源。
 
 ## 当前内容
 
-- Galaxy 主脚本与固定板子、自定义剧本、全员追忆规则。
 - 说书人工具：赋予能力、发送特定信息、夜间顺序和身份管理。
 - 一句话角色 DSL、角色规格审核和接入计划生成。
 - SC2Map 解包、脚本写入、UI 内嵌和本地测试工具。
@@ -43,6 +42,7 @@ git lfs install
 地图和星际 II 的安装路径不写死在仓库里，通过环境变量指定：
 
 ```powershell
+$env:BOTC_SCRIPT = "C:\path\to\BOTC_脚本_粘贴用.txt"
 $env:BOTC_MAP = "C:\path\to\base.SC2Map"
 $env:BOTC_UI_MOD = "C:\path\to\UIHIDE55.SC2Mod"
 $env:BOTC_BUILD_DIR = (Join-Path $PWD "build")
@@ -86,13 +86,13 @@ python -m unittest discover -s BOTC_Tools\tests -v
 
 | 路径 | 用途 |
 | --- | --- |
-| `BOTC_脚本_粘贴用.txt` | Galaxy 主脚本源文件；文件名是历史名称 |
 | `BOTC_Tools/` | 构建、检查、角色 DSL 和测试工具 |
+| `BOTC_Tools/role_specs/` | 角色规格、DSL 示例和接入计划 |
 | `BOTC_UI导入/` | 可内嵌的 UI 布局资源 |
-| `botc_图标导入/` | 本地角色图片资源；不提交到 Git |
-| `pg_src_*.txt` | 本地规则文本整理记录；不提交到 Git |
 | `docs/` | 开发和 GitHub 发布指南 |
 | `AGENTS.md` | 项目工程约定 |
+
+完整地图脚本、地图文件、角色图片和规则原文由使用者在本机提供，不进入本仓库。
 
 ## 开发规则
 

@@ -21,9 +21,6 @@ jobs:
       - name: Run unit tests
         run: python -m unittest discover -s BOTC_Tools\tests -v
 
-      - name: Check Galaxy source
-        run: python BOTC_Tools\botc.py check
-
       - name: Validate example role DSL
         run: python BOTC_Tools\botc.py design validate BOTC_Tools\role_specs\role_dsl.example.json
 

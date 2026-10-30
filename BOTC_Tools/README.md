@@ -9,7 +9,7 @@
 
 - Python：`py -3`、`python`，或通过 `BOTC_PYTHON` 指定解释器
 - StormLib：`BOTC_Tools\vendor\StormLib.dll`
-- 正式脚本：仓库根目录的 `BOTC_脚本_粘贴用.txt`
+- 正式脚本：仓库不提供完整地图脚本，必须通过 `BOTC_SCRIPT` 指向本机脚本
 - 基础地图：通过 `BOTC_MAP` 指定，仓库不提交 `.SC2Map`
 - UI 资源：通过 `BOTC_UI_MOD` 指定
 - 构建输出：默认仓库根目录的 `build/`
@@ -18,7 +18,7 @@
 
 ```powershell
 $env:BOTC_MAP = "C:\path\to\base.SC2Map"
-$env:BOTC_SCRIPT = (Join-Path $PWD "BOTC_脚本_粘贴用.txt")
+$env:BOTC_SCRIPT = "C:\path\to\BOTC_脚本_粘贴用.txt"
 $env:BOTC_UI_MOD = "C:\path\to\UIHIDE55.SC2Mod"
 $env:BOTC_BUILD_DIR = (Join-Path $PWD "build")
 $env:BOTC_SC2_ROOT = "C:\Program Files (x86)\StarCraft II"
