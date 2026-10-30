@@ -35,6 +35,8 @@ try {
     if ($LASTEXITCODE -ne 0) { throw "切换 main 失败" }
     git pull --ff-only origin main
     if ($LASTEXITCODE -ne 0) { throw "同步 GitHub 失败" }
+    git lfs pull
+    if ($LASTEXITCODE -ne 0) { throw "拉取 Git LFS 资源失败" }
 
     Write-Host "[2/5] 检查构建环境..."
     Invoke-Botc @("doctor")
