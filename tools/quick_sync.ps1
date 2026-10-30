@@ -17,6 +17,7 @@ function Invoke-Botc {
 }
 
 try {
+    $output = $null
     Write-Host "== BOTC 一键同步与构建 ==" -ForegroundColor Cyan
     if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
         throw "找不到 Git。请先安装 Git。"
@@ -68,6 +69,26 @@ try {
     New-Item -ItemType Directory -Path $outputDir -Force | Out-Null
     $output = Join-Path $outputDir "$prefix`_$stamp.SC2Map"
 
+    $oldSyncMaps = @(
+        Get-ChildItem -LiteralPath $outputDir -Filter "$prefix`_*.SC2Map" |
+            Sort-Object LastWriteTime -Descending
+    )
+    foreach ($oldSyncMap in ($oldSyncMaps | Select-Object -Skip 1)) {
+        try {
+            [IO.File]::Delete($oldSyncMap.FullName)
+            Write-Host "构建前已清理旧同步地图：$($oldSyncMap.Name)" -ForegroundColor DarkGray
+        }
+        catch {
+            Write-Host "旧同步地图正被占用，暂未清理：$($oldSyncMap.Name)" -ForegroundColor Yellow
+        }
+    }
+    $driveName = [IO.Path]::GetPathRoot($outputDir).Substring(0, 1)
+    $drive = Get-PSDrive -Name $driveName
+    $minimumFreeBytes = 250MB
+    if ($drive.Free -lt $minimumFreeBytes) {
+        throw "输出磁盘 $driveName`: 可用空间不足 250 MB，请先清理旧测试地图。"
+    }
+
     Write-Host "[4/5] 构建 $Mode 地图..."
     Invoke-Botc @(
         "build",
@@ -101,6 +122,19 @@ try {
 catch {
     Write-Host ""
     Write-Host "失败：$($_.Exception.Message)" -ForegroundColor Red
+    if ($output) {
+        foreach ($failedOutput in @($output, "$output.tmp")) {
+            try {
+                [IO.File]::Delete($failedOutput)
+                if (Test-Path -LiteralPath $failedOutput) {
+                    Write-Host "已清理失败产物：$failedOutput" -ForegroundColor DarkGray
+                }
+            }
+            catch {
+                Write-Host "失败产物正被占用，未清理：$failedOutput" -ForegroundColor Yellow
+            }
+        }
+    }
     exit 1
 }
 finally {
