@@ -1,0 +1,50 @@
+{
+  "schema_version": 2,
+  "index": 148,
+  "name": "示例占卜者",
+  "team": "townsfolk",
+  "alignment": "good",
+  "text": "每个夜晚，你要选择一名存活玩家：你得知他是否是爪牙。",
+  "lore": "一名在王庭记录访客行踪的占卜者，擅长判断谁与爪牙暗中往来。",
+  "timing": "every_night",
+  "frequency": "always",
+  "action": "every_night",
+  "target": {
+    "kind": "players",
+    "count": 1,
+    "living": true,
+    "allow_self": true,
+    "allow_repeat": true
+  },
+  "artwork": {
+    "source": "需要由用户提供参考图，或使用 AI 生成透明背景人物图",
+    "role_icon": "botc_role148.dds",
+    "night_icon": "botc_night148.dds",
+    "token_icons": []
+  },
+  "night_order": {
+    "section": "information",
+    "anchor_role": "占卜师",
+    "relation": "near",
+    "first": null,
+    "other": null
+  },
+  "tokens": [],
+  "jinxes": [],
+  "effects": [
+    {
+      "kind": "send_information",
+      "text": "你得知他是否是爪牙。"
+    }
+  ],
+  "randomness": {
+    "declared": false,
+    "notes": ""
+  },
+  "tests": [
+    "健康来源选择爪牙时发送是/否信息",
+    "中毒或醉酒时按约定发送干扰信息",
+    "目标死亡时拒绝确认并提示重选",
+    "换座位后目标和确认仍然有效"
+  ]
+}

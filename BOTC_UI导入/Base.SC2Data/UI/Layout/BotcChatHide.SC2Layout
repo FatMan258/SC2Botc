@@ -1,0 +1,98 @@
+﻿<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<Desc>
+    <!-- 隐藏原生聊天记录区 -->
+    <Frame type="Frame" name="GameUI/UIContainer/FullscreenUpperContainer" file="GameUI">
+        <Frame type="MessageDisplay" name="ChatDisplay" template="StandardTemplates/StandardMessageDisplayTemplate">
+            <Visible val="false"/>
+        </Frame>
+    </Frame>
+
+    <!-- 消息记录（F11）：两个面板都挂在 FullscreenUpperContainer 底下，name 写全路径、file 写 GameUI -->
+    <Frame type="LogMessagePanel" name="GameUI/UIContainer/FullscreenUpperContainer/LogMessagePanel" file="GameUI">
+        <Visible val="false"/>
+        <Anchor side="Top" relative="$parent" pos="Min" offset="4000"/>
+    </Frame>
+    <Frame type="MessageLogDialog" name="GameUI/UIContainer/FullscreenUpperContainer/MessageLogDialog" file="GameUI">
+        <Visible val="false"/>
+        <Anchor side="Top" relative="$parent" pos="Mid" offset="8000"/>
+        <Anchor side="Bottom" relative="$parent" pos="Mid" offset="8000"/>
+    </Frame>
+
+    <!-- 【2026-09-30】右下角那一排按钮：队伍 / 大厅聊天 / 帮助(F12) / 菜单，
+         它们都是 FullscreenUpperContainer 底下 MenuBar 的子帧，所以整条 MenuBar 藏掉，
+         四个按钮再各自补一遍（跟底部控制台那几个按钮一个套路：父级藏了子级也照样补）。 -->
+    <Frame type="MenuBar" name="GameUI/UIContainer/FullscreenUpperContainer/MenuBar" file="GameUI">
+        <Visible val="false"/>
+        <Anchor side="Bottom" relative="$parent" pos="Max" offset="4000"/>
+    </Frame>
+    <Frame type="Button" name="GameUI/UIContainer/FullscreenUpperContainer/MenuBar/MenuButton" file="GameUI">
+        <Visible val="false"/>
+        <Alpha val="0"/>
+    </Frame>
+    <Frame type="SocialButton" name="GameUI/UIContainer/FullscreenUpperContainer/MenuBar/SocialButton" file="GameUI">
+        <Visible val="false"/>
+        <Alpha val="0"/>
+        <Anchor side="Top" relative="$parent" pos="Max" offset="2000"/>
+    </Frame>
+    <Frame type="Button" name="GameUI/UIContainer/FullscreenUpperContainer/MenuBar/ChatButton" file="GameUI">
+        <Visible val="false"/>
+        <Alpha val="0"/>
+        <Anchor side="Top" relative="$parent" pos="Max" offset="2000"/>
+    </Frame>
+    <Frame type="Button" name="GameUI/UIContainer/FullscreenUpperContainer/MenuBar/HelpButton" file="GameUI">
+        <Visible val="false"/>
+        <Alpha val="0"/>
+        <Anchor side="Top" relative="$parent" pos="Max" offset="2000"/>
+    </Frame>
+    <Frame type="Image" name="GameUI/UIContainer/FullscreenUpperContainer/MenuBar/MenuBarBackgroundImage" file="GameUI">
+        <Visible val="false"/>
+    </Frame>
+
+    <!-- 隐藏底部控制台：小地图 / 单位属性 / 命令卡 / 编队按钮 -->
+    <Frame type="Frame" name="GameUI/UIContainer/ConsoleUIContainer" file="GameUI">
+        <Visible val="false"/>
+        <Anchor side="Bottom" relative="$parent" pos="Max" offset="4000"/>
+    </Frame>
+    <Frame type="Frame" name="GameUI/UIContainer/ConsolePanel/InfoStub" file="GameUI">
+        <Height val="0"/>
+    </Frame>
+    <Frame type="Frame" name="GameUI/UIContainer/ConsolePanel/CommandStub" file="GameUI">
+        <Height val="0"/>
+    </Frame>
+    <Frame type="Frame" name="GameUI/UIContainer/ConsolePanel/MinimapStub" file="GameUI">
+        <Height val="0"/>
+    </Frame>
+    <Frame type="PortraitPanel" name="GameUI/UIContainer/ConsolePanel/PortraitPanel" file="GameUI">
+        <Anchor side="Bottom" relative="$parent" pos="Max" offset="4000"/>
+    </Frame>
+    <Frame type="Model" name="GameUI/UIContainer/ConsolePanel/CommandPanelModel" file="GameUI">
+        <Visible val="false"/>
+    </Frame>
+    <Frame type="Model" name="GameUI/UIContainer/ConsolePanel/MinimapModel" file="GameUI">
+        <Visible val="false"/>
+    </Frame>
+    <Frame type="Model" name="GameUI/UIContainer/ConsolePanel/InfopanelModel" file="GameUI">
+        <Visible val="false"/>
+    </Frame>
+    <Frame type="IdleButton" name="GameUI/UIContainer/ConsoleUIContainer/IdleButton" file="GameUI">
+        <Visible val="false"/>
+    </Frame>
+    <Frame type="PylonButton" name="GameUI/UIContainer/ConsoleUIContainer/PylonButton" file="GameUI">
+        <Visible val="false"/>
+    </Frame>
+    <Frame type="ArmyButton" name="GameUI/UIContainer/ConsoleUIContainer/ArmyButton" file="GameUI">
+        <Visible val="false"/>
+    </Frame>
+    <Frame type="GameUI" name="GameUI" file="GameUI">
+        <ConsoleWorldTopOffset val="0"/>
+        <ConsoleWorldBottomOffset val="0"/>
+    </Frame>
+    <Frame type="ResourcePanel" name="GameUI/UIContainer/FullscreenUpperContainer/ResourcePanel" file="GameUI">
+        <Visible val="false"/>
+        <Anchor side="Right" relative="$parent" pos="Max" offset="4000"/>
+    </Frame>
+    <Frame type="ResourceFrame" name="GameUI/UIContainer/FullscreenUpperContainer/ResourcePanel/ResourceFrame" file="GameUI">
+        <Visible val="false"/>
+        <Anchor side="Right" relative="$parent" pos="Max" offset="4000"/>
+    </Frame>
+</Desc>

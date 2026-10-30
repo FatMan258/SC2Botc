@@ -1,0 +1,54 @@
+{
+  "schema_version": 1,
+  "index": 148,
+  "name": "示例角色",
+  "team": "townsfolk",
+  "alignment": "good",
+  "ability": "每个夜晚，你要选择一名存活玩家：你得知一条示例信息。",
+  "ability_fragments": [
+    "每个夜晚，你要选择一名存活玩家",
+    "你得知一条示例信息"
+  ],
+  "action": "every_night",
+  "target_count": 1,
+  "first_night_order": null,
+  "other_night_order": null,
+  "role_tag": 1,
+  "role_keywords": "",
+  "boards": [
+    7
+  ],
+  "tokens": [],
+  "death_token_slot": null,
+  "resources": {
+    "role_icon": "botc_role148.dds",
+    "night_icon": "botc_night148.dds",
+    "token_icons": []
+  },
+  "implementation": {
+    "required_functions": [
+      "BOTC_SkillOpen",
+      "BOTC_SkillConfirm"
+    ],
+    "required_symbols": [
+      "g_roleTargets[148]",
+      "g_roleAct[148]"
+    ],
+    "state_fields": [
+      "每局重置字段",
+      "换位迁移字段",
+      "跨日清理字段"
+    ],
+    "reset_points": [
+      "BOTC_NewGameReset",
+      "BOTC_AfterSeatChange"
+    ]
+  },
+  "acceptance": [
+    "健康时结算正确",
+    "中毒和醉酒时面板可打开，按规则决定是否生效",
+    "目标死亡、离场、重复目标和取消路径正确",
+    "换座位和换说书人后仍可确认",
+    "第二局不残留状态和 token"
+  ]
+}

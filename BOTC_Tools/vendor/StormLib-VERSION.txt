@@ -1,0 +1,7 @@
+StormLib v9.40
+Source: https://github.com/ladislav-zezula/StormLib/releases/tag/v9.40
+Package: stormlib_dll.zip
+Package SHA256: B2C9635E7B63EDEE1BD7C82E7DC180D739F3ACCB2B8994804C7774E464CE89AE
+Vendored file: x64\StormLib.dll
+Vendored SHA256: 93321F6F030BE5D7D79EB4CBF433D6EF7E83CE20D47D8963717F207D54AFBE16
+License: MIT

@@ -1,0 +1,51 @@
+隐藏右下角那排原生按钮（队伍 / 大厅聊天 / 帮助(F12) / 菜单）—— 导入说明
+（这不是触发器脚本，是 UI 布局文件；改完不用重贴脚本，只要重新导入这个布局、重新发布 mod）
+
+这次改了什么
+    新增了一段：把右下角那一整条 MenuBar 藏掉。四个按钮都是它的子帧：
+
+        GameUI/UIContainer/FullscreenUpperContainer/MenuBar              ← 整条（含米色底条）
+          ├ MenuButton            菜单
+          ├ SocialButton          队伍（人形图标，右上角带人数角标那个）
+          ├ ChatButton            大厅聊天（气泡图标）
+          ├ HelpButton            帮助(F12)（问号图标）
+          └ MenuBarBackgroundImage
+
+    写法：MenuBar 自己「Visible=false + 锚点推到屏幕外 4000」（跟隐藏底部控制台用的是同一招，
+    单靠 Visible 有可能被游戏自己再显示回来）。
+
+    ⚠ 第三版（2026-09-30 晚）：光给那四个按钮写 Visible=false，**帮助(?) 那个按钮还是会显示出来**
+    （另外三个跟着 MenuBar 一起没了）。所以四个按钮改成三招一起上：
+
+        <Visible val="false"/>
+        <Alpha val="0"/>
+        <Anchor side="Top" relative="$parent" pos="Max" offset="2000"/>
+
+    最后那条「锚点推到父级下面 2000」不是我瞎写的 —— 暴雪自己的观察者 mod
+    （Base.SC2Data\UI\Layout\Observer_Toggle_ObserverPanelMenuBar.SC2Layout）里，
+    藏 SocialButton / ChatButton / HelpButton 用的就是这句，注释写着
+    "Hiding the social button, help button, and menu background image"。
+
+    其它隐藏项（聊天记录区 ChatDisplay、F11 消息记录两个面板、底部控制台 / 资源栏）**一个没动**，
+    在原来那份的基础上只多了上面这 6 条。
+
+导入方法（跟以前一样）
+    1. 打开你平时发布的那份「UIHIDE」mod 工程；
+    2. 把这份 Base.SC2Data\UI\Layout\BotcChatHide.SC2Layout 导入进去，覆盖同名文件；
+    3. 保存，然后**重新发布**这个 mod（地图依赖写的是 bnet:UIHIDE/1.3/188066，本地改完不发布不生效）；
+    4. 不要动 .SC2Mod 文件本身（直接改会把 mod 改坏）。
+
+    这个文件夹就是给你导入用的，路径按原样保持：
+        BOTC_UI导入\Base.SC2Data\UI\Layout\BotcChatHide.SC2Layout
+    （mod 的 ComponentList.SC2Components 和 Base.SC2Data/UI/Layout/DescIndex.SC2Layout
+      不用动 —— 它本来就 Include 着 BotcChatHide.SC2Layout。）
+
+怎么验证生效
+    进游戏看右下角：
+        · 那一排四个按钮连着底条一起没了 = 成功；
+        · 还剩着 = 这条覆盖没生效，把 Documents\StarCraft II\GameLogs 里最新那份 UI.txt 发我，
+          我看日志里是「找不到框架」还是「框架被锁定」，再换写法。
+
+顺带说明
+    · 隐藏的是「按钮」；F10（菜单）、F12（帮助）这些**快捷键本身还在**，
+      想连按键一起废掉得改 GameMenuDialog 那套（之前试过，那个框架是锁定的，覆盖不了）。

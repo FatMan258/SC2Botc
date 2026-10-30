@@ -1,0 +1,45 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Local StarCraft II maps and generated artifacts
+*.SC2Map
+*.SC2Mod
+*.SC2Bank
+*.bank
+build/
+dist/
+Test/
+BOTC_build/
+
+# Local backups, extracted maps and private project notes
+botc_图标导入/
+pg_src_*.txt
+_存档备份/
+BOTC_项目记忆*.md
+BOTC_开发手册.md
+_全员追忆*.png
+*_备份_*
+*素材临时/
+codex_full_access.ps1
+开启完全访问.bat
+fix_snakecharmer_align.ps1
+
+# Local configuration and editor files
+.env
+.env.*
+*.local.json
+BOTC_Tools/python.local.cmd
+.vscode/
+.idea/
+*.code-workspace
+
+# OS files
+Thumbs.db
+Desktop.ini
+.DS_Store
