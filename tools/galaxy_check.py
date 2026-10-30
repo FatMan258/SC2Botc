@@ -110,6 +110,121 @@ FUNCTION_DEF = re.compile(
     r"\([^;{}]*\)\s*\{",
     re.MULTILINE,
 )
+FUNCTION_DECL = re.compile(
+    rf"^(?:{'|'.join(RETURN_TYPES)})\s+([A-Za-z_][A-Za-z0-9_]*)\s*"
+    r"\([^;{}]*\)\s*;",
+    re.MULTILINE,
+)
+FUNCTION_CALL = re.compile(r"\b([A-Za-z_][A-Za-z0-9_]*)\s*\(")
+
+
+def mask_galaxy_comments_and_strings(text: str) -> str:
+    chars = list(text)
+    in_line_comment = False
+    in_block_comment = False
+    in_string = False
+    escaped = False
+    i = 0
+    while i < len(text):
+        char = text[i]
+        following = text[i + 1] if i + 1 < len(text) else "\0"
+        if in_line_comment:
+            if char in "\r\n":
+                in_line_comment = False
+            else:
+                chars[i] = " "
+            i += 1
+            continue
+        if in_block_comment:
+            if char == "*" and following == "/":
+                chars[i] = " "
+                chars[i + 1] = " "
+                in_block_comment = False
+                i += 2
+            else:
+                if char not in "\r\n":
+                    chars[i] = " "
+                i += 1
+            continue
+        if in_string:
+            if escaped:
+                escaped = False
+            elif char == "\\":
+                escaped = True
+            elif char == '"':
+                in_string = False
+            if char not in "\r\n":
+                chars[i] = " "
+            i += 1
+            continue
+        if char == "/" and following == "/":
+            chars[i] = " "
+            chars[i + 1] = " "
+            in_line_comment = True
+            i += 2
+            continue
+        if char == "/" and following == "*":
+            chars[i] = " "
+            chars[i + 1] = " "
+            in_block_comment = True
+            i += 2
+            continue
+        if char == '"':
+            chars[i] = " "
+            in_string = True
+        i += 1
+    return "".join(chars)
+
+
+def matching_brace(text: str, opening: int) -> int:
+    depth = 0
+    for index in range(opening, len(text)):
+        if text[index] == "{":
+            depth += 1
+        elif text[index] == "}":
+            depth -= 1
+            if depth == 0:
+                return index
+    return -1
+
+
+def find_forward_call_errors(text: str) -> list[str]:
+    clean = mask_galaxy_comments_and_strings(text)
+    definitions: dict[str, list[tuple[int, int, int]]] = {}
+    declarations: dict[str, list[int]] = {}
+    for match in FUNCTION_DEF.finditer(clean):
+        name = match.group(1)
+        opening = match.end() - 1
+        closing = matching_brace(clean, opening)
+        if closing >= 0:
+            definitions.setdefault(name, []).append(
+                (match.start(), opening, closing)
+            )
+    for match in FUNCTION_DECL.finditer(clean):
+        declarations.setdefault(match.group(1), []).append(match.start())
+
+    errors: list[str] = []
+    reported: set[tuple[str, str]] = set()
+    for caller, bodies in definitions.items():
+        for _, opening, closing in bodies:
+            for call in FUNCTION_CALL.finditer(clean, opening + 1, closing):
+                callee = call.group(1)
+                if callee not in definitions:
+                    continue
+                if not any(start > call.start() for start, _, _ in definitions[callee]):
+                    continue
+                if any(pos < call.start() for pos in declarations.get(callee, [])):
+                    continue
+                key = (caller, callee)
+                if key in reported:
+                    continue
+                reported.add(key)
+                line = text.count("\n", 0, call.start()) + 1
+                errors.append(
+                    f"{caller}() 在第 {line} 行调用了后定义函数 {callee}()，"
+                    "但调用前没有前置声明"
+                )
+    return errors
 
 
 def check_script(path: Path) -> tuple[list[str], list[str]]:
@@ -148,6 +263,7 @@ def check_script(path: Path) -> tuple[list[str], list[str]]:
     duplicates = sorted({name for name in names if names.count(name) > 1})
     for name in duplicates:
         errors.append(f"函数定义重复：{name}")
+    errors.extend(find_forward_call_errors(text))
 
     if "void BOTC_Init (" not in text and "void BOTC_Init()" not in text:
         errors.append("找不到 BOTC_Init()")

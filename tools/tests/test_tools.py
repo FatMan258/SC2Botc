@@ -17,7 +17,7 @@ from build_map import (
     verify_split_map_script,
     verify_split_triggers,
 )
-from galaxy_check import scan_galaxy
+from galaxy_check import find_forward_call_errors, scan_galaxy
 from role_workflow import default_spec
 
 
@@ -129,6 +129,20 @@ class GalaxyCheckTests(unittest.TestCase):
             self.assertIn("BOTC_CustomRoleVisible(r)", sync_body)
             self.assertLess(source.index(prototype), sync_start)
             self.assertLess(sync_start, source.index(definition))
+
+    def test_rejects_forward_call_without_prototype(self) -> None:
+        source = "void First () {\n    Second();\n}\nvoid Second () {\n}\n"
+        errors = find_forward_call_errors(source)
+        self.assertEqual(len(errors), 1)
+        self.assertIn("Second", errors[0])
+
+    def test_accepts_forward_call_with_prototype(self) -> None:
+        source = (
+            "void Second ();\n"
+            "void First () {\n    Second();\n}\n"
+            "void Second () {\n}\n"
+        )
+        self.assertEqual(find_forward_call_errors(source), [])
 
 
 class RoleSpecTests(unittest.TestCase):
