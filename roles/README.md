@@ -4,7 +4,6 @@
 
 - `role_dsl.example.json`：一句话角色 DSL 示例。
 - `role_148.example.json`：脚本接入计划示例。
-- `role_148_nightmare_dealer.json`：端到端测试角色“梦魇贩子”。
 
 推荐流程：
 

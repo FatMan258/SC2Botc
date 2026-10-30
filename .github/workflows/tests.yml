@@ -26,6 +26,3 @@ jobs:
 
       - name: Validate example role DSL
         run: python tools\botc.py design validate roles\role_dsl.example.json
-
-      - name: Validate prototype role DSL
-        run: python tools\botc.py design validate roles\role_148_nightmare_dealer.json
