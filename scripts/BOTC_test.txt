@@ -2537,6 +2537,7 @@ void   BOTC_CustomClose ();
 void   BOTC_CustomClear ();
 void   BOTC_CustomToggle (int i);
 void   BOTC_CustomUnpick (int k);
+bool   BOTC_CustomRoleVisible (int r);
 void   BOTC_CustomSyncBoardRoles ();
 void   BOTC_CustomSaveBank ();
 void   BOTC_CustomLoadBank (bool talk);

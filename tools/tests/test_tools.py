@@ -6,6 +6,7 @@ from pathlib import Path
 
 
 TOOL_ROOT = Path(__file__).resolve().parents[1]
+PROJECT_ROOT = TOOL_ROOT.parent
 sys.path.insert(0, str(TOOL_ROOT))
 
 from build_map import (
@@ -114,6 +115,20 @@ class GalaxyCheckTests(unittest.TestCase):
         result = scan_galaxy('void A () { string s = "unterminated')
         self.assertEqual(result.brace_depth, 1)
         self.assertTrue(result.in_string)
+
+    def test_custom_role_visible_is_declared_before_sync_call(self) -> None:
+        prototype = "bool   BOTC_CustomRoleVisible (int r);"
+        definition = "bool BOTC_CustomRoleVisible (int r) {"
+        for name in ("BOTC.txt", "BOTC_test.txt"):
+            source = (PROJECT_ROOT / "scripts" / name).read_text(
+                encoding="utf-8-sig"
+            )
+            sync_start = source.index("void BOTC_CustomSyncBoardRoles () {")
+            sync_end = source.index("void BOTC_GrantRoleOpen () {")
+            sync_body = source[sync_start:sync_end]
+            self.assertIn("BOTC_CustomRoleVisible(r)", sync_body)
+            self.assertLess(source.index(prototype), sync_start)
+            self.assertLess(sync_start, source.index(definition))
 
 
 class RoleSpecTests(unittest.TestCase):

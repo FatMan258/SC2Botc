@@ -411,6 +411,8 @@ rg -n -F -m 20 'BOTC_函数名' scripts\BOTC.txt
 - 骑士和杂技演员不得重新加入自定义剧本隐藏名单。
 - 限次角色选否后不得消耗机会。
 - `BOTC_NomPick()` 新增循环前先声明局部变量 `i`。
+- `BOTC_CustomSyncBoardRoles()` 调用后定义的 `BOTC_CustomRoleVisible()`；
+  必须保留前置原型，否则整个 `BOTC_CustomLogic.galaxy` 编译失败、所有脚本不运行。
 - 新角色索引必须同步全部表、循环、资源、板子和重置逻辑。
 - 新角色已加入当前自定义板时，必须同步进入 `g_boardRole[7]` 和【赋予能力】；
   不得出现“板子上有、赋予窗口没有”的板子缓存不同步。
