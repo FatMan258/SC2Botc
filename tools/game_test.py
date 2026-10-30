@@ -186,7 +186,7 @@ def launch_test(
                 print("ALIVE    : 游戏进程仍在运行，未发现新的 ScriptError")
                 print(
                     "VERIFY   : 若画面停在网易账号登录/“无法运行游戏”，"
-                    "请先登录 Battle.net；线上 UIHIDE 依赖在这里不会继续加载"
+                    "请先登录 Battle.net；游戏自带线上依赖可能尚未加载"
                 )
                 result = 0
                 break

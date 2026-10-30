@@ -12,13 +12,11 @@ from botc_config import (
     BUILD_DIR,
     MAP_PATH,
     SCRIPT_PATH,
-    UI_MOD_PATH,
     ensure_build_dir,
     require_file,
 )
 from galaxy_check import check_script
 from stormlib_mpq import MPQArchive
-from ui_embed import embed_ui, verify_embedded_ui
 
 
 CUSTOM_TITLE = "// Custom Script: BOTC_Init()"
@@ -153,7 +151,6 @@ def build_map(
     output: Path,
     compact: bool = True,
     skip_check: bool = False,
-    ui_mod: Path | None = None,
     split_script: bool = False,
 ) -> Path:
     map_path = require_file(Path(map_path), "基础地图")
@@ -254,12 +251,6 @@ def build_map(
     if errors:
         raise ValueError("回读校验失败：\n" + "\n".join(errors))
 
-    if ui_mod is not None:
-        embedded = embed_ui(output, ui_mod)
-        errors = verify_embedded_ui(output)
-        if errors:
-            raise ValueError("UI 内嵌校验失败：\n" + "\n".join(errors))
-        print(f"ui       : 已内嵌 {embedded} 个文件，来源 {ui_mod}")
     return output
 
 
@@ -273,8 +264,6 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--name")
     parser.add_argument("--no-compact", action="store_true")
     parser.add_argument("--skip-check", action="store_true")
-    parser.add_argument("--ui-mod", type=Path, default=UI_MOD_PATH)
-    parser.add_argument("--no-embed-ui", action="store_true")
     parser.add_argument(
         "--split-script",
         action="store_true",
@@ -289,23 +278,12 @@ def main(argv: list[str] | None = None) -> int:
     print(f"map      : {args.map}")
     print(f"script   : {args.script}")
     print(f"output   : {output}")
-    ui_mod = None
-    if not args.no_embed_ui:
-        if args.ui_mod.is_file():
-            ui_mod = args.ui_mod
-        elif args.ui_mod == UI_MOD_PATH:
-            print(
-                f"ui       : 未找到 {args.ui_mod}，沿用基础地图已有 UI"
-            )
-        else:
-            raise FileNotFoundError(f"UI 资源不存在：{args.ui_mod}")
     built = build_map(
         args.map,
         args.script,
         output,
         compact=not args.no_compact,
         skip_check=args.skip_check,
-        ui_mod=ui_mod,
         split_script=args.split_script,
     )
     print(f"OK       : {built} ({built.stat().st_size} bytes)")

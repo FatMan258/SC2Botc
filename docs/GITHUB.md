@@ -2,6 +2,16 @@
 
 建议第一次先创建 **Private** 仓库，确认许可证和素材授权后再公开。
 
+推荐使用完整的 Git 克隆：
+
+```powershell
+git lfs install
+git clone https://github.com/FatMan258/SC2Botc.git
+cd SC2Botc
+git lfs pull
+tools\botc.cmd doctor
+```
+
 ## 1. 安装和登录
 
 仓库已经启用 Git LFS。先确保本机执行过：

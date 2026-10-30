@@ -7,6 +7,7 @@ from pathlib import Path
 
 from botc_config import MAP_PATH, SCRIPT_PATH
 from build_map import main as build_main
+from env_check import main as doctor_main
 from galaxy_check import main as check_main
 from game_test import main as game_test_main
 from role_design import main as role_design_main
@@ -63,7 +64,8 @@ def inspect_map(path: Path) -> int:
 def main(argv: list[str] | None = None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
     if not args or args[0] in {"-h", "--help"}:
-        print("用法：botc.py <inspect|check|build|test|role|design> [参数]")
+        print("用法：botc.py <doctor|inspect|check|build|test|role|design> [参数]")
+        print("  doctor   检查脚本、基线地图、LFS 文件和本地运行环境")
         print("  inspect  检查 SC2Map 包结构")
         print("  check    检查正式 Galaxy 脚本")
         print("  build    直接构建 SC2Map")
@@ -81,6 +83,8 @@ def main(argv: list[str] | None = None) -> int:
             parser.add_argument("map", nargs="?", type=Path, default=MAP_PATH)
             parsed = parser.parse_args(args)
             return inspect_map(parsed.map)
+        if command == "doctor":
+            return doctor_main(args)
         if command == "check":
             return check_main(args)
         if command == "build":

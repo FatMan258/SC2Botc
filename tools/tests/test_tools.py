@@ -18,10 +18,6 @@ from build_map import (
 )
 from galaxy_check import scan_galaxy
 from role_workflow import default_spec
-from ui_embed import (
-    strip_ui_dependency_document_info,
-    strip_ui_dependency_header,
-)
 
 
 class BuildMapTests(unittest.TestCase):
@@ -126,55 +122,6 @@ class RoleSpecTests(unittest.TestCase):
         self.assertEqual(spec["index"], 148)
         self.assertGreaterEqual(len(spec["acceptance"]), 5)
         self.assertIn("state_fields", spec["implementation"])
-
-
-class UIDependencyTests(unittest.TestCase):
-    def test_document_info_removes_only_uihide(self) -> None:
-        source = (
-            "<Dependencies>\n"
-            "  <Value>bnet:Void/1.0/1</Value>\n"
-            "  <Value>bnet:UIHIDE/1.4/188066</Value>\n"
-            "</Dependencies>\n"
-        ).encode()
-        updated = strip_ui_dependency_document_info(source).decode()
-        self.assertIn("bnet:Void/1.0/1", updated)
-        self.assertNotIn("UIHIDE", updated)
-
-    def test_document_info_removes_local_uihide(self) -> None:
-        source = (
-            "<Dependencies>\n"
-            "  <Value>bnet:Void/1.0/1</Value>\n"
-            r"  <Value>file:Mods\UIHIDE55.SC2Mod</Value>"
-            "\n</Dependencies>\n"
-        ).encode()
-        updated = strip_ui_dependency_document_info(source).decode()
-        self.assertIn("bnet:Void/1.0/1", updated)
-        self.assertNotIn("UIHIDE", updated)
-
-    def test_document_header_removes_dependency_and_count(self) -> None:
-        header = bytearray(b"H2CS")
-        header.extend(b"\0" * 36)
-        header.extend((2).to_bytes(4, "little"))
-        header.extend(b"bnet:Void/1.0/1\0")
-        header.extend(b"bnet:UIHIDE/1.4/188066\0")
-        header.extend((7).to_bytes(4, "little"))
-        header.extend(b"tail")
-        updated = strip_ui_dependency_header(bytes(header))
-        self.assertEqual(int.from_bytes(updated[40:44], "little"), 1)
-        self.assertIn(b"bnet:Void/1.0/1", updated)
-        self.assertNotIn(b"UIHIDE", updated)
-        self.assertTrue(updated.endswith((7).to_bytes(4, "little") + b"tail"))
-
-    def test_document_header_removes_local_uihide(self) -> None:
-        header = bytearray(b"H2CS")
-        header.extend(b"\0" * 36)
-        header.extend((2).to_bytes(4, "little"))
-        header.extend(b"bnet:Void/1.0/1\0")
-        header.extend(b"file:Mods\\UIHIDE55.SC2Mod\0")
-        header.extend((1).to_bytes(4, "little"))
-        updated = strip_ui_dependency_header(bytes(header))
-        self.assertEqual(int.from_bytes(updated[40:44], "little"), 1)
-        self.assertNotIn(b"UIHIDE", updated)
 
 
 if __name__ == "__main__":

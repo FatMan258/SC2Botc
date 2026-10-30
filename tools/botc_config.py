@@ -13,11 +13,6 @@ SCRIPT_PATH = Path(
 MAP_PATH = Path(
     os.environ.get("BOTC_MAP", str(PROJECT_ROOT / "base" / "BOTC.map"))
 )
-UI_MOD_PATH = Path(
-    os.environ.get(
-        "BOTC_UI_MOD", str(PROJECT_ROOT / "data" / "UIHIDE55.SC2Mod")
-    )
-)
 BUILD_DIR = Path(
     os.environ.get("BOTC_BUILD_DIR", str(PROJECT_ROOT / "work"))
 )

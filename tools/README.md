@@ -12,7 +12,6 @@
 - 正式脚本：`scripts\BOTC.txt`
 - 测试脚本：`scripts\BOTC_test.txt`
 - 基础地图：`base\BOTC.map`
-- UI 资源：通过 `BOTC_UI_MOD` 指定
 - 构建输出：默认仓库根目录的 `work/`
 
 路径可以通过环境变量覆盖：
@@ -20,7 +19,6 @@
 ```powershell
 $env:BOTC_MAP = (Join-Path $PWD "base\BOTC.map")
 $env:BOTC_SCRIPT = (Join-Path $PWD "scripts\BOTC.txt")
-$env:BOTC_UI_MOD = "C:\path\to\UIHIDE55.SC2Mod"
 $env:BOTC_BUILD_DIR = (Join-Path $PWD "work")
 $env:BOTC_SC2_ROOT = "C:\Program Files (x86)\StarCraft II"
 ```
@@ -36,6 +34,7 @@ StormLib 固定为官方 v9.40 x64 版本，版本、发布包校验值和 DLL �
 可以直接使用批处理入口：
 
 ```powershell
+tools\botc.cmd doctor
 tools\botc.cmd inspect
 tools\botc.cmd check
 tools\botc.cmd build
@@ -57,19 +56,13 @@ py -3 tools\botc.py build --script scripts\BOTC_test.txt --out work\BOTC_test.SC
 默认观察 90 秒，至少观察 65 秒后才会报告结果。
 
 如果画面停在网易账号登录或“无法运行游戏”，说明直接启动没有继承平台登录态；
-先登录 Battle.net 再测试。线上依赖（例如 `bnet:UIHIDE/1.4/188066`）在登录前不会解析。
+先登录 Battle.net 再测试。
 工具报告 `ALIVE` 只表示进程存活且没有新的 `ScriptError`，仍需要目视确认地图画面。
 
+`doctor` 会检查 Galaxy 脚本、基础地图、StormLib 和 SC2 启动器。
+
 `build` 会先运行源码检查，再复制基础地图、替换自定义脚本、回读校验并输出新地图。
-若找到 `BOTC_UI_MOD` 指定的 SC2Mod，会解包并内嵌隐藏 UI 文件，同时删除
-`bnet:UIHIDE/...` 或 `file:...UIHIDE...` 依赖。基础地图不会被修改。
-公开基线已经内嵌 UI；没有额外 SC2Mod 时会自动沿用基线 UI。
-
-只有明确需要保留线上 UI 依赖时才使用：
-
-```powershell
-tools\botc.cmd build --no-embed-ui
-```
+公开基线已经内嵌 UI，不需要外部 UI 模块。
 
 创建角色规格：
 

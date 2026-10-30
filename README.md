@@ -41,10 +41,12 @@ git lfs install
 ## 克隆后直接构建
 
 ```powershell
+git lfs install
 git clone https://github.com/FatMan258/SC2Botc.git
 cd SC2Botc
 git lfs pull
 
+tools\botc.cmd doctor
 tools\botc.cmd check
 tools\botc.cmd build --script scripts\BOTC_test.txt --out work\BOTC_test.SC2Map --split-script
 ```
@@ -66,7 +68,6 @@ scripts/BOTC_test.txt
 ```powershell
 $env:BOTC_SCRIPT = (Join-Path $PWD "scripts\BOTC_test.txt")
 $env:BOTC_MAP = (Join-Path $PWD "base\BOTC.map")
-$env:BOTC_UI_MOD = "C:\path\to\UIHIDE55.SC2Mod"
 $env:BOTC_BUILD_DIR = (Join-Path $PWD "work")
 $env:BOTC_SC2_ROOT = "C:\Program Files (x86)\StarCraft II"
 ```
@@ -87,6 +88,7 @@ set "BOTC_PYTHON=C:\path\to\python.exe"
 ## 常用命令
 
 ```powershell
+tools\botc.cmd doctor
 tools\botc.cmd inspect
 tools\botc.cmd check
 tools\botc.cmd build
