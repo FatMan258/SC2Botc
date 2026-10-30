@@ -12,7 +12,9 @@ venv/
 *.SC2Mod
 *.SC2Bank
 *.bank
-build/
+!base/BOTC.map
+work/*
+!work/README.md
 dist/
 
 # User-provided local source and game assets
@@ -28,7 +30,7 @@ BOTC_脚本_*.txt
 .env
 .env.*
 *.local.json
-BOTC_Tools/python.local.cmd
+tools/python.local.cmd
 .vscode/
 .idea/
 *.code-workspace

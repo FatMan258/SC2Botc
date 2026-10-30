@@ -7,6 +7,7 @@ from pathlib import Path
 
 
 TOOL_ROOT = Path(__file__).resolve().parents[1]
+PROJECT_ROOT = TOOL_ROOT.parent
 sys.path.insert(0, str(TOOL_ROOT))
 
 from role_design import build_ai_prompt, compile_plan, validate_spec
@@ -15,7 +16,7 @@ from role_design import build_ai_prompt, compile_plan, validate_spec
 class RoleDesignTests(unittest.TestCase):
     def load_example(self) -> dict:
         return json.loads(
-            (TOOL_ROOT / "role_specs" / "role_dsl.example.json").read_text(
+            (PROJECT_ROOT / "roles" / "role_dsl.example.json").read_text(
                 encoding="utf-8"
             )
         )

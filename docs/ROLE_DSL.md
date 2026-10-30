@@ -12,9 +12,9 @@
 5. 实现者补齐描述中未明确的内容，并通过 `role audit`、源码检查和构建。
 
 ```powershell
-BOTC_Tools\botc.cmd design prompt "每个夜晚，你要选择一名玩家：你得知他是否是爪牙。"
-BOTC_Tools\botc.cmd design validate BOTC_Tools\role_specs\role_dsl.example.json
-BOTC_Tools\botc.cmd design compile BOTC_Tools\role_specs\role_dsl.example.json --out role_plan.md
+tools\botc.cmd design prompt "每个夜晚，你要选择一名玩家：你得知他是否是爪牙。"
+tools\botc.cmd design validate roles\role_dsl.example.json
+tools\botc.cmd design compile roles\role_dsl.example.json --out role_plan.md
 ```
 
 ## 为什么不用模型直接写 Galaxy

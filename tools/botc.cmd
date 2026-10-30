@@ -14,7 +14,7 @@ python -c "import sys" >nul 2>nul
 if not errorlevel 1 goto run_python
 
 echo Python 3 was not found.
-echo Set BOTC_PYTHON or create BOTC_Tools\python.local.cmd.
+echo Set BOTC_PYTHON or create tools\python.local.cmd.
 exit /b 9009
 
 :run_custom

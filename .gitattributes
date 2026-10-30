@@ -23,6 +23,7 @@ BOTC_Tools/.gitignore text eol=lf
 *.ogg filter=lfs diff=lfs merge=lfs -text
 *.m3 filter=lfs diff=lfs merge=lfs -text
 *.dll filter=lfs diff=lfs merge=lfs -text
+*.map filter=lfs diff=lfs merge=lfs -text
 *.SC2Map filter=lfs diff=lfs merge=lfs -text
 *.SC2Mod filter=lfs diff=lfs merge=lfs -text
 *.SC2Bank filter=lfs diff=lfs merge=lfs -text

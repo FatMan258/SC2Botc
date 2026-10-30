@@ -8,18 +8,20 @@ TOOL_ROOT = Path(__file__).resolve().parent
 PROJECT_ROOT = TOOL_ROOT.parent
 
 SCRIPT_PATH = Path(
-    os.environ.get("BOTC_SCRIPT", str(PROJECT_ROOT / "BOTC_脚本_粘贴用.txt"))
+    os.environ.get("BOTC_SCRIPT", str(PROJECT_ROOT / "scripts" / "BOTC.txt"))
 )
 MAP_PATH = Path(
-    os.environ.get("BOTC_MAP", str(PROJECT_ROOT / "base_map.SC2Map"))
+    os.environ.get("BOTC_MAP", str(PROJECT_ROOT / "base" / "BOTC.map"))
 )
 UI_MOD_PATH = Path(
-    os.environ.get("BOTC_UI_MOD", str(PROJECT_ROOT / "UIHIDE55.SC2Mod"))
+    os.environ.get(
+        "BOTC_UI_MOD", str(PROJECT_ROOT / "data" / "UIHIDE55.SC2Mod")
+    )
 )
 BUILD_DIR = Path(
-    os.environ.get("BOTC_BUILD_DIR", str(PROJECT_ROOT / "build"))
+    os.environ.get("BOTC_BUILD_DIR", str(PROJECT_ROOT / "work"))
 )
-ROLE_SPEC_DIR = TOOL_ROOT / "role_specs"
+ROLE_SPEC_DIR = PROJECT_ROOT / "roles"
 STORM_DLL = TOOL_ROOT / "vendor" / "StormLib.dll"
 
 SC2_ROOT = Path(
@@ -28,7 +30,7 @@ SC2_ROOT = Path(
     )
 )
 SC2_SWITCHER = SC2_ROOT / "Support64" / "SC2Switcher_x64.exe"
-SC2_TEST_DIR = PROJECT_ROOT / "Test"
+SC2_TEST_DIR = PROJECT_ROOT / "work" / "test"
 GAME_LOG_DIR = (
     Path.home() / "Documents" / "StarCraft II" / "GameLogs"
 )

@@ -1,7 +1,7 @@
 # BOTC 说书人地图开发指南
 
 > 本文件是长期维护的工程约定。开始任何修改前先阅读本文件。
-> 工具使用说明见 `BOTC_Tools/README.md`；角色 DSL 见 `BOTC_Tools/ROLE_DSL.md`。
+> 工具使用说明见 `tools/README.md`；角色 DSL 见 `docs/ROLE_DSL.md`。
 
 ## 1. 项目定位
 
@@ -14,11 +14,11 @@
 
 ## 2. 当前状态
 
-- 基础地图通过 `BOTC_MAP` 指定；仓库不提交 `.SC2Map`。
+- 公开构建基线为 `base/BOTC.map`；其他构建地图默认不提交。
 - 旧工作图不得作为当前构建基线。
 - 当前地图约有 550 个包内成员，主逻辑嵌入 `MapScript.galaxy` 的自定义脚本区段。
 - 当前地图依赖：虚空之遗战役和本地 `file:Mods\UIHIDE55.SC2Mod`。
-  `BOTC_Tools` 的默认构建会内嵌 UI 文件，并删除 `bnet:` 或 `file:` 形式的
+  `tools` 的默认构建会内嵌 UI 文件，并删除 `bnet:` 或 `file:` 形式的
   UIHIDE 依赖，只保留虚空之遗战役依赖。
 - 当前有 12 张固定板子、动态“自定义剧本”和“全员追忆”板子。
 - 136..142、147 是实验性角色；143..146 是全员追忆占位身份。
@@ -28,32 +28,32 @@
 
 ### 3.1 正式文件
 
-- 完整地图脚本不进入公开仓库，由使用者在本地通过 `BOTC_SCRIPT` 提供。
-- 本地脚本文件名中的“粘贴用”只是历史名称；当前主流程通过工具解包写入。
-- 当前基础地图：由 `BOTC_MAP` 指定。
+- 正式脚本：`scripts/BOTC.txt`。
+- 新角色测试脚本：`scripts/BOTC_test.txt`。
+- 当前基础地图：`base/BOTC.map`。
 - UI 依赖源：由 `BOTC_UI_MOD` 指定。
-- 构建输出：由 `BOTC_BUILD_DIR` 指定，默认 `build/`。
-- 工具目录：仓库内的 `BOTC_Tools/`。
+- 构建输出：由 `BOTC_BUILD_DIR` 指定，默认 `work/`。
+- 工具目录：仓库内的 `tools/`。
 
 ### 3.2 固定环境
 
 - Python：优先使用 `BOTC_PYTHON`，否则使用 `py -3` 或 `python`。
-- MPQ 写入：`BOTC_Tools\vendor\StormLib.dll`，固定 v9.40 x64。
+- MPQ 写入：`tools\vendor\StormLib.dll`，固定 v9.40 x64。
 - 星际 II：由 `BOTC_SC2_ROOT` 指定，默认使用标准安装目录。
-- 游戏日志与测试地图目录由 `BOTC_Tools/botc_config.py` 按当前用户目录解析。
+- 游戏日志与测试地图目录由 `tools/botc_config.py` 按当前用户目录解析。
 
 ### 3.3 标准命令
 
 ```powershell
-BOTC_Tools\botc.cmd inspect
-BOTC_Tools\botc.cmd check
-BOTC_Tools\botc.cmd build
-BOTC_Tools\botc.cmd test "构建出的地图.SC2Map"
-BOTC_Tools\botc.cmd design prompt "一句话角色描述"
-BOTC_Tools\botc.cmd design validate 角色DSL.json
-BOTC_Tools\botc.cmd design compile 角色DSL.json --out 角色计划.md
-BOTC_Tools\botc.cmd role list
-BOTC_Tools\botc.cmd role audit 角色规格.json
+tools\botc.cmd inspect
+tools\botc.cmd check
+tools\botc.cmd build
+tools\botc.cmd test "构建出的地图.SC2Map"
+tools\botc.cmd design prompt "一句话角色描述"
+tools\botc.cmd design validate 角色DSL.json
+tools\botc.cmd design compile 角色DSL.json --out 角色计划.md
+tools\botc.cmd role list
+tools\botc.cmd role audit 角色规格.json
 ```
 
 ## 4. 标准开发循环
@@ -61,9 +61,9 @@ BOTC_Tools\botc.cmd role audit 角色规格.json
 1. 先精确搜索函数名和关键字符串，只读取命中位置附近的必要代码。
 2. 确认本次只处理一个功能或一个 Bug，不顺便恢复已停用功能。
 3. 对正式脚本做最小定向修改，不整份重排或格式化。
-4. 运行 `BOTC_Tools\botc.cmd check`。
+4. 运行 `tools\botc.cmd check`。
 5. 涉及角色时，先维护角色规格，再运行 `role audit`。
-6. 运行 `BOTC_Tools\botc.cmd build`。
+6. 运行 `tools\botc.cmd build`。
 7. 再运行 `botc.cmd inspect`，核对：
    - `MapScript.galaxy` 存在且大小合理。
    - 自定义脚本首尾标记和初始化函数存在。
@@ -80,7 +80,7 @@ BOTC_Tools\botc.cmd role audit 角色规格.json
 
 ### 5.1 默认路线
 
-- 默认使用 `BOTC_Tools\botc.cmd build`。
+- 默认使用 `tools\botc.cmd build`。
 - 构建器复制基础地图，定位 `MapScript.galaxy` 中的：
   - `// Custom Script: BOTC_Init()`
   - `// Custom Script Initialization`
@@ -97,7 +97,7 @@ BOTC_Tools\botc.cmd role audit 角色规格.json
   `UIHIDE` 依赖，包括 `bnet:UIHIDE/...` 与 `file:...UIHIDE...`。
 - 保留虚空之遗战役依赖，它是游戏自带依赖。
 - 只有调试线上依赖时才使用 `botc.cmd build --no-embed-ui`。
-- 不得把 UI 文件只塞进一次构建而不登记到 `BOTC_Tools/ui_embed.py`。
+- 不得把 UI 文件只塞进一次构建而不登记到 `tools/ui_embed.py`。
 
 ### 5.3 编辑器边界
 
@@ -114,14 +114,14 @@ BOTC_Tools\botc.cmd role audit 角色规格.json
 - 解包构建器无法写入当前地图格式。
 - 需要验证脚本源文件与编辑器编译器差异。
 
-回退后仍要把最终脚本同步回 `BOTC_脚本_粘贴用.txt`，下一次构建继续使用解包路线。
+回退后仍要把最终脚本同步回 `scripts\BOTC.txt`，下一次构建继续使用解包路线。
 
 ## 6. 修改安全规则
 
 1. 修改前先精确搜索：
 
 ```powershell
-rg -n -F -m 20 'BOTC_函数名' BOTC_脚本_粘贴用.txt
+rg -n -F -m 20 'BOTC_函数名' scripts\BOTC.txt
 ```
 
 2. 不知道函数名时，先用一个精确界面文字定位，再改用命中函数名搜索。
@@ -439,7 +439,7 @@ rg -n -F -m 20 'BOTC_函数名' BOTC_脚本_粘贴用.txt
 - 一句话生成结果只能作为草稿，不能绕过人工规则审查。
 - 发布前至少运行：
   - `botc.cmd check`
-  - `python -m unittest discover -s BOTC_Tools\tests -v`
+  - `python -m unittest discover -s tools\tests -v`
   - `botc.cmd role audit`
   - `botc.cmd build`
   - `botc.cmd inspect`

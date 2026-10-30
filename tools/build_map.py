@@ -289,13 +289,23 @@ def main(argv: list[str] | None = None) -> int:
     print(f"map      : {args.map}")
     print(f"script   : {args.script}")
     print(f"output   : {output}")
+    ui_mod = None
+    if not args.no_embed_ui:
+        if args.ui_mod.is_file():
+            ui_mod = args.ui_mod
+        elif args.ui_mod == UI_MOD_PATH:
+            print(
+                f"ui       : 未找到 {args.ui_mod}，沿用基础地图已有 UI"
+            )
+        else:
+            raise FileNotFoundError(f"UI 资源不存在：{args.ui_mod}")
     built = build_map(
         args.map,
         args.script,
         output,
         compact=not args.no_compact,
         skip_check=args.skip_check,
-        ui_mod=None if args.no_embed_ui else args.ui_mod,
+        ui_mod=ui_mod,
         split_script=args.split_script,
     )
     print(f"OK       : {built} ({built.stat().st_size} bytes)")

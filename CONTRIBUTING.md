@@ -2,24 +2,24 @@
 
 ## 开始修改前
 
-1. 阅读 `AGENTS.md` 和 `BOTC_Tools/README.md`。
+1. 阅读 `AGENTS.md` 和 `tools/README.md`。
 2. 一个分支只处理一个功能或一个 Bug。
-3. 新角色先创建 `BOTC_Tools/role_specs` 下的 JSON 规格。
+3. 新角色先创建 `roles` 下的 JSON 规格。
 4. 不要提交地图、Bank、账号信息、构建产物或未授权素材。
 
 ## 修改流程
 
 ```powershell
-BOTC_Tools\botc.cmd check
-python -m unittest discover -s BOTC_Tools\tests -v
-BOTC_Tools\botc.cmd design validate BOTC_Tools\role_specs\role_dsl.example.json
+tools\botc.cmd check
+python -m unittest discover -s tools\tests -v
+tools\botc.cmd design validate roles\role_dsl.example.json
 ```
 
 涉及角色时还需要：
 
 ```powershell
-BOTC_Tools\botc.cmd role audit BOTC_Tools\role_specs\角色规格.json
-BOTC_Tools\botc.cmd design compile BOTC_Tools\role_specs\角色规格.json --out role-plan.md
+tools\botc.cmd role audit roles\角色规格.json
+tools\botc.cmd design compile roles\角色规格.json --out role-plan.md
 ```
 
 如果修改会影响游戏内行为，必须构建测试地图并在游戏中验收。只通过静态检查不能视为完成。

@@ -8,45 +8,49 @@
 ## 环境
 
 - Python：`py -3`、`python`，或通过 `BOTC_PYTHON` 指定解释器
-- StormLib：`BOTC_Tools\vendor\StormLib.dll`
-- 正式脚本：仓库不提供完整地图脚本，必须通过 `BOTC_SCRIPT` 指向本机脚本
-- 基础地图：通过 `BOTC_MAP` 指定，仓库不提交 `.SC2Map`
+- StormLib：`tools\vendor\StormLib.dll`
+- 正式脚本：`scripts\BOTC.txt`
+- 测试脚本：`scripts\BOTC_test.txt`
+- 基础地图：`base\BOTC.map`
 - UI 资源：通过 `BOTC_UI_MOD` 指定
-- 构建输出：默认仓库根目录的 `build/`
+- 构建输出：默认仓库根目录的 `work/`
 
 路径可以通过环境变量覆盖：
 
 ```powershell
-$env:BOTC_MAP = "C:\path\to\base.SC2Map"
-$env:BOTC_SCRIPT = "C:\path\to\BOTC_脚本_粘贴用.txt"
+$env:BOTC_MAP = (Join-Path $PWD "base\BOTC.map")
+$env:BOTC_SCRIPT = (Join-Path $PWD "scripts\BOTC.txt")
 $env:BOTC_UI_MOD = "C:\path\to\UIHIDE55.SC2Mod"
-$env:BOTC_BUILD_DIR = (Join-Path $PWD "build")
+$env:BOTC_BUILD_DIR = (Join-Path $PWD "work")
 $env:BOTC_SC2_ROOT = "C:\Program Files (x86)\StarCraft II"
 ```
 
 如果 Python 不在 `py` 或 `PATH` 中，可设置 `BOTC_PYTHON`，或创建不会提交的
-`BOTC_Tools\python.local.cmd` 并设置该变量。
+`tools\python.local.cmd` 并设置该变量。
 
 StormLib 固定为官方 v9.40 x64 版本，版本、发布包校验值和 DLL 校验值记录在
-`BOTC_Tools\vendor\StormLib-VERSION.txt`。
+`tools\vendor\StormLib-VERSION.txt`。
 
 ## 常用命令
 
 可以直接使用批处理入口：
 
 ```powershell
-BOTC_Tools\botc.cmd inspect
-BOTC_Tools\botc.cmd check
-BOTC_Tools\botc.cmd build
+tools\botc.cmd inspect
+tools\botc.cmd check
+tools\botc.cmd build
 ```
 
 等价的完整命令：
 
 ```powershell
-py -3 BOTC_Tools\botc.py inspect
-py -3 BOTC_Tools\botc.py check
-py -3 BOTC_Tools\botc.py build
-py -3 BOTC_Tools\botc.py test "build\地图.SC2Map"
+py -3 tools\botc.py inspect
+py -3 tools\botc.py check
+py -3 tools\botc.py build
+py -3 tools\botc.py test "work\地图.SC2Map"
+
+# 使用带新角色测试代码的脚本
+py -3 tools\botc.py build --script scripts\BOTC_test.txt --out work\BOTC_test.SC2Map --split-script
 ```
 
 `test` 会从 `DocumentInfo` 自动识别 `Void.SC2Campaign` 并传入 `-meleeMod Void`，
@@ -57,32 +61,33 @@ py -3 BOTC_Tools\botc.py test "build\地图.SC2Map"
 工具报告 `ALIVE` 只表示进程存活且没有新的 `ScriptError`，仍需要目视确认地图画面。
 
 `build` 会先运行源码检查，再复制基础地图、替换自定义脚本、回读校验并输出新地图。
-默认还会从 `BOTC_UI_MOD` 指定的 SC2Mod 解包并内嵌隐藏 UI 文件，同时删除
+若找到 `BOTC_UI_MOD` 指定的 SC2Mod，会解包并内嵌隐藏 UI 文件，同时删除
 `bnet:UIHIDE/...` 或 `file:...UIHIDE...` 依赖。基础地图不会被修改。
+公开基线已经内嵌 UI；没有额外 SC2Mod 时会自动沿用基线 UI。
 
 只有明确需要保留线上 UI 依赖时才使用：
 
 ```powershell
-BOTC_Tools\botc.cmd build --no-embed-ui
+tools\botc.cmd build --no-embed-ui
 ```
 
 创建角色规格：
 
 ```powershell
-py -3 BOTC_Tools\botc.py role new --index 148 --name "新角色" --team townsfolk --alignment good
-py -3 BOTC_Tools\botc.py role list
-py -3 BOTC_Tools\botc.py role audit BOTC_Tools\role_specs\role_148.json
+py -3 tools\botc.py role new --index 148 --name "新角色" --team townsfolk --alignment good
+py -3 tools\botc.py role list
+py -3 tools\botc.py role audit roles\role_148.json
 ```
 
 一句话角色草稿使用受约束 DSL，不由模型直接生成 Galaxy：
 
 ```powershell
-BOTC_Tools\botc.cmd design prompt "每个夜晚，你要选择一名存活玩家：你得知他是否是爪牙。"
-BOTC_Tools\botc.cmd design validate BOTC_Tools\role_specs\role_dsl.example.json
-BOTC_Tools\botc.cmd design compile BOTC_Tools\role_specs\role_dsl.example.json --out role_plan.md
+tools\botc.cmd design prompt "每个夜晚，你要选择一名存活玩家：你得知他是否是爪牙。"
+tools\botc.cmd design validate roles\role_dsl.example.json
+tools\botc.cmd design compile roles\role_dsl.example.json --out role_plan.md
 ```
 
-详细设计见 `BOTC_Tools\ROLE_DSL.md`。
+详细设计见 `docs\ROLE_DSL.md`。
 
 阵营代号：
 
@@ -126,7 +131,7 @@ BOTC_Tools\botc.cmd design compile BOTC_Tools\role_specs\role_dsl.example.json -
 
 ## 禁区
 
-- 不要把整个 `MapScript.galaxy` 替换为 `BOTC_脚本_粘贴用.txt`。
+- 不要把整个 `MapScript.galaxy` 替换为 `scripts\BOTC.txt`。
 - 不要在采用直写构建后随意让编辑器重存整图。
 - 不要把 Trigger XML 生成路线和自己的正式脚本路线混用。
 - 新角色索引一旦超过 147，必须同步所有角色数组、扫描循环和索引表。
@@ -134,5 +139,5 @@ BOTC_Tools\botc.cmd design compile BOTC_Tools\role_specs\role_dsl.example.json -
 ## 自检
 
 ```powershell
-py -3 -m unittest discover -s BOTC_Tools\tests -v
+py -3 -m unittest discover -s tools\tests -v
 ```
