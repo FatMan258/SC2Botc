@@ -109,6 +109,20 @@ python -m compileall -q tools
 python -m unittest discover -s tools\tests -v
 ```
 
+## GitHub 自动防护
+
+`.github/workflows/tests.yml` 会在每次 push 和 Pull Request 时自动执行：
+
+- Python 编译与单元测试。
+- 两份 Galaxy 脚本的括号、编码、函数重复和后置调用前置声明检查。
+- 构建环境检查。
+- 实际构建正式版和测试版地图。
+- 回读构建产物的脚本、触发器和依赖结构。
+
+任何一步失败都会让 GitHub Actions 变红。建议在 GitHub 仓库的
+`Settings → Rules / Branch protection` 中把 `test` 设置为合并到 `main`
+前的必需检查。
+
 ## 目录结构
 
 | 路径 | 用途 |

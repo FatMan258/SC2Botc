@@ -54,6 +54,7 @@ git push -u origin main
 - 确定 LICENSE，并与素材授权一致。
 - 检查截图、日志和文档中没有 Battle.net 账号、路径或私人信息。
 - 运行全部测试。
+- 在 GitHub 分支保护或 Ruleset 中要求 `test` 检查通过后才能合并到 `main`。
 - 创建第一个版本标签，例如 `v0.1.0-test`。
 - 在 Release 中附加测试地图和变更说明。
 
