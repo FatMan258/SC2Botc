@@ -1,0 +1,71 @@
+{
+  "schema_version": 2,
+  "index": 148,
+  "name": "梦魇贩子",
+  "team": "minion",
+  "alignment": "evil",
+  "text": "每个夜晚，你要选择一名其他存活玩家和一个角色。如果他是该角色，他中毒直到下个黄昏；否则你得知他不是该角色。",
+  "lore": "一个收集恐惧、并把猜中的梦魇卖给受害者的爪牙。梦魇贩子会用身份作为赌注：猜中时让目标的处境恶化，猜错时只能确认这条线索并不成立。",
+  "timing": "every_night",
+  "frequency": "always",
+  "action": "every_night",
+  "target": {
+    "kind": "player_and_role",
+    "count": 1,
+    "living": true,
+    "allow_self": false,
+    "allow_repeat": true
+  },
+  "artwork": {
+    "source": "未提供专属角色图；使用失忆的爪牙身份图与夜序图占位",
+    "role_icon": "botc_role145.dds",
+    "night_icon": "botc_night145.dds",
+    "token_icons": [
+      "botc_tk17.dds"
+    ]
+  },
+  "night_order": {
+    "section": "interference",
+    "anchor_role": "投毒者",
+    "relation": "after",
+    "first": 32,
+    "other": 13
+  },
+  "tokens": [
+    {
+      "id": "dream_poison",
+      "name": "中毒（梦魇贩子）",
+      "short": "梦魇毒",
+      "effect": "目标的角色能力不生效",
+      "place": "梦魇贩子猜中目标真实角色时放置，并移除他上一次放置的梦魇毒",
+      "remove": "下个黄昏、梦魇贩子离场或新局开始时移除",
+      "visibility": "storyteller",
+      "icon": "botc_tk17.dds"
+    }
+  ],
+  "jinxes": [],
+  "effects": [
+    {
+      "kind": "set_token",
+      "token": "dream_poison",
+      "duration": "until_dusk",
+      "mode": "如果目标的真实角色与所选角色相同"
+    },
+    {
+      "kind": "send_information",
+      "text": "如果目标的真实角色与所选角色不同，梦魇贩子得知他不是该角色。"
+    }
+  ],
+  "randomness": {
+    "declared": false,
+    "notes": ""
+  },
+  "tests": [
+    "健康来源猜中目标角色：目标获得梦魇毒，到下一个黄昏移除",
+    "健康来源猜错：梦魇贩子收到他不是该角色的私聊信息",
+    "目标死亡或梦魇贩子无法选择死亡玩家时拒绝确认",
+    "梦魇贩子中毒或醉酒：不放置新毒，也不自动发送真假信息",
+    "梦魇贩子死亡、离场或身份变化：梦魇毒立即移除",
+    "换座位、换说书人和第二局后不保留旧目标"
+  ]
+}
