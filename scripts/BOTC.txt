@@ -2537,6 +2537,7 @@ void   BOTC_CustomClose ();
 void   BOTC_CustomClear ();
 void   BOTC_CustomToggle (int i);
 void   BOTC_CustomUnpick (int k);
+void   BOTC_CustomSyncBoardRoles ();
 void   BOTC_CustomSaveBank ();
 void   BOTC_CustomLoadBank (bool talk);
 string BOTC_CustomSection (int slot);
@@ -17597,7 +17598,35 @@ void BOTC_GrantOpen () {
     DialogSetVisible(g_grantDlg, PlayerGroupSingle(g_teller), true);
 }
 
+// 自定义板 7 的 g_boardRole 可能来自开局缓存；打开赋予能力前按实际勾选重建，
+// 防止新加到 g_csel 的角色没有进入当前板子角色池。
+void BOTC_CustomSyncBoardRoles () {
+    int r;
+    int n;
+    if (g_board != 7) {
+        return;
+    }
+    n = 0;
+    for (r = 0; r <= 147; r += 1) {
+        if (!g_csel[r] || !BOTC_CustomRoleVisible(r)) {
+            continue;
+        }
+        if (g_roleTeam[r] == 4 || g_roleTeam[r] == 5) {
+            continue;
+        }
+        if (n >= 128) {
+            break;
+        }
+        g_boardRole[(7 * 256) + n] = r;
+        n = n + 1;
+    }
+    if (n > 0) {
+        g_boardRoleN[7] = n;
+    }
+}
+
 void BOTC_GrantRoleOpen () {
+    BOTC_CustomSyncBoardRoles();
     g_pickMode[g_teller] = 34;
     g_pickWho[g_teller] = 0;
     g_pickTeam = -1;
