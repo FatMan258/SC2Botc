@@ -88,7 +88,6 @@ python -m unittest discover -s BOTC_Tools\tests -v
 | --- | --- |
 | `BOTC_Tools/` | 构建、检查、角色 DSL 和测试工具 |
 | `BOTC_Tools/role_specs/` | 角色规格、DSL 示例和接入计划 |
-| `BOTC_UI导入/` | 可内嵌的 UI 布局资源 |
 | `docs/` | 开发和 GitHub 发布指南 |
 | `AGENTS.md` | 项目工程约定 |
 
