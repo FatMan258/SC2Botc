@@ -252,7 +252,8 @@ def audit_spec(spec_path: Path, script_path: Path, map_path: Path | None) -> tup
                     warnings.append(f"地图内未找到资源：{resource}")
 
     if index >= 148:
-        if f"int[{index + 1}]" not in script and f"string[{index + 1}]" not in script:
+        match = re.search(r"string\[(\d+)\]\s+g_roleName", script)
+        if not match or int(match.group(1)) < index + 1:
             errors.append(f"角色索引 {index} 已超过当前数组容量，需要同步扩展角色数组和扫描上限")
 
     return errors, warnings
