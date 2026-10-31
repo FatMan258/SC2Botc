@@ -1,6 +1,5 @@
 ﻿param(
-    [ValidateSet("test", "production")]
-    [string]$Mode = "test",
+    [string]$Mode = "",
     [switch]$NoPause
 )
 
@@ -40,26 +39,13 @@ try {
 
     Write-Host "[2/5] 检查构建环境..."
     Invoke-Botc @("doctor")
-    Invoke-Botc @(
-        "check",
-        $(if ($Mode -eq "test") { "scripts\BOTC_test.galaxy" } else { "scripts\BOTC.galaxy" })
-    )
+    Invoke-Botc @("check", "scripts\BOTC.galaxy")
 
     Write-Host "[3/5] 运行自动测试..."
     Invoke-Botc @("selftest")
 
-    $scriptPath = if ($Mode -eq "test") {
-        "scripts\BOTC_test.galaxy"
-    }
-    else {
-        "scripts\BOTC.galaxy"
-    }
-    $prefix = if ($Mode -eq "test") {
-        "BOTC_test_sync"
-    }
-    else {
-        "BOTC_sync"
-    }
+    $scriptPath = "scripts\BOTC.galaxy"
+    $prefix = "BOTC_sync"
     $stamp = Get-Date -Format "yyyyMMdd-HHmmss"
     $documents = [Environment]::GetFolderPath("MyDocuments")
     $outputDir = if ($env:BOTC_SYNC_OUTPUT_DIR) {
@@ -91,7 +77,7 @@ try {
         throw "输出磁盘 $driveName`: 可用空间不足 250 MB，请先清理旧测试地图。"
     }
 
-    Write-Host "[4/5] 构建 $Mode 地图..."
+    Write-Host "[4/5] 构建地图..."
     Invoke-Botc @(
         "build",
         "--script", $scriptPath,
