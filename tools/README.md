@@ -10,7 +10,6 @@
 - Python：`py -3`、`python`，或通过 `BOTC_PYTHON` 指定解释器
 - StormLib：`tools\vendor\StormLib.dll`
 - 正式脚本：`scripts\BOTC.galaxy`
-- 测试脚本：`scripts\BOTC_test.galaxy`
 - 基础地图：`base\BOTC.map`
 - 构建输出：默认仓库根目录的 `work/`
 
@@ -48,8 +47,8 @@ py -3 tools\botc.py check
 py -3 tools\botc.py build
 py -3 tools\botc.py test "work\地图.SC2Map"
 
-# 使用带新角色测试代码的脚本
-py -3 tools\botc.py build --script scripts\BOTC_test.galaxy --out work\BOTC_test.SC2Map --split-script
+# 构建唯一正式地图
+py -3 tools\botc.py build --out work\BOTC_BOTC1.SC2Map --split-script
 ```
 
 `test` 会从 `DocumentInfo` 自动识别 `Void.SC2Campaign` 并传入 `-meleeMod Void`，
@@ -77,6 +76,23 @@ tools\botc.cmd build --local-assets "D:\local\my-assets"
 ```powershell
 tools\botc.cmd build --no-local-assets
 ```
+
+## 私有依赖
+
+黑名单位于 `BOTC_Private_Core.SC2Mod`，不在地图主脚本中。
+
+- 正式构建使用已上传依赖 `bnet:BOTC1/1.0/188805`。
+- 构建地图时直接挂载已上传的 `BOTC1`；`private\` 下的生成器只用于以后
+  更新并重新上传依赖。
+- 黑名单写在 `data\private\ban_handles.txt`，该文件被 Git 忽略。
+- 可用 `--private-mode release|test|none` 手动覆盖选择。
+- 已上传 `BOTC1` 的完整 ID 保存在 `private\dependency_id.txt`；构建会
+  优先使用这个 ID。
+- 发布到 Battle.net 时，先发布正式依赖，再把地图的本地 `file:` 依赖改成
+  对应的 `bnet:` 依赖 ID。
+
+依赖模块不是加密。它能阻止普通地图使用者直接修改黑名单，
+但不能防御能够解包、修改并重新发布整个地图的人。
 
 创建角色规格：
 
@@ -120,6 +136,9 @@ tools\botc.cmd design compile roles\role_dsl.example.json --out role_plan.md
 9. 运行 `botc.py check` 和 `role audit`，通过后运行 `botc.py build`。
 10. 用 `botc.py test` 启动构建产物，检查是否产生新的 `ScriptError.txt`。
 11. 用构建产物进游戏验收，不直接用编辑器保存自动构建地图。
+
+黑名单维护只修改 `data\private\ban_handles.txt` 并重新构建私有依赖，
+不要重新把名单写回主脚本。Bank 相关文件仍留在主图中。
 
 白天公开发动能力统一进入【声称】按钮及 `BOTC_Declare*()` 流程。不得制作只有真实角色
 可见的专用按钮；假声称者也必须看到同样的入口和反馈流程。
