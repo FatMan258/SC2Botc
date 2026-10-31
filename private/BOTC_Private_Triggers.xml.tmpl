@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TriggerData>
+    <Root>
+        <Item Type="Trigger" Id="B07C0001"/>
+    </Root>
+    <Element Type="Trigger" Id="B07C0001">
+        <Event Type="FunctionCall" Id="B07C0002"/>
+        <Action Type="FunctionCall" Id="B07C0003"/>
+    </Element>
+    <Element Type="FunctionCall" Id="B07C0002">
+        <FunctionDef Type="FunctionDef" Library="Ntve" Id="00000120"/>
+    </Element>
+    <Element Type="FunctionCall" Id="B07C0003">
+        <FunctionDef Type="FunctionDef" Library="Ntve" Id="00000123"/>
+        <ScriptCode>
+            libBOTC_Private_gf_BanCheck();
+        </ScriptCode>
+    </Element>
+</TriggerData>
