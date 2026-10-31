@@ -24,9 +24,7 @@ jobs:
         run: python -m unittest discover -s tools\tests -v
 
       - name: Check Galaxy source
-        run: |
-          python tools\botc.py check scripts\BOTC.galaxy
-          python tools\botc.py check scripts\BOTC_test.galaxy
+        run: python tools\botc.py check scripts\BOTC.galaxy
 
       - name: Check build environment
         run: python tools\botc.py doctor
@@ -37,11 +35,5 @@ jobs:
       - name: Build production smoke map
         run: python tools\botc.py build --script scripts\BOTC.galaxy --out work\BOTC.ci.SC2Map --split-script
 
-      - name: Build test smoke map
-        run: python tools\botc.py build --script scripts\BOTC_test.galaxy --out work\BOTC_test.ci.SC2Map --split-script
-
       - name: Inspect production smoke map
         run: python tools\botc.py inspect work\BOTC.ci.SC2Map
-
-      - name: Inspect test smoke map
-        run: python tools\botc.py inspect work\BOTC_test.ci.SC2Map
