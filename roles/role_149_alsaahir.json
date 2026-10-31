@@ -1,0 +1,67 @@
+{
+  "schema_version": 2,
+  "index": 149,
+  "name": "戏法师",
+  "team": "townsfolk",
+  "alignment": "good",
+  "text": "每个白天，你可以公开进行一次谁是爪牙，谁是恶魔的猜测。如果你猜对，善良阵营获胜。",
+  "lore": "戏法师希望一次性指出所有爪牙和恶魔。猜测必须公开，可以包含多名爪牙和多只恶魔。",
+  "timing": "day",
+  "frequency": "once_per_day",
+  "action": "public_trigger",
+  "target": {
+    "kind": "none",
+    "count": 0,
+    "living": false,
+    "allow_self": false,
+    "allow_repeat": true
+  },
+  "artwork": {
+    "source": "assets/source/role_149_alsaahir.png",
+    "role_icon": "botc_role149.dds",
+    "night_icon": "botc_night149.dds",
+    "token_icons": []
+  },
+  "night_order": {
+    "section": "utility",
+    "anchor_role": null,
+    "relation": null,
+    "first": null,
+    "other": null
+  },
+  "tokens": [],
+  "jinxes": [
+    {
+      "role": "维齐尔",
+      "text": "说书人不会宣布维齐尔在场。"
+    }
+  ],
+  "effects": [
+    {
+      "kind": "win_condition",
+      "mode": "good_if_all_current_minions_and_demons_are_publicly_guessed"
+    },
+    {
+      "kind": "custom",
+      "id": "public_multi_seat_classification",
+      "notes": "声称面板中每名玩家可在未选、爪牙、恶魔三态间循环，允许多名爪牙和多只恶魔；死亡角色同样参与判断，军团按恶魔判断，邪恶旅行者排除。"
+    }
+  ],
+  "randomness": {
+    "declared": false,
+    "notes": ""
+  },
+  "tests": [
+    "所有存活玩家都能在白天通过声称按钮进入戏法师猜测面板",
+    "可同时标记多名爪牙和多只恶魔",
+    "只猜中部分爪牙或恶魔时不获胜",
+    "全部爪牙和恶魔都猜中时善良阵营立即获胜",
+    "死亡玩家仍按当前爪牙或恶魔角色参与判断",
+    "军团玩家按恶魔判断",
+    "善良阵营的爪牙和恶魔仍须猜中，邪恶旅行者不参与判断",
+    "假声称与真声称使用相同公开流程",
+    "中毒或醉酒的戏法师即使猜对也不获胜",
+    "每一名玩家每个白天只能提交一次戏法师猜测",
+    "戏法师在场时，维齐尔首日不公开身份"
+  ]
+}
