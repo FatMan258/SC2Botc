@@ -124,12 +124,12 @@ int[16]     g_boardRoleN;
 int[4096]   g_boardRole;          // 每条板子 256 个角色槽，容纳全员追忆
 // 角色提示面板的文案：g_tipLine 里是**已经切好行的**文案，每个身份/每段用 (At, N) 指出范围
 text[4000]  g_tipLine;
-text[151]    g_tipAbility;        // 每个角色的「能力」整段（角色能力表用；由 g_tipLine 的能力段拼成）
+text[152]    g_tipAbility;        // 每个角色的「能力」整段（角色能力表用；由 g_tipLine 的能力段拼成）
 // 【说书人提示】（用户 2026-09-19）：只有玩家1（说书人）看得到的那些条目，铺在「游戏帮助」面板里
 text[24]    g_tipStLine;
 int         g_tipStN;
-int[151]     g_tipRoleAt;
-int[151]     g_tipRoleN;
+int[152]     g_tipRoleAt;
+int[152]     g_tipRoleN;
 int         g_tipGoodAt;
 int         g_tipGoodN;
 int         g_tipMinionAt;
@@ -174,7 +174,7 @@ int[4]      g_abNewSec;           // 第 2 页的分段小标题
 int         g_abNewPrev;
 int         g_abNewNext;
 // 【角色能力表 · 第 3 页「名词解释」】（用户 2026-09-20）
-string[151]  g_roleKey;        // 每个角色身上带哪些关键词（多个用 | 隔开）---- 决定名词页显示哪些词条
+string[152]  g_roleKey;        // 每个角色身上带哪些关键词（多个用 | 隔开）---- 决定名词页显示哪些词条
 text[8]     g_glossTitle;     // 词条标题（富文本：关键词带颜色）
 string[8]   g_glossK1;        // 显示条件：本板子里有角色带这个关键词就显示
 string[8]   g_glossK2;
@@ -286,11 +286,11 @@ int[4]      g_legRowBtn;
 int[4]      g_legRowRole;
 int         g_legRowN;
 int         g_legClose;
-bool[151]   g_legacyOn;
+bool[152]   g_legacyOn;
 int[16]     g_boardLegacyN;
 int[64]     g_boardLegacy;
 // ---- 【自定义剧本】（用户 2026-10-03）----
-bool[151]   g_csel;             // 自定义剧本：已选角色（true = 选中）
+bool[152]   g_csel;             // 自定义剧本：已选角色（true = 选中）
 int         g_cat;               // 当前分类 0 镇民 / 1 外来者 / 2 爪牙 / 3 恶魔 / 4 传奇 / 5 奇遇
 int         g_cpage;             // 左盘块当前页（0 起）
 bool        g_cOpen;             // 自定义面板是不是开着
@@ -604,11 +604,11 @@ int[14]     g_deadNightNum;
 //   首夜：投毒者 → 洗衣妇 → 图书管理员 → 调查员 → 厨师 → 共情者 → 占卜师 → 管家 → 间谍
 //   其他夜：投毒者 → 僧侣 → 小恶魔 → 守鸦人 → 共情者 → 占卜师 → 管家 → 送葬者 → 间谍
 //   （爪牙信息 / 恶魔信息 / 红唇女郎 不在表里：他们不唤醒，只发私聊或被动变身）
-int[151]     g_nightOrderFirst;
-int[151]     g_nightOrder;
+int[152]     g_nightOrderFirst;
+int[152]     g_nightOrder;
 // 【官方全角色夜间顺序表】（用户 2026-09-23 给的 8 张图）：编号 = 那张表里的行号（首夜列 / 其他夜晚列各自从 1 数）
-int[151]     g_noAllFirst;
-int[151]     g_noAllOther;
+int[152]     g_noAllFirst;
+int[152]     g_noAllOther;
 // 公开死亡：只有「处决标记 / 死亡标记 / 小恶魔天亮结算 / 猎手命中」这些会公开播报的死法才点亮，
 //   别人看到的就是它（红叉 + 存活人数）。单纯在 token 面板点的死亡 token 只做技能检测，不公开。
 bool[14]    g_deadShown;
@@ -647,6 +647,9 @@ int[196]    g_alsaChoice;     // 提交时还原成客户端玩家号 × 14 + �
 // 【召唤师（150）】开局无恶魔，第三夜创建恶魔。
 bool        g_summonerPending;
 bool        g_summonerDone;
+// 【熊孩子（151）】当前夜选中的镇民角色；token 170 = 捣蛋。
+bool[14]    g_rascalActive;
+int[14]     g_rascalRole;
 // 【猎手请求】真人说书专用：猎手点头像之后弹出「是否让他击杀」的面板（智能说书不弹，直接按规则自动判）
 int         g_slayDlg;        // 弹窗本体
 int         g_slayTitle;
@@ -746,7 +749,7 @@ int         g_ftFakeWant;
 //   就把 token 转给别人；已经被验过的（或者转的目标座位已经验过）都不动。
 bool[14]    g_ftChkSeat;
 // 「查身份」类答案里用过的身份（酒鬼 / 中毒的送葬者用）：一个身份最多只报一次
-bool[151]    g_idUsed;
+bool[152]    g_idUsed;
 // 【酒鬼 / 中毒的共情者】「邪恶名额」：他这辈子最多只能报出「本局邪恶人数」那么多个邪恶，
 //   已经报过的座位记在这里（换局清空）。名额用完以后，看错成邪恶的座位也一律当善良报。
 bool[14]    g_empMark;
@@ -1129,10 +1132,10 @@ bool[14]    g_grimSnapOn;      // 这个玩家的魔典是否显示自己保存�
 int         g_butlerSeat;     // 管家坐在哪个座位（0 = 还没管家行动过）
 int         g_butlerMaster;   // 管家昨晚指定的主人（次日投票时用；0 = 没指定）
 // 每个角色夜间需要选几个目标（0 = 被动信息 / 没有主动技能）
-int[151]     g_roleTargets;
+int[152]     g_roleTargets;
 // 角色标签（位标志，用 BOTC_RoleHasTag 查询）
 //   1 = 信息类   2 = 被动信息（不用自己选人）   4 = 第一夜就有信息   8 = 干扰身份（登记可能不同）
-int[151]     g_roleTag;
+int[152]     g_roleTag;
 // 角色行动类别（不分善良/邪恶，只看这个角色什么时候要醒；说书人唤醒时按它放行 / 拒绝）
 //   0 = 被动（没有夜间行动，不能被唤醒：陌客、镇长、士兵、男爵...）
 //   1 = 夜晚主动（每夜都要醒：占卜师、共情者、投毒者、管家、间谍）
@@ -1140,23 +1143,23 @@ int[151]     g_roleTag;
 //   3 = 公开触发（白天当众喊出来才用，夜里不唤醒：猎手）---- 类别名按钟楼百科的「公开触发能力」
 //   4 = 触发式被动（平时不醒，条件到了才醒：守鸦人「夜里被杀」）
 //   5 = 首夜被动（只有第 1 夜能醒：洗衣妇、图书管理员、调查员、厨师）
-int[151]     g_roleAct;
+int[152]     g_roleAct;
 // 智能说书生成「其中一位是 X」这类信息时的临时结果
 int         g_infoRole;
 int         g_infoA;
 int         g_infoB;
-int[151]     g_hintPool;
+int[152]     g_hintPool;
 int[8]      g_hintBiasPool;
 // 假信息（中毒 / 酒鬼的情报位）专用的临时候选池：比 g_hintPool 大一点，够放整桌座位和 24 个身份
-int[151]     g_fakePool;
+int[152]     g_fakePool;
 int         g_hintN;
 int         g_hintBiasN;
 // 有干扰身份（陌客/间谍）在场时，被动信息身份被指向他们的额外概率（百分比）
 int         g_infoBias;
 bool        g_fakeBias;            // 这次的假信息（中毒 / 酒鬼的信息位）允不允许出现「互动干扰」（陌客 / 间谍）：按 g_infoBias% 掷一次
 // 身份分类表：g_roleTeam 0=镇民 1=外来者 2=爪牙 3=恶魔；g_roleAlign 0=善良 1=邪恶
-int[151]     g_roleTeam;
-int[151]     g_roleAlign;
+int[152]     g_roleTeam;
+int[152]     g_roleAlign;
 // 每个座位的「登记」覆盖：-1 = 跟真实一致。
 // 间谍/陌客这种「会被人看成别的阵营」的角色，由技能层或说书人改写这两项。
 int[14]     g_regTeam;
@@ -1464,7 +1467,7 @@ int[14]       g_pickFilterTeam;
 int[14]       g_pickFilterAlign;
 int[4]      g_pickSec;            // 选身份面板：四个类别标题（镇民 / 外来者 / 爪牙 / 恶魔）
 // 【手动配板】面板（用户 2026-09-19）：说书人自己挑本局出场的角色，再一键发给座位
-bool[151]    g_rsPick;             // 每个身份有没有被选中（下标 = 身份索引）
+bool[152]    g_rsPick;             // 每个身份有没有被选中（下标 = 身份索引）
 int[4]      g_rsQuota;            // 当前名额：0 镇民 / 1 外来者 / 2 爪牙 / 3 恶魔
 int[4]      g_rsCatPage;          // 手动配板：四类各自当前第几页（1 开始）
 int[4]      g_rsCatPrev;          // 手动配板：四类各自的小翻页按钮
@@ -1531,12 +1534,12 @@ bool[14]    g_bluffGot;        // 【不在场身份面板「谁收到过」】�
 int[14]     g_pickMode;
 int[14]     g_pickBluffSlot;
 int         g_bluffSendAllBtn;
-int[151]     g_avail;
+int[152]     g_avail;
 int         g_availN;
 // 给恶魔抽 3 个伪装身份时用的两个候选池：
 //   A = 受限（首夜信息位 + 外来者，最多只出 1 个）、B = 其余镇民
-int[151]     g_bfA;
-int[151]     g_bfB;
+int[152]     g_bfA;
+int[152]     g_bfB;
 
 int[200]    g_mark;
 bool[50176] g_tokOn;          // 14 观察者 × 14 座位 × 256 个 token 槽（2026-10-10：128 -> 256，何方教众要加标记）
@@ -1544,12 +1547,12 @@ bool[50176] g_tokOn;          // 14 观察者 × 14 座位 × 256 个 token 槽�
 // 先保存当前真值身份 + token 整行，换完再明确写进新说书人的观察者行。
 int[14]     g_swapTruthMark;
 bool[3584]  g_swapTruthTok;    // 14 格 × 256 token
-string[151]  g_roleName;
+string[152]  g_roleName;
 string[256]  g_tokName;
 string[256]  g_tokShort;
 string[256]  g_tokIcon;         // 这个 token 用哪张图（空 = 没有图，只显示文字）
-int[151]     g_roleDeathTok;    // 【角色 → 专属死亡 token】-1 = 这个角色没有专属死因，用大类 token（用户 2026-09-20）
-bool[151]    g_scrUsed;          // 随机发牌用过的身份（下标 = 身份索引；扩到 64，黯月初升 22..46 也要用）
+int[152]     g_roleDeathTok;    // 【角色 → 专属死亡 token】-1 = 这个角色没有专属死因，用大类 token（用户 2026-09-20）
+bool[152]    g_scrUsed;          // 随机发牌用过的身份（下标 = 身份索引；扩到 64，黯月初升 22..46 也要用）
 int[16]     g_scrSeat;
 int[16]     g_scrRole;
 int[16]     g_tcTab;
@@ -2241,6 +2244,11 @@ void   BOTC_DamselClick (int p);
 void   BOTC_DamselGuess (int p, int q);
 void   BOTC_DamselPoisonSync ();
 void   BOTC_DamselDealInfo ();
+bool   BOTC_InfoErrorOn (int q);
+void   BOTC_RascalOpen (int p);
+void   BOTC_RascalPick (int p, int role);
+void   BOTC_RascalSync ();
+void   BOTC_RascalDuskClear ();
 void   BOTC_BuildHd (int p);
 void   BOTC_BuildShugenja ();            // 【修行者（114）】说书人两选一面板（用户 2026-10-16）
 void   BOTC_SgOpen (int seat);           // 【修行者（114）】唤醒时打开那个面板
@@ -2758,6 +2766,7 @@ text BOTC_KeyColor (text t) {
     t = BOTC_PutWord(t, "食人魔", Color(0, 191, 255));
     t = BOTC_PutWord(t, "戏法师", Color(0, 191, 255));
     t = BOTC_PutWord(t, "召唤师", Color(255, 69, 0));
+    t = BOTC_PutWord(t, "熊孩子", Color(0, 191, 255));
     // 爪牙（橙）
     t = BOTC_PutWord(t, "投毒者", Color(255, 69, 0));
     t = BOTC_PutWord(t, "间谍", Color(255, 69, 0));
@@ -2982,6 +2991,9 @@ string BOTC_IconName (int idx) {
     if (idx == 150) {
         return "botc_role150.dds";
     }
+    if (idx == 151) {
+        return "botc_role151.dds";
+    }
     if (idx < 10) {
         return "botc_role0" + IntToString(idx) + ".dds";
     }
@@ -2998,6 +3010,9 @@ string BOTC_NightIconName (int idx) {
     }
     if (idx == 150) {
         return "botc_night150.dds";
+    }
+    if (idx == 151) {
+        return "botc_night151.dds";
     }
     if (idx < 10) {
         return "botc_night0" + IntToString(idx) + ".dds";
@@ -3959,7 +3974,7 @@ string BOTC_GrimShareRoleText (int ob, int q) {
         return "";
     }
     role = g_mark[(ob * 14) + q] - 1;
-    if (role < 0 || role > 150) {
+    if (role < 0 || role > 151) {
         role = -1;
         roleName = "";
     }
@@ -7035,7 +7050,7 @@ bool BOTC_Click_Func (bool testConds, bool runActions) {
 //   指令：-t（弹身份网格点一个身份）／ -t off（关掉、清空）
 //==================================================================================================
 void BOTC_TestSelfRole (int r) {
-    if (r < 0 || r > 150) {
+    if (r < 0 || r > 151) {
         // 关掉
         g_testSelfOn = false;
         g_mark[(g_teller * 14) + 1] = 0;
@@ -7546,7 +7561,7 @@ bool BOTC_ChatDo (bool testConds, bool runActions) {
                 g_tipForce[p] = -1;
             }
             BOTC_TipOpen(p);
-            if (g_tipForce[p] >= 0 && g_tipForce[p] <= 150) {
+            if (g_tipForce[p] >= 0 && g_tipForce[p] <= 151) {
                 BOTC_Notice(p, "【测试】角色提示面板强制显示：" + g_roleName[g_tipForce[p]]);
             }
             else {
@@ -8327,7 +8342,7 @@ void BOTC_TipRender (int p) {
     }
     else {
     libNtve_gf_SetDialogItemText(g_tipTitleLbl, StringToText("你的角色是"), PlayerGroupSingle(p));
-    if (r >= 0 && r <= 150 && g_roleName[r] != "") {
+    if (r >= 0 && r <= 151 && g_roleName[r] != "") {
         libNtve_gf_SetDialogItemImage(g_tipIcon, BOTC_NightIconName(r), PlayerGroupSingle(p));
         DialogControlSetVisible(g_tipIcon, PlayerGroupSingle(p), true);
         libNtve_gf_SetDialogItemText(g_tipName, TextWithColor(StringToText(g_roleName[r]), BOTC_RoleTeamColor(r)), PlayerGroupSingle(p));
@@ -8504,7 +8519,7 @@ void BOTC_NightOrderRender (int p) {
     int o;
     int row;
     int b;
-    bool[151] showRole;
+    bool[152] showRole;
     for (i = 0; i < 24; i += 1) {
         DialogControlSetVisible(g_noIcon[i], PlayerGroupSingle(p), false);
         DialogControlSetVisible(g_noName[i], PlayerGroupSingle(p), false);
@@ -8513,23 +8528,23 @@ void BOTC_NightOrderRender (int p) {
     if (b < 1 || b > 13) {
         b = 1;
     }
-    for (r = 0; r <= 150; r += 1) {
+    for (r = 0; r <= 151; r += 1) {
         showRole[r] = false;
     }
     for (i = 0; i < g_boardRoleN[b]; i += 1) {
         r = g_boardRole[(b * 256) + i];
-        if (r >= 0 && r <= 150) {
+        if (r >= 0 && r <= 151) {
             showRole[r] = true;
         }
     }
     // 实际发到玩家身上的角色也显示，避免手工改身份 / 自定义板漏角色。
     for (i = 2; i <= 13; i += 1) {
         r = g_mark[(g_teller * 14) + i] - 1;
-        if (r >= 0 && r <= 150) {
+        if (r >= 0 && r <= 151) {
             showRole[r] = true;
         }
     }
-    for (r = 0; r <= 150; r += 1) {
+    for (r = 0; r <= 151; r += 1) {
         if (g_legacyOn[r]) {
             showRole[r] = true;
         }
@@ -8543,7 +8558,7 @@ void BOTC_NightOrderRender (int p) {
     // 左栏：按首夜顺序
     row = 1;
     for (o = 1; o <= 127; o += 1) {
-        for (r = 0; r <= 150; r += 1) {
+        for (r = 0; r <= 151; r += 1) {
             if (!showRole[r]) { continue; }
             if (g_noAllFirst[r] != o) {
                 continue;
@@ -8560,7 +8575,7 @@ void BOTC_NightOrderRender (int p) {
     // 右栏：第二夜起
     row = 0;
     for (o = 1; o <= 127; o += 1) {
-        for (r = 0; r <= 150; r += 1) {
+        for (r = 0; r <= 151; r += 1) {
             if (!showRole[r]) { continue; }
             if (g_noAllOther[r] != o) {
                 continue;
@@ -8814,7 +8829,7 @@ void BOTC_AbCatCtrlRender (int p, int t) {
 //==================================================================================================
 void BOTC_InitGloss () {
     int i;
-    for (i = 0; i < 151; i += 1) {
+    for (i = 0; i < 152; i += 1) {
         g_roleKey[i] = "";
     }
     // ---- 每个角色身上带的关键词（多个用 | 隔开）----
@@ -8881,6 +8896,7 @@ void BOTC_InitGloss () {
     g_roleKey[148] = "首个夜晚";
     g_roleKey[149] = "";
     g_roleKey[150] = "角色变化";
+    g_roleKey[151] = "信息错误";
 
 
     // ---- 词条（按官方 Wiki Glossary / Vortox 词条整理为中文）----
@@ -8946,7 +8962,7 @@ bool BOTC_KeyInPlay (string key) {
     }
     for (i = 0; i < g_boardRoleN[b]; i += 1) {
         r = g_boardRole[(b * 256) + i];
-        if (r < 0 || r > 150) {
+        if (r < 0 || r > 151) {
             continue;
         }
         if (StringLength(g_roleKey[r]) <= 0) {
@@ -9035,7 +9051,7 @@ void BOTC_GlossRender (int p) {
 
 void BOTC_LegacyApply (int b) {
     int i;
-    for (i = 0; i < 151; i += 1) {
+    for (i = 0; i < 152; i += 1) {
         g_legacyOn[i] = false;
     }
     if (b < 1 || b > 13) {
@@ -9055,7 +9071,7 @@ void BOTC_LegacyAnnounce () {
     string s;
     s = "";
     n = 0;
-    for (r = 0; r <= 150; r += 1) {
+    for (r = 0; r <= 151; r += 1) {
         if (!g_legacyOn[r]) {
             continue;
         }
@@ -9162,7 +9178,7 @@ void BOTC_LegacyRender (int p) {
     int n;
     libNtve_gf_SetDialogItemText(g_abNewLbl, StringToText("角色能力表  5 / 5 ---- 传奇 / 奇遇角色"), PlayerGroupSingle(p));
     n = 0;
-    for (i = 0; i < 151; i += 1) {
+    for (i = 0; i < 152; i += 1) {
         if (!g_legacyOn[i]) {
             continue;
         }
@@ -9642,6 +9658,7 @@ void BOTC_NightGo () {
     else {
         g_isNight = true;
         BOTC_OrganDuskClear();
+        BOTC_RascalDuskClear();
         // 时段编号：进入夜晚 = 第（当前天号 + 1）夜
         if (g_dayNum > 0 || g_nightNum > 0) {
             g_nightNum = g_dayNum + 1;
@@ -9877,7 +9894,7 @@ void BOTC_KingAnswer (int p, int role) {
     if (p < 2 || p > 13) {
         return;
     }
-    if (role < 0 || role > 150) {
+    if (role < 0 || role > 151) {
         return;
     }
     BOTC_PmInfo(g_who[p], "【信息】你得知" + g_roleName[role] + "。");
@@ -9919,7 +9936,7 @@ void BOTC_SpecStormPick (int p, int role) {
     if (p < 2 || p > 13) {
         return;
     }
-    if (role < 0 || role > 150) {
+    if (role < 0 || role > 151) {
         return;
     }
     seat = BOTC_SeatOfRole(role);
@@ -10022,7 +10039,7 @@ bool BOTC_StormInGame () {
 void BOTC_StormSync () {
     int q;
     int seat;
-    if (g_stormRole < 0 || g_stormRole > 150) {
+    if (g_stormRole < 0 || g_stormRole > 151) {
         g_stormRole = 106;
     }
     seat = 0;
@@ -10103,7 +10120,7 @@ void BOTC_HfWakeAction (int q) {
     int n2;
     // 按当前正在使用的身份判：普通唤醒看魔典，科学怪人额外唤醒则看借来的善良角色。
     r = BOTC_ActRoleOf(q);
-    if (r < 0 || r > 150) { return; }
+    if (r < 0 || r > 151) { return; }
     // ① 国王（104）：条件满足时给他一个存活角色的名字（说书人填框、原样发给他）
     if (r == 104) {
         n = 0;
@@ -10203,7 +10220,7 @@ void BOTC_LmDetectNoDemon () {
             continue;
         }
         r = BOTC_SeatTrueRole(q);
-        if (r < 0 || r > 150) {
+        if (r < 0 || r > 151) {
             continue;
         }
         if (BOTC_RoleTeam(r) == 3) {
@@ -10708,6 +10725,8 @@ void BOTC_ResetGameVars () {
         g_juggUsed[i] = false;         // 杂耍艺人（58）：这一局还没得过信息
         g_alsaOpen[i] = false;         // 戏法师（149）
         g_alsaDay[i] = -1;
+        g_rascalActive[i] = false;     // 熊孩子（151）
+        g_rascalRole[i] = 0;
         g_psyDone[i] = false;          // 精神病患者（84）：新局
         g_psyDay[i] = -1;
         g_gossipRole = 28;             // 那块输入框默认是造谣者的
@@ -14906,6 +14925,14 @@ void BOTC_InitRoleTexts () {
     g_tipLine[3689] = StringToText("· 配板时移除初始恶魔并用一名镇民替换，不把恶魔转化成爪牙。前两夜没有恶魔也不会因此结束游戏。");
     g_tipLine[3690] = StringToText("· 新恶魔在召唤当晚即可行动。召唤师在成功创造恶魔前死亡，或第三夜无法创造恶魔时，善良阵营获胜。");
     g_tipRoleAt[150] = 3684; g_tipRoleN[150] = 7;
+    g_tipLine[3691] = StringToText("【角色能力】");
+    g_tipLine[3692] = StringToText("每个夜晚，你要选择一个镇民角色：他的能力会产生错误信息，直到下个黄昏。");
+    g_tipLine[3693] = StringToText("【角色简介】");
+    g_tipLine[3694] = StringToText("熊孩子会指定一个镇民角色，让该角色对应的玩家直到下个黄昏前都只能产生错误信息。");
+    g_tipLine[3695] = StringToText("【规则细节】");
+    g_tipLine[3696] = StringToText("· 选择的是角色而不是玩家；只影响真实拥有该角色的玩家，不影响仅借用该能力的玩家。");
+    g_tipLine[3697] = StringToText("· 选中角色后来才进场时仍会获得捣蛋效果；下个黄昏、熊孩子死亡或离场时移除。");
+    g_tipRoleAt[151] = 3691; g_tipRoleN[151] = 7;
     g_tipAbility[126] = StringToText("与你邻近的两名镇民玩家会在其首次死亡时被当作仍然存活。[-1 外来者]");
     g_tipAbility[127] = StringToText("如果多于一名善良玩家被处决，邪恶阵营获胜。所有玩家都知道利维坦在场。持有第五天提示时，进入夜晚、第五天之后的白天或恢复能力时能力生效则邪恶阵营获胜。");
     // ---- 【心理博弈 XI】官网角色能力文本覆盖 ----
@@ -15117,7 +15144,7 @@ void BOTC_GrimInitData () {
     }
     // 72..127 是留给以后新板子的空槽：名字清空、阵营设 -1
     //   （所有「按阵营挑身份」的循环都是 BOTC_RoleTeam(i) == t，-1 永远不匹配，自动跳过）
-    for (i = 72; i <= 150; i += 1) {
+    for (i = 72; i <= 151; i += 1) {
         g_roleName[i] = "";
         g_roleTeam[i] = -1;
         g_roleAlign[i] = -1;
@@ -15249,6 +15276,7 @@ void BOTC_GrimInitData () {
     g_roleName[148] = "食人魔";       g_roleTeam[148] = 1; g_roleAlign[148] = 0;   // 新角色测试：外来者
     g_roleName[149] = "戏法师";       g_roleTeam[149] = 0; g_roleAlign[149] = 0;
     g_roleName[150] = "召唤师";       g_roleTeam[150] = 2; g_roleAlign[150] = 1;
+    g_roleName[151] = "熊孩子";       g_roleTeam[151] = 0; g_roleAlign[151] = 0;
     // ---- 【全员追忆】玩家视角占位身份（只发给玩家自己看，不进入随机角色池 / 自定义剧本）----
     g_roleName[143] = "失忆的镇民";    g_roleTeam[143] = 0; g_roleAlign[143] = 0;
     g_roleName[144] = "失忆外来者";    g_roleTeam[144] = 1; g_roleAlign[144] = 0;
@@ -15269,6 +15297,7 @@ void BOTC_GrimInitData () {
     g_tipAbility[148] = StringToText("在你的首个夜晚，你要选择除你以外的一名玩家：你转变为他的阵营，即使你已醉酒或中毒，但你不知道你转变后的阵营。");
     g_tipAbility[149] = StringToText("每个白天，你可以公开进行一次谁是爪牙，谁是恶魔的猜测。如果你猜对，善良阵营获胜。");
     g_tipAbility[150] = StringToText("在首个夜晚，你会得知三个伪装。在第三个夜晚，你要选择一名玩家：他变成由你选择的邪恶恶魔。[无恶魔在场]");
+    g_tipAbility[151] = StringToText("每个夜晚，你要选择一个镇民角色：他的能力会产生错误信息，直到下个黄昏。");
     g_tipAbility[143] = StringToText("你只知道自己是镇民。真实角色只有说书人知道；你的实际角色能力仍由说书人正常主持。");
     g_tipAbility[144] = StringToText("你只知道自己是外来者。真实角色只有说书人知道；你的实际角色能力仍由说书人正常主持。");
     g_tipAbility[145] = StringToText("你只知道自己是爪牙。真实角色只有说书人知道；你的实际角色能力仍由说书人正常主持。");
@@ -15616,9 +15645,12 @@ g_boardRole[(12 * 256) + 22] = 111;
     g_boardLegacyN[12] = 0;
     // 13 号板子 = 全员追忆：排除华灯系列、尚未完成的角色，以及本板不使用的暴风捕手 113。
     g_boardRoleN[13] = 0;
-    for (i = 0; i <= 150; i += 1) {
+    for (i = 0; i <= 151; i += 1) {
         if (i >= 143 && i <= 146) {
             continue;                 // 玩家视角占位身份不进真实角色池
+        }
+        if (i >= 151) {
+            continue;                 // 华灯初上角色不进入全员追忆
         }
         if (i == 113 || i == 115 || i == 116 || i == 117 || i == 118 || i == 119 || i == 121 || i == 123 || i == 124 || i == 126) {
             continue;
@@ -16159,7 +16191,7 @@ g_deathTok[9] = 67;   g_deathKind[9] = 1;   g_deathByDemon[9] = 1;   g_deathImp[
     g_deathTok[20] = 160; g_deathKind[20] = 1; g_deathByDemon[20] = 1; g_deathImp[20] = 0;  // 死亡（卡扎力）：夜间、恶魔杀
     // 【角色 → 它专属的死亡 token】（用户 2026-09-20）：有专属死因的角色，死亡时打自己那一格；
     //   没有的（例如镇长替死）继续用大类 token（死亡（夜间·其他）这种）。
-    for (i = 0; i <= 150; i += 1) {
+    for (i = 0; i <= 151; i += 1) {
         g_roleDeathTok[i] = -1;
     }
     g_roleDeathTok[21] = 16;   // 小恶魔
@@ -16374,6 +16406,7 @@ g_tokName[119] = "即将被处决（军团）"; g_tokShort[119] = "即将被处�
     g_tokName[167] = "得知（事务官）";       g_tokShort[167] = "得知";   g_tokIcon[167] = "botc_tk142.dds"; g_tokRole[167] = 142;
     g_tokName[168] = "大限将至（限）";       g_tokShort[168] = "大限";   g_tokIcon[168] = "botc_tk147.dds"; g_tokRole[168] = 147;
     g_tokName[169] = "中毒（限）";           g_tokShort[169] = "中毒";   g_tokIcon[169] = "botc_tk147.dds"; g_tokRole[169] = 147;
+    g_tokName[170] = "捣蛋（熊孩子）";       g_tokShort[170] = "捣蛋";   g_tokIcon[170] = "botc_tk151.dds"; g_tokRole[170] = 151;
     g_tokName[148] = "活尸（赶尸人）";        g_tokShort[148] = "活尸";        g_tokIcon[148] = "botc_tk126.dds"; g_tokRole[148] = 126;
     g_tokName[149] = "第一天（利维坦）";      g_tokShort[149] = "第一天";      g_tokIcon[149] = "botc_tk127.dds"; g_tokRole[149] = 127;
     g_tokName[150] = "第二天（利维坦）";      g_tokShort[150] = "第二天";      g_tokIcon[150] = "botc_tk127.dds"; g_tokRole[150] = 127;
@@ -16439,7 +16472,7 @@ g_tcTab[6] = 3;   g_ocTab[6] = 1;   g_mcTab[6] = 1;
         g_wokeTonight[i] = false;
         g_seatFirstNight[i] = 1;       // 换局：每个座位的首夜都从第 1 夜重新算
     }
-    for (i = 0; i < 151; i += 1) {
+    for (i = 0; i < 152; i += 1) {
         g_scrUsed[i] = false;
     }
     for (i = 0; i <= 13; i += 1) {
@@ -16479,7 +16512,7 @@ g_tcTab[6] = 3;   g_ocTab[6] = 1;   g_mcTab[6] = 1;
     // 有干扰身份在场时，被动信息身份被指向他们（陌客/间谍）的额外概率
     g_infoBias = 20;
     // 角色标签：位标志见 g_roleTag 的注释
-    for (i = 0; i <= 150; i += 1) {
+    for (i = 0; i <= 151; i += 1) {
         g_roleTag[i] = 0;
     }
     g_roleTag[0] = 7;    // 洗衣妇：信息 / 被动 / 第一夜
@@ -16529,9 +16562,10 @@ g_tcTab[6] = 3;   g_ocTab[6] = 1;   g_mcTab[6] = 1;
     g_roleTag[148] = 0;   // 食人魔：首夜阵营选择
     g_roleTag[149] = 0;   // 戏法师：白天公开触发 + 特殊胜利
     g_roleTag[150] = 0;   // 召唤师：设置调整 + 第三夜角色变化
+    g_roleTag[151] = 0;   // 熊孩子：信息错误干扰
     g_roleTag[116] = 5;   // 郎中：每夜信息（自己要选人），首夜也醒
     // 夜间需要选目标的角色（0 = 被动信息 / 没有主动技能）
-    for (i = 0; i <= 150; i += 1) {
+    for (i = 0; i <= 151; i += 1) {
         g_roleTargets[i] = 0;
     }
     // 【横行霸道 · 目标数】（用户 2026-10-03）：同样要写在清零循环之后
@@ -16613,10 +16647,11 @@ g_tcTab[6] = 3;   g_ocTab[6] = 1;   g_mcTab[6] = 1;
     g_roleTargets[148] = 1;   // 食人魔：首夜选择除自己以外的一名玩家
     g_roleTargets[149] = 0;   // 戏法师：使用声称面板，不走普通目标面板
     g_roleTargets[150] = 1;   // 召唤师：第三夜先选一名玩家
+    g_roleTargets[151] = 0;   // 熊孩子：使用镇民角色网格
     g_roleTargets[126] = 0;   // 赶尸人：被动
     g_roleTargets[127] = 0;   // 利维坦：被动
     // 角色行动类别（唤醒时按这张表放行 / 拒绝：见 BOTC_CanWakeAt / BOTC_WakeBlockStr）
-    for (i = 0; i <= 150; i += 1) {
+    for (i = 0; i <= 151; i += 1) {
         g_roleAct[i] = 0;
     }
     // 【横行霸道 · 8 个新角色的行动类别】（用户 2026-10-03）：必须写在上面那个「全部清零」循环**之后**，否则会被清零覆盖！
@@ -16755,6 +16790,7 @@ g_roleAct[90] = 6;   // 赏金猎人：首夜报一名邪恶；之后「得知�
     g_roleAct[148] = 5;   // 食人魔：只有他的首夜
     g_roleAct[149] = 3;   // 戏法师：白天公开触发
     g_roleAct[150] = 6;   // 召唤师：条件性，仅第三夜自动唤醒
+    g_roleAct[151] = 1;   // 熊孩子：每夜
     g_roleAct[126] = 0;   // 赶尸人：被动
     g_roleAct[127] = 0;   // 利维坦：被动
     g_roleTag[76] = 7;   g_roleTag[85] = 7;
@@ -16766,7 +16802,7 @@ g_roleAct[90] = 6;   // 赏金猎人：首夜报一名邪恶；之后「得知�
     g_roleTargets[84] = 1;
     g_roleTargets[87] = 3;
     // 夜间行动顺序（见变量处注释；数字越小越先醒）
-    for (i = 0; i <= 150; i += 1) {
+    for (i = 0; i <= 151; i += 1) {
         g_nightOrderFirst[i] = 0;
         g_nightOrder[i] = 0;
     }
@@ -16867,7 +16903,7 @@ g_roleAct[90] = 6;   // 赏金猎人：首夜报一名邪恶；之后「得知�
     //   触发式 → 夜里不唤醒）。完整的两列名单（含还没做出来的角色）存在 BOTC_项目记忆.md 里。
     //   ⚠ 夜序表渲染 / 唤醒提示 / 自动唤醒 / 快进测试全部改成读这两张表了；
     //     上面那两张 g_nightOrderFirst / g_nightOrder 已经停用（留着只是不想动老代码）。
-    for (i = 0; i <= 150; i += 1) {
+    for (i = 0; i <= 151; i += 1) {
         g_noAllFirst[i] = 0;
         g_noAllOther[i] = 0;
     }
@@ -17177,11 +17213,13 @@ g_noAllOther[102] = 28;     // 恐惧之灵（其他夜第 28）
     g_noAllFirst[148] = 28;   // 食人魔：首夜阵营选择
     g_noAllFirst[149] = 0;    // 戏法师：白天公开触发，不进入夜序
     g_noAllFirst[150] = 0;    // 召唤师：首夜伪装由说书人手工处理
+    g_noAllFirst[151] = 50;   // 熊孩子：小精灵之前
     g_noAllOther[140] = 28;   // 街头风琴手
     g_noAllOther[139] = 33;   // 鹰身女妖
     g_noAllOther[147] = 11;   // 限：排在麻脸巫婆与投毒者之间
     g_noAllOther[149] = 0;    // 戏法师：白天公开触发，不进入夜序
     g_noAllOther[150] = 39;   // 召唤师：第三夜在疯子与恶魔行动之前
+    g_noAllOther[151] = 27;   // 熊孩子：街头风琴手之前
     g_noAllOther[137] = 0;    // 瘟疫医生已改为白板：不占夜序
     // 赶尸人（126）是纯被动，不占夜序。
     // 变脸师（117）/ 悟道者（118）：官方表里没有他们自己的夜序 → 不占位次（拿到的能力按那个角色排）
@@ -17320,7 +17358,7 @@ g_noAllOther[102] = 28;     // 恐惧之灵（其他夜第 28）
         g_grimShareCd[i] = 0;           // 换局清空一键发送魔典冷却
     }
     // 「查身份」用过的身份（酒鬼 / 中毒的送葬者）：换局清空（表已扩到 128）
-    for (i = 0; i < 151; i += 1) {
+    for (i = 0; i < 152; i += 1) {
         g_idUsed[i] = false;
     }
     // 共情者的「邪恶名额」记录：换局清空
@@ -17801,7 +17839,7 @@ void BOTC_CustomSyncBoardRoles () {
         return;
     }
     n = 0;
-    for (r = 0; r <= 150; r += 1) {
+    for (r = 0; r <= 151; r += 1) {
         if (!g_csel[r] || !BOTC_CustomRoleVisible(r)) {
             continue;
         }
@@ -17868,7 +17906,7 @@ void BOTC_GrantApply () {
         BOTC_Notice(g_teller, "玩家号要填 1~12，并且那个座位有人。");
         return;
     }
-    if (g_grantRoleSel <= 0 || g_grantRoleSel > 150) {
+    if (g_grantRoleSel <= 0 || g_grantRoleSel > 151) {
         BOTC_Notice(g_teller, "先选择一个要赋予的角色能力。");
         return;
     }
@@ -17931,7 +17969,7 @@ void BOTC_SpecSeatRender () {
     int i;
     string s;
     for (i = 0; i < 6; i += 1) {
-        if (g_specRoleSel[i] > 0 && g_specRoleSel[i] <= 150) {
+        if (g_specRoleSel[i] > 0 && g_specRoleSel[i] <= 151) {
             s = IntToString(i + 1) + "：" + g_roleName[g_specRoleSel[i] - 1];
         }
         else {
@@ -18025,7 +18063,7 @@ void BOTC_SpecSeatSend () {
             seats = seats + BOTC_NameStr(n + 1);
             seatN = seatN + 1;
         }
-        if (g_specRoleSel[i] > 0 && g_specRoleSel[i] <= 150) {
+        if (g_specRoleSel[i] > 0 && g_specRoleSel[i] <= 151) {
             r = g_specRoleSel[i] - 1;
             if (roleN > 0) {
                 roles = roles + ",";
@@ -18317,7 +18355,7 @@ void BOTC_GridPlan () {
         n = 0;
         for (i = 0; i < g_boardRoleN[b]; i += 1) {
             r = g_boardRole[(b * 256) + i];
-            if (r < 0 || r > 150) {
+            if (r < 0 || r > 151) {
                 continue;
             }
             if (BOTC_RoleTeam(r) != t) {
@@ -18380,7 +18418,7 @@ void BOTC_GridBuildCat () {
     }
     for (i = 0; i < g_boardRoleN[b]; i += 1) {
         r = g_boardRole[(b * 256) + i];
-        if (r < 0 || r > 150) {
+        if (r < 0 || r > 151) {
             continue;
         }
         t = BOTC_RoleTeam(r);
@@ -18952,7 +18990,7 @@ int BOTC_RsPickedCount (int team) {
     c = 0;
     for (i = 0; i < g_boardRoleN[b]; i += 1) {
         r = g_boardRole[(b * 256) + i];
-        if (r >= 0 && r <= 150 && BOTC_RoleTeam(r) == team && g_rsPick[r]) {
+        if (r >= 0 && r <= 151 && BOTC_RoleTeam(r) == team && g_rsPick[r]) {
             c = c + 1;
         }
     }
@@ -19024,7 +19062,7 @@ void BOTC_RsOpen (int p) {
     }
     BOTC_GrimRelayout();
     // 先把「场上已经有的身份」勾上（先随机发牌过的话，这里就是 √ 的状态）
-    for (r = 0; r < 151; r += 1) {
+    for (r = 0; r < 152; r += 1) {
         g_rsPick[r] = false;
     }
     for (q = 0; q < 4; q += 1) {
@@ -19032,7 +19070,7 @@ void BOTC_RsOpen (int p) {
     }
     for (q = 2; q <= 13; q += 1) {
         r = g_mark[(g_teller * 14) + q] - 1;
-        if (r >= 0 && r <= 150) {
+        if (r >= 0 && r <= 151) {
             g_rsPick[r] = true;
         }
     }
@@ -19095,7 +19133,7 @@ void BOTC_RsRandom (int p) {
         return;
     }
     BOTC_RsLayout();
-    for (i = 0; i < 151; i += 1) {
+    for (i = 0; i < 152; i += 1) {
         g_rsPick[i] = false;
     }
     BOTC_RsQuotaUpdate();
@@ -19122,7 +19160,7 @@ void BOTC_RsRandom (int p) {
             n = 0;
             pick = -1;
             for (k = 0; k < g_gridCatN[t]; k += 1) {      // 从这一类的完整角色池抽，不受当前页限制
-                if (g_gridCatRole[(t * 128) + k] < 0 || g_gridCatRole[(t * 128) + k] > 150) {
+                if (g_gridCatRole[(t * 128) + k] < 0 || g_gridCatRole[(t * 128) + k] > 151) {
                     continue;
                 }
                 if (g_rsPick[g_gridCatRole[(t * 128) + k]]) {
@@ -19159,7 +19197,7 @@ void BOTC_RsApply (int p) {
     BOTC_GrimRelayout();
     BOTC_GrimResetPerPlayer();     // 【玩家自己那份也清空】（用户 2026-10-18）：不然会留着上一把别人的身份
     cnt = 0;
-    for (r = 0; r < 151; r += 1) {
+    for (r = 0; r < 152; r += 1) {
         if (g_rsPick[r]) {
             roles[cnt] = r;
             cnt = cnt + 1;
@@ -19538,6 +19576,17 @@ void BOTC_PickChoose (int ob, int idx) {
     int infoSeat;
     if (idx >= 0 && idx < 64) {
         idx = g_pickSlotRole[(ob * 64) + idx];
+    }
+    if (g_pickMode[ob] == 43) {
+        DialogSetVisible(g_pickDlg, PlayerGroupSingle(ob), false);
+        g_pickMode[ob] = 0;
+        g_pickTeam = -1;
+        g_pickAlign = -1;
+        if (idx >= 0) {
+            BOTC_RascalPick(g_pickWho[ob], idx);
+        }
+        g_pickWho[ob] = 0;
+        return;
     }
     // 【送葬者 / 守鸦人】模式 42：说书人选择角色后直接私聊告诉被唤醒的玩家。
     if (g_pickMode[ob] == 42) {
@@ -20224,6 +20273,7 @@ void BOTC_SeatStateSync () {
     BOTC_PhiloDrunkSync();
     BOTC_BoffinSyncKnowledge();
     BOTC_DamselPoisonSync();
+    BOTC_RascalSync();
     BOTC_LeviathanTokenWin();
 }
 
@@ -20274,7 +20324,7 @@ int BOTC_PlayerRoleView (int seat, int roleIdx) {
 }
 
 void BOTC_AmnesiaRevealSeat (int seat, int roleIdx) {
-    if (g_board != 13 || seat < 2 || seat > 13 || roleIdx < 0 || roleIdx > 150) {
+    if (g_board != 13 || seat < 2 || seat > 13 || roleIdx < 0 || roleIdx > 151) {
         return;
     }
     g_amnesiaRevealed[seat] = true;
@@ -21199,7 +21249,7 @@ void BOTC_SyncDeathFromTok (int q, int t) {
 string BOTC_SeatRoleStr (int q) {
     int r;
     r = g_mark[(g_teller * 14) + q] - 1;
-    if (r < 0 || r > 150) {
+    if (r < 0 || r > 151) {
         return "未定";
     }
     if (BOTC_SeatTrueRole(q) == 14) {
@@ -21229,6 +21279,13 @@ string BOTC_SeatRoleStr (int q) {
 //       「失去能力（X）」「攻击三次（珀）」「已假死（僵怖）」这些「已经用过」的记录
 //     · 通用「醉酒 24」：那一格是手动槽，谁醉的不一定跟这一格绑，所以不动它
 //==================================================================================================
+bool BOTC_InfoErrorOn (int q) {
+    if (q < 1 || q > 13) {
+        return false;
+    }
+    return g_tokOn[(((g_teller * 14) + q) * 256) + 84] || g_tokOn[(((g_teller * 14) + q) * 256) + 170];
+}
+
 bool BOTC_TokGoneWithSource (int t) {
     if (t == 7) { return true; }                            // 中毒（投毒者）
     if (t == 9) { return true; }                            // 保护（僧侣）
@@ -21272,6 +21329,7 @@ bool BOTC_TokGoneWithSource (int t) {
     if (t == 156) { return true; }                          // 杂技演员的「被选择」随角色离场
     if (t == 161) { return true; }                          // 瘟疫医生给予的说书人能力
     if (t >= 162 && t <= 165) { return true; }              // 鹰身女妖 / 街头风琴手的提示标记
+    if (t == 170) { return true; }                           // 捣蛋（熊孩子）
     // 【是恶魔（小怪宝）134 **不再跟来源走**】（用户 2026-10-13）：照看人被处决 / 离场时，
     //   原来这里会把 token 一起收掉（他的真身被读成 112 → 被当成「小怪宝离场」）----
     //   现在这枚 token 归板子管（见 BOTC_TokHidden），要挪 / 要撤由说书人自己在 token 面板上点。
@@ -21288,8 +21346,12 @@ void BOTC_SourceGoneCleanup (int q) {
         return;
     }
     r = BOTC_SeatTrueRole(q);
-    if (r < 0 || r > 150) {
+    if (r < 0 || r > 151) {
         return;
+    }
+    if (r == 151) {
+        g_rascalActive[q] = false;
+        g_rascalRole[q] = 0;
     }
     // 【舞蛇人的毒】（用户 2026-09-21）：中毒这个人死了 / 离场 → 这一格收掉（官方提示标记的移除时机）
     // 【哲学家】（56）离场：他让那个人醉酒的那一份也一起收掉（官方：哲学家死亡/离场 → 恢复清醒）
@@ -21644,7 +21706,7 @@ void BOTC_MarkDeathRowTok (int q, int row, int tok, bool pierce) {
     BOTC_PoppyDeathMark(q);
     // 【记下死掉的是哪只恶魔】（用户 2026-09-21）：红唇女郎 / 传位接位的人变成同一只恶魔
     r2 = BOTC_SeatTrueRole(q);
-    if (r2 >= 0 && r2 <= 150 && BOTC_RoleTeam(r2) == 3) {
+    if (r2 >= 0 && r2 <= 151 && BOTC_RoleTeam(r2) == 3) {
         g_demonKind = r2;
     }
     // 【通用规则】他离场 → 他带来的 token 与配套记录一起收掉（用户 2026-09-20）
@@ -21807,7 +21869,7 @@ void BOTC_MarkDeathQuietSrc (int q, int kind, int byDemon, int srcRole) {
     }
     row = BOTC_DeathRowOf(kind, byDemon);
     tok = -1;
-    if (srcRole >= 0 && srcRole <= 150) {
+    if (srcRole >= 0 && srcRole <= 151) {
         tok = g_roleDeathTok[srcRole];
     }
     BOTC_MarkDeathRowTok(q, row, tok, pierce);
@@ -21930,7 +21992,7 @@ bool BOTC_DemonGoneCheck () {
     for (i = 0; i < g_seatN; i += 1) {
         q = g_seatList[i];
         r = BOTC_SeatTrueRole(q);
-        if (r >= 0 && r <= 150 && BOTC_RoleTeam(r) == 3) {
+        if (r >= 0 && r <= 151 && BOTC_RoleTeam(r) == 3) {
             if (!BOTC_SeatDead(q)) {
                 return false;
             }
@@ -22127,14 +22189,14 @@ void BOTC_PickRedHerring () {
 //   酒鬼在魔典上放的是他「以为自己是」的镇民，真实身份靠「是酒鬼」token（索引 8）判断
 //==================================================================================================
 int BOTC_RoleTeam (int idx) {
-    if (idx < 0 || idx > 150) {
+    if (idx < 0 || idx > 151) {
         return -1;
     }
     return g_roleTeam[idx];
 }
 
 int BOTC_RoleAlign (int idx) {
-    if (idx < 0 || idx > 150) {
+    if (idx < 0 || idx > 151) {
         return -1;
     }
     return g_roleAlign[idx];
@@ -22142,7 +22204,7 @@ int BOTC_RoleAlign (int idx) {
 
 // 【身份转变用身份名】：只有阵营真的改变才显示「善良/邪恶的X」。
 string BOTC_TransitionRoleName (int oldAlign, int newAlign, int role) {
-    if (role < 0 || role > 150) {
+    if (role < 0 || role > 151) {
         return "未知";
     }
     if (oldAlign == newAlign) {
@@ -22185,7 +22247,7 @@ string BOTC_AlignName (int a) {
 
 // 组合标签，比如「爪牙邪恶」；没身份返回「未定」
 string BOTC_RoleTagStr (int idx) {
-    if (idx < 0 || idx > 150) {
+    if (idx < 0 || idx > 151) {
         return "未定";
     }
     return BOTC_TeamName(g_roleTeam[idx]) + "·" + BOTC_AlignName(g_roleAlign[idx]);
@@ -22254,7 +22316,7 @@ int BOTC_SeatTeam (int q) {
 //   中毒/醉酒**不影响**这个判定本身（有没有能力是事实），要不要生效由调用方自己再判 BOTC_SeatImpaired。
 bool BOTC_HasAbility (int q, int role) {
     int tr;
-    if (q < 1 || q > 13 || role < 0 || role > 150) {
+    if (q < 1 || q > 13 || role < 0 || role > 151) {
         return false;
     }
     if (q == 1 && g_pdRole == role + 1) {
@@ -23004,7 +23066,7 @@ bool BOTC_RoleInPlay (int idx) {
 bool BOTC_RoleTrueInPlay (int idx) {
     int i;
     int q;
-    if (idx < 0 || idx > 150) {
+    if (idx < 0 || idx > 151) {
         return false;
     }
     BOTC_BuildSeatList();
@@ -23033,7 +23095,7 @@ void BOTC_XaanSetupSync () {
             continue;
         }
         r = BOTC_SeatTrueRole(q);
-        if (r >= 0 && r <= 150 && BOTC_RoleTeam(r) == 1) {
+        if (r >= 0 && r <= 151 && BOTC_RoleTeam(r) == 1) {
             n = n + 1;
         }
     }
@@ -23085,7 +23147,7 @@ void BOTC_XaanApply (int q) {
             continue;
         }
         r = BOTC_SeatTrueRole(i);
-        if (r >= 0 && r <= 150 && BOTC_RoleTeam(r) == 0) {
+        if (r >= 0 && r <= 151 && BOTC_RoleTeam(r) == 0) {
             g_tokOn[(((g_teller * 14) + i) * 256) + 169] = true;
         }
     }
@@ -23619,7 +23681,7 @@ int BOTC_RoleForTeamNotInPlay (int t) {
     int pick;
     pick = -1;
     n = 0;
-    for (i = 0; i <= 150; i += 1) {
+    for (i = 0; i <= 151; i += 1) {
         if (BOTC_RoleTeam(i) == t && BOTC_BoardHasRole(i) && !BOTC_RoleInPlay(i)) {
             n = n + 1;
             if (RandomInt(1, n) == 1) {
@@ -23631,7 +23693,7 @@ int BOTC_RoleForTeamNotInPlay (int t) {
         return pick;
     }
     n = 0;
-    for (i = 0; i <= 150; i += 1) {
+    for (i = 0; i <= 151; i += 1) {
         if (BOTC_RoleTeam(i) == t) {
             n = n + 1;
             if (RandomInt(1, n) == 1) {
@@ -23673,7 +23735,7 @@ string BOTC_SeatListStr () {
 
 // 角色标签查询：tag 传单个位（1 / 2 / 4 / 8）
 bool BOTC_RoleHasTag (int idx, int tag) {
-    if (idx < 0 || idx > 150 || tag <= 0) {
+    if (idx < 0 || idx > 151 || tag <= 0) {
         return false;
     }
     return ((g_roleTag[idx] / tag) % 2) == 1;
@@ -23774,7 +23836,7 @@ void BOTC_PmInfo (int p, string s) {
 
 // 玩家确认技能后，在私聊框回显本人实际选择的目标。
 void BOTC_TellRoleChoice (int p, int role) {
-    if (p < 1 || p > 13 || role < 0 || role > 150) {
+    if (p < 1 || p > 13 || role < 0 || role > 151) {
         return;
     }
     BOTC_PmInfo(g_who[p], "你选择了" + g_roleName[role] + "。");
@@ -23801,7 +23863,7 @@ void BOTC_TellSkillChoice (int p, int role) {
         }
         s = s + BOTC_NameStr(g_skillT3[p]);
     }
-    if (role >= 0 && role <= 150) {
+    if (role >= 0 && role <= 151) {
         if (StringLength(s) > 0) {
             s = s + ",";
         }
@@ -23876,7 +23938,7 @@ int BOTC_UtDemonChance (int day) {
 
 // 记住这个身份已经用过了（一个身份最多只报一次）
 void BOTC_MarkIdUsed (int r) {
-    if (r >= 0 && r <= 150) {
+    if (r >= 0 && r <= 151) {
         g_idUsed[r] = true;
     }
 }
@@ -23889,7 +23951,7 @@ int BOTC_PickFreshFakeRole (int t) {
     int pick;
     pick = -1;
     n = 0;
-    for (i = 0; i <= 150; i += 1) {
+    for (i = 0; i <= 151; i += 1) {
         if (i == 14) {
             continue;
         }
@@ -23911,7 +23973,7 @@ int BOTC_PickFreshFakeRole (int t) {
         return pick;
     }
     n = 0;
-    for (i = 0; i <= 150; i += 1) {
+    for (i = 0; i <= 151; i += 1) {
         if (i == 14) {
             continue;
         }
@@ -24120,7 +24182,7 @@ int BOTC_CogSeenRole (int q) {
         return -1;                                  // 只有酒鬼 / 疯子是「认知覆盖」
     }
     r = g_mark[(g_teller * 14) + q] - 1;                         // 他「以为自己是」的那个身份
-    if (r < 0 || r > 150) {
+    if (r < 0 || r > 151) {
         return -1;
     }
     return r;
@@ -24140,7 +24202,7 @@ void BOTC_PushLunaticBluffs (int t) {
             if (r < 0) {
                 r = g_bluffPick[k] - 1;
             }
-            if (r < 0 || r > 150) {
+            if (r < 0 || r > 151) {
                 continue;
             }
             if (BOTC_RoleTeam(r) != t) {
@@ -24197,13 +24259,13 @@ bool BOTC_MakeFakeHint (int ob, int t) {
     BOTC_PushCogSeenRoles(t);
     for (i = 0; i < 3; i += 1) {
         r = g_bluffPick[i] - 1;
-        if (r >= 0 && r <= 150 && BOTC_RoleTeam(r) == t) {
+        if (r >= 0 && r <= 151 && BOTC_RoleTeam(r) == t) {
             g_fakePool[g_hintN] = r;
             g_hintN = g_hintN + 1;
         }
     }
     if (g_hintN <= 0) {
-        for (i = 0; i <= 150; i += 1) {
+        for (i = 0; i <= 151; i += 1) {
             if (BOTC_RoleTeam(i) == t && BOTC_BoardHasRole(i) && !BOTC_RoleInPlay(i)) {
                 g_fakePool[g_hintN] = i;
                 g_hintN = g_hintN + 1;
@@ -24211,7 +24273,7 @@ bool BOTC_MakeFakeHint (int ob, int t) {
         }
     }
     if (g_hintN <= 0) {
-        for (i = 0; i <= 150; i += 1) {
+        for (i = 0; i <= 151; i += 1) {
             if (BOTC_RoleTeam(i) == t) {
                 g_fakePool[g_hintN] = i;
                 g_hintN = g_hintN + 1;
@@ -24374,12 +24436,12 @@ bool BOTC_MakeTeamHint (int ob, int t, bool lie) {
     }
     else {
         r2 = BOTC_PairSeenRole(ob, subj);
-        if (r2 >= 0 && r2 <= 150 && r2 != r && BOTC_RoleTeam(r2) == t) {
+        if (r2 >= 0 && r2 <= 151 && r2 != r && BOTC_RoleTeam(r2) == t) {
             g_infoRole = r2;
         }
         else {
             g_hintN = 0;
-            for (i = 0; i <= 150; i += 1) {
+            for (i = 0; i <= 151; i += 1) {
                 if (BOTC_RoleTeam(i) == t && BOTC_BoardHasRole(i) && !BOTC_RoleInPlay(i)) {
                     g_hintPool[g_hintN] = i;
                     g_hintN = g_hintN + 1;
@@ -24783,7 +24845,7 @@ string BOTC_DiagSeat (int ob, int q) {
         if (t == BOTC_RoleTeam(r) && sr == r) {
             return s + "（没看错）";
         }
-        if (sr >= 0 && sr <= 150) {
+        if (sr >= 0 && sr <= 151) {
             return s + "→他看成 " + g_roleName[sr] + "（" + BOTC_TeamName(t) + "·" + BOTC_AlignName(BOTC_ViewAlign(ob, q)) + "）";
         }
         return s + "→看成别的身份";
@@ -24795,7 +24857,7 @@ string BOTC_DiagSeat (int ob, int q) {
         }
         else {
             sr = BOTC_PairSeenRole(g_who[ob], q);
-            if (sr >= 0 && sr <= 150) {
+            if (sr >= 0 && sr <= 151) {
                 s = s + "→看成 " + g_roleName[sr] + "（" + BOTC_TeamName(t) + "·" + BOTC_AlignName(BOTC_PairAlign(ob, q)) + "）";
             }
             else {
@@ -24908,7 +24970,7 @@ string BOTC_YesNoStr (bool b) {
 // 把一个身份索引渲染成给玩家看的文案（送葬者 / 守鸦人的答案走这里）：
 // 身份索引 -> 名字（越界给「未定」，诊断文案用）
 string BOTC_RoleNameSafe (int r) {
-    if (r < 0 || r > 150) {
+    if (r < 0 || r > 151) {
         return "未定";
     }
     return g_roleName[r];
@@ -24946,7 +25008,7 @@ void BOTC_DiagUtLine (int q, bool lie, int t, int r2, int rp, int day) {
 //   是伪装 / 看错的身份就直接报那个名字；
 //   例外：报出来的就是这个座位**真的是酒鬼**时，只写「酒鬼」，不带他以为自己是的那张皮
 string BOTC_RoleTextStr (int q, int r) {
-    if (r < 0 || r > 150) {
+    if (r < 0 || r > 151) {
         return "未定";
     }
     if (r == 14) {
@@ -25134,7 +25196,7 @@ void BOTC_GfPickSet (int p, bool plus) {
 bool BOTC_PickModeRoleAllowed (int p, int r) {
     int mode;
     int seat;
-    if (p < 1 || p > 13 || r < 0 || r > 150) {
+    if (p < 1 || p > 13 || r < 0 || r > 151) {
         return false;
     }
     mode = g_pickMode[p];
@@ -25273,6 +25335,9 @@ void BOTC_PickFilter (int p, bool goodOnly) {
     }
     if (g_pickMode[p] == 39) {
         show = false;                  // 瘟疫医生死亡时必须选择一个爪牙能力
+    }
+    if (g_pickMode[p] == 43) {
+        show = false;                  // 熊孩子每夜必须选择一个镇民角色
     }
 
     // 【巡山人（77）· 说书人给落难少女定新身份】（用户 2026-10-04）：这一步必须选完 —— 不给【取消】。
@@ -25475,7 +25540,7 @@ bool BOTC_CanWakeAt (int q) {
         return true;
     }
     r = g_mark[(g_teller * 14) + q] - 1;
-    if (r < 0 || r > 150) {
+    if (r < 0 || r > 151) {
         return false;
     }
     if (r == 150 && BOTC_HasAbility(q, 150) && g_nightNum != 3) {
@@ -25606,7 +25671,7 @@ string BOTC_WakeBlockStr (int q) {
         return BOTC_NameStr(q) + " 今晚被驱魔人点名了，不能因其自身能力被唤醒（这是驱魔人的能力效果）。";
     }
     r = g_mark[(g_teller * 14) + q] - 1;
-    if (r < 0 || r > 150) {
+    if (r < 0 || r > 151) {
         return BOTC_NameStr(q) + " 还没定身份，先在说书人那份魔典上给他定个身份。";
     }
     if (r == 150 && BOTC_HasAbility(q, 150) && g_nightNum != 3) {
@@ -25683,21 +25748,21 @@ string BOTC_WakeBlockStr (int q) {
 // 这个身份今晚的行动顺序（0 = 今晚不醒；首夜和其他夜用不同的表）
 // 【官方全角色夜序表】（用户 2026-09-23）：直接读表；表里没有（0）就是这一夜不唤醒
 int BOTC_NoFirstOf (int r) {
-    if (r < 0 || r > 150) {
+    if (r < 0 || r > 151) {
         return 0;
     }
     return g_noAllFirst[r];
 }
 
 int BOTC_NoOtherOf (int r) {
-    if (r < 0 || r > 150) {
+    if (r < 0 || r > 151) {
         return 0;
     }
     return g_noAllOther[r];
 }
 
 int BOTC_NightOrder (int r) {
-    if (r < 0 || r > 150) {
+    if (r < 0 || r > 151) {
         return 0;
     }
     if (g_nightNum <= 1) {
@@ -25726,7 +25791,7 @@ int BOTC_NightOrderOf (int q) {
     if (BOTC_SeatTrueRole(q) == 112 && g_tokOn[(((g_teller * 14) + q) * 256) + 134]) {
         r = 112;                                // 照看小怪宝的爪牙：按「小怪宝」那一格行动
     }
-    if (r < 0 || r > 150) {
+    if (r < 0 || r > 151) {
         return 0;
     }
     if (g_nightNum <= g_seatFirstNight[q] && BOTC_NoFirstOf(r) > 0) {
@@ -25766,7 +25831,7 @@ void BOTC_WakeListHint () {
         for (i = 0; i < g_seatN; i += 1) {
             q = g_seatList[i];
             r = g_mark[(g_teller * 14) + q] - 1;
-            if (r < 0 || r > 150) {
+            if (r < 0 || r > 151) {
                 continue;
             }
             if (BOTC_NightOrderOf(q) != o) {
@@ -25817,7 +25882,7 @@ void BOTC_WakeListHint () {
     for (i = 0; i < g_seatN; i += 1) {
         q = g_seatList[i];
         r = g_mark[(g_teller * 14) + q] - 1;
-        if (r < 0 || r > 150) {
+        if (r < 0 || r > 151) {
             continue;
         }
         if (g_roleAct[r] == 3) {
@@ -27380,7 +27445,7 @@ void BOTC_NanaPick (int q) {
             continue;
         }
         r = BOTC_RegRoleOf(i);
-        if (r < 0 || r > 150) {
+        if (r < 0 || r > 151) {
             continue;
         }
         if (BOTC_SeatRegAlign(i) != 0) {
@@ -27405,7 +27470,7 @@ void BOTC_NanaPick (int q) {
             continue;
         }
         r = BOTC_RegRoleOf(i);
-        if (r < 0 || r > 150) {
+        if (r < 0 || r > 151) {
             continue;
         }
         if (BOTC_SeatRegAlign(i) != 0) {
@@ -27443,7 +27508,7 @@ void BOTC_NanaPick (int q) {
                 continue;
             }
             r = BOTC_RegRoleOf(i);
-            if (r < 0 || r > 150) {
+            if (r < 0 || r > 151) {
                 continue;
             }
             if (BOTC_SeatRegAlign(i) != 0) {
@@ -27465,7 +27530,7 @@ void BOTC_NanaPick (int q) {
                     continue;
                 }
                 r = BOTC_RegRoleOf(i);
-                if (r < 0 || r > 150) {
+                if (r < 0 || r > 151) {
                     continue;
                 }
                 if (BOTC_SeatRegAlign(i) != 0) {
@@ -27575,7 +27640,7 @@ void BOTC_GambleGuess (int p, int guess) {
     g_gambleWait[p] = false;
     DialogSetVisible(g_pickDlg, PlayerGroupSingle(g_who[p]), false);      // 智能说书兜底代猜时它不是被点击关的，这里统一关
     libNtve_gf_SetDialogItemText(g_pickClear, StringToText("清除身份"), PlayerGroupSingle(g_who[p]));
-    if (guess < 0 || guess > 150) {
+    if (guess < 0 || guess > 151) {
         BOTC_PmStore(g_teller, "【赌徒】" + BOTC_NameStr(p) + " 这次没有猜，没有结算。");
         return;
     }
@@ -27591,7 +27656,7 @@ void BOTC_GambleGuess (int p, int guess) {
         right = true;
         BOTC_PmStore(g_teller, "【赌徒】" + BOTC_NameStr(p) + " 中毒/酒鬼 → 按百科不放死亡标记，这一晚不会死。");
     }
-    if (real >= 0 && real <= 150) {
+    if (real >= 0 && real <= 151) {
         BOTC_PmStore(g_teller, "【赌徒】" + BOTC_NameStr(p) + " 猜 " + BOTC_NameStr(g_gambleTarget[p]) + " 是「" + g_roleName[guess] + "」，登记的是「" + BOTC_RoleNameSafe(real) + "」。");
     }
     else {
@@ -28337,8 +28402,8 @@ void BOTC_ManInfoOpen (int seat, int role, string extra) {
         if (role == 50) {
             s2 = s2 + "　拜访说书人获得信息是否异常需要你手动判定。";
         }
-        if (seat >= 2 && g_tokOn[(((g_teller * 14) + seat) * 256) + 84]) {
-            s2 = s2 + "　【涡流】他是镇民：这一条要给他错的那份。";
+        if (seat >= 2 && BOTC_InfoErrorOn(seat)) {
+            s2 = s2 + "　【信息错误】他带有涡流或熊孩子的效果：这一条要给他错的那份。";
         }
         libNtve_gf_SetDialogItemText(g_miNote, StringToText(s2), PlayerGroupSingle(g_teller));
         DialogControlSetVisible(g_miNote, PlayerGroupSingle(g_teller), true);
@@ -28351,8 +28416,8 @@ void BOTC_ManInfoOpen (int seat, int role, string extra) {
         }
         else {
             // 【涡流（71）】（用户 2026-09-21）：他带着「信息错误（涡流）」→ 这一条得给错的
-            if (seat >= 2 && g_tokOn[(((g_teller * 14) + seat) * 256) + 84]) {
-                libNtve_gf_SetDialogItemText(g_miNote, StringToText("【涡流】他是镇民：这一条信息要给错的那份，别照正确答案发。"), PlayerGroupSingle(g_teller));
+            if (seat >= 2 && BOTC_InfoErrorOn(seat)) {
+                libNtve_gf_SetDialogItemText(g_miNote, StringToText("【信息错误】他带有涡流或熊孩子的效果：这一条信息要给错的那份，别照正确答案发。"), PlayerGroupSingle(g_teller));
                 DialogControlSetVisible(g_miNote, PlayerGroupSingle(g_teller), true);
             }
             else {
@@ -28427,7 +28492,7 @@ void BOTC_ManInfoDreamer (int seat, int target) {
         return;
     }
     r = BOTC_SeatTrueRole(target);
-    if (r < 0 || r > 150) {
+    if (r < 0 || r > 151) {
         return;
     }
     team = BOTC_RoleTeam(r);
@@ -29026,7 +29091,7 @@ int BOTC_SeatOfRoleNot (int r, int skip) {
 // 给「某个身份」身上打一格 token（卖花女孩 / 城镇公告员的提示标记走它）
 void BOTC_TokMarkRole (int r, int t, string why) {
     int q;
-    if (r < 0 || r > 150 || t < 0 || t > 255) {
+    if (r < 0 || r > 151 || t < 0 || t > 255) {
         return;
     }
     q = BOTC_SeatOfRole(r);
@@ -29254,6 +29319,41 @@ void BOTC_TestPhilo (int role) {
     BOTC_PmStore(g_teller, "【测试】座位 2 现在是哲学家，并且选了「" + g_roleName[role] + "」：请在弹出来的网格里点他以为自己是哪个角色。");
 }
 // 哲学家（56）：弹身份网格（只列善良角色）---- 复用侍臣那套网格，模式 8（用户 2026-09-21）
+// 【熊孩子（151）】选择镇民角色；只标记真实拥有该角色的人，不标记借用能力者。
+void BOTC_RascalOpen (int p) {
+    int cp;
+    if (p < 1 || p > 13) {
+        return;
+    }
+    cp = g_who[p];
+    g_pickMode[cp] = 43;
+    g_pickWho[cp] = p;
+    g_pickTeam = 0;
+    BOTC_PickFilter(cp, false);
+    libNtve_gf_SetDialogItemText(g_pickTitle, StringToText("选择一个镇民角色"), PlayerGroupSingle(cp));
+    DialogSetVisible(g_pickDlg, PlayerGroupSingle(cp), true);
+}
+
+void BOTC_RascalPick (int p, int role) {
+    if (p < 1 || p > 13 || role < 0 || role > 151) {
+        return;
+    }
+    if (BOTC_RoleTeam(role) != 0) {
+        BOTC_Notice(g_who[p], "请选择一个镇民角色。");
+        return;
+    }
+    BOTC_TellRoleChoice(p, role);
+    g_rascalRole[p] = role;
+    g_rascalActive[p] = BOTC_AbilityWorks(p, 151);
+    if (g_rascalActive[p]) {
+        BOTC_PmStore(g_teller, "【熊孩子】" + BOTC_NameStr(p) + " 选择了镇民角色「" + g_roleName[role] + "」：真实拥有该角色的玩家获得「捣蛋」，直到下个黄昏。");
+    }
+    else {
+        BOTC_PmStore(g_teller, "【熊孩子】" + BOTC_NameStr(p) + " 选择了「" + g_roleName[role] + "」，但能力未生效。");
+    }
+    BOTC_RascalSync();
+}
+
 void BOTC_PhiloOpen (int p) {
     int cp;
     if (p < 1 || p > 13) {
@@ -29280,7 +29380,7 @@ void BOTC_PhiloPick (int p, int role) {
     if (p < 1 || p > 13) {
         return;
     }
-    if (role < 0 || role > 150) {
+    if (role < 0 || role > 151) {
         return;
     }
     if (BOTC_RoleAlign(role) != 0) {
@@ -29504,7 +29604,7 @@ int BOTC_LunaticActingSeat () {
     return any;
 }
 void BOTC_PhiloBelieve (int p, int role) {
-    if (p < 1 || p > 13 || role < 0 || role > 150) {
+    if (p < 1 || p > 13 || role < 0 || role > 151) {
         return;
     }
     if (g_nightNum > 0) {
@@ -30377,7 +30477,7 @@ int BOTC_GossipVictim (int by) {
             continue;
         }
         r = BOTC_SeatTrueRole(q);
-        if (r < 0 || r > 150) {
+        if (r < 0 || r > 151) {
             continue;
         }
         if (BOTC_RoleAlign(r) == 1) {
@@ -30396,7 +30496,7 @@ int BOTC_GossipVictim (int by) {
                 continue;
             }
             r = BOTC_SeatTrueRole(q);
-            if (r < 0 || r > 150) {
+            if (r < 0 || r > 151) {
                 continue;
             }
             if (BOTC_RoleAlign(r) == 1) {
@@ -30420,7 +30520,7 @@ int BOTC_GossipVictim (int by) {
             continue;
         }
         r = BOTC_SeatTrueRole(q);
-        if (r < 0 || r > 150) {
+        if (r < 0 || r > 151) {
             continue;
         }
         if (BOTC_RoleAlign(r) == 1) {
@@ -30620,7 +30720,7 @@ void BOTC_OjoDecline (int p) {
 }
 
 void BOTC_OjoOpenStTarget (int p, int role) {
-    if (p < 1 || p > 13 || role < 0 || role > 150) {
+    if (p < 1 || p > 13 || role < 0 || role > 151) {
         return;
     }
     DialogSetVisible(g_skillDlg[p], PlayerGroupSingle(g_who[p]), false);
@@ -30666,7 +30766,7 @@ void BOTC_OjoPick (int p, int role) {
     int alive;
     int last;
     int sent;
-    if (p < 1 || p > 13 || role < 0 || role > 150) {
+    if (p < 1 || p > 13 || role < 0 || role > 151) {
         return;
     }
     if (p != g_ojoFrom) {
@@ -30770,7 +30870,7 @@ void BOTC_KazaliCompositionApply () {
         pick = -1;
         for (i = 0; i < g_boardRoleN[g_board]; i += 1) {
             r = g_boardRole[(g_board * 256) + i];
-            if (r < 0 || r > 150) {
+            if (r < 0 || r > 151) {
                 continue;
             }
             if (BOTC_RoleTeam(r) != 0 && BOTC_RoleTeam(r) != 1) {
@@ -30868,7 +30968,7 @@ bool BOTC_BoffinNestedWorksAt (int src, int q) {
 
 int BOTC_BoffinNestedSourceFor (int q, int role) {
     int src;
-    if (q < 2 || q > 13 || role < 0 || role > 150) {
+    if (q < 2 || q > 13 || role < 0 || role > 151) {
         return 0;
     }
     for (src = 2; src <= 13; src += 1) {
@@ -30900,7 +31000,7 @@ int BOTC_BoffinNestedPhiloDrunkTarget (int src) {
         return 0;
     }
     role = g_bnestRoleBy[src] - 1;
-    if (role < 0 || role > 150) {
+    if (role < 0 || role > 151) {
         return 0;
     }
     return BOTC_SeatOfRoleNot(role, q);
@@ -31006,7 +31106,7 @@ void BOTC_BoffinNestedOpen (int src) {
 void BOTC_BoffinNestedPick (int src, int role) {
     int q;
     int outerRole;
-    if (src < 2 || src > 13 || role < 0 || role > 150 || !BOTC_BoffinWorksAt(src)) {
+    if (src < 2 || src > 13 || role < 0 || role > 151 || !BOTC_BoffinWorksAt(src)) {
         return;
     }
     q = g_boffinTargetBy[src];
@@ -31048,7 +31148,7 @@ int BOTC_BoffinNestedRoleOrderFor (int src, int q) {
         return 0;
     }
     role = g_bnestRoleBy[src] - 1;
-    if (role < 0 || role > 150) {
+    if (role < 0 || role > 151) {
         return 0;
     }
     if (role == 29 && g_courtUsed[q]) { return 0; }
@@ -31165,7 +31265,7 @@ bool BOTC_BoffinWorksAt (int b) {
     if (!BOTC_BoffinSourceIs(b) || !g_boffinChosenBy[b]) {
         return false;
     }
-    if (g_boffinRoleBy[b] < 1 || g_boffinRoleBy[b] > 150) {
+    if (g_boffinRoleBy[b] < 1 || g_boffinRoleBy[b] > 151) {
         return false;
     }
     q = g_boffinTargetBy[b];
@@ -31206,7 +31306,7 @@ bool BOTC_BoffinActiveFrom (int b, int q, int role) {
 
 bool BOTC_BoffinActiveFor (int q, int role) {
     int b;
-    if (q < 2 || q > 13 || role < 0 || role > 150) {
+    if (q < 2 || q > 13 || role < 0 || role > 151) {
         return false;
     }
     for (b = 2; b <= 13; b += 1) {
@@ -31235,7 +31335,7 @@ bool BOTC_BoffinMustStayEvil (int q) {
 bool BOTC_BoffinRoleAllowed (int role) {
     int i;
     int n;
-    if (role < 0 || role > 150) {
+    if (role < 0 || role > 151) {
         return false;
     }
     if (BOTC_RoleTeam(role) != 0 && BOTC_RoleTeam(role) != 1) {
@@ -31298,9 +31398,9 @@ void BOTC_BoffinOpenStatus (int q) {
         return;
     }
     BOTC_MiSeatFieldsReset();
-    if (g_boffinChosenBy[q] && g_boffinTargetBy[q] >= 2 && g_boffinRoleBy[q] >= 1 && g_boffinRoleBy[q] <= 150) {
+    if (g_boffinChosenBy[q] && g_boffinTargetBy[q] >= 2 && g_boffinRoleBy[q] >= 1 && g_boffinRoleBy[q] <= 151) {
         note = "已赋予" + BOTC_NameStr(g_boffinTargetBy[q]) + "：" + g_roleName[g_boffinRoleBy[q] - 1] + "。";
-        if (g_bnestChosenBy[q] && g_bnestRoleBy[q] >= 1 && g_bnestRoleBy[q] <= 150) {
+        if (g_bnestChosenBy[q] && g_bnestRoleBy[q] >= 1 && g_bnestRoleBy[q] <= 151) {
             note = note + " 嵌套能力：" + g_roleName[g_bnestRoleBy[q] - 1] + "。";
         }
     }
@@ -31374,7 +31474,7 @@ void BOTC_BoffinRecipientOpen () {
     if (role <= 0) {
         role = g_boffinRoleBy[src];
     }
-    if (role < 1 || role > 150) {
+    if (role < 1 || role > 151) {
         BOTC_Notice(g_teller, "先选择科学怪人要赋予的能力。");
         return;
     }
@@ -31415,7 +31515,7 @@ void BOTC_BoffinSetRecipient (int q) {
     if (role <= 0) {
         role = g_boffinRoleBy[src];
     }
-    if (role < 1 || role > 150) {
+    if (role < 1 || role > 151) {
         return;
     }
     old = g_boffinTargetBy[src];
@@ -31486,7 +31586,7 @@ int BOTC_ActRoleOf (int p) {
     if (p < 1 || p > 13) {
         return -1;
     }
-    if (p == 1 && g_pdRole > 0 && g_pdRole <= 150) {
+    if (p == 1 && g_pdRole > 0 && g_pdRole <= 151) {
         return g_pdRole - 1;
     }
     if (g_boffinActing[p]) {
@@ -31498,12 +31598,12 @@ int BOTC_ActRoleOf (int p) {
     }
     if (g_bnestActing[p]) {
         src = g_bnestSource[p];
-        if (BOTC_BoffinNestedWorksAt(src, p) && g_bnestRoleBy[src] > 0 && g_bnestRoleBy[src] <= 150) {
+        if (BOTC_BoffinNestedWorksAt(src, p) && g_bnestRoleBy[src] > 0 && g_bnestRoleBy[src] <= 151) {
             return g_bnestRoleBy[src] - 1;
         }
         return -1;
     }
-    if (g_grantActing[p] && g_grantRoleBy[p] > 0 && g_grantRoleBy[p] <= 150) {
+    if (g_grantActing[p] && g_grantRoleBy[p] > 0 && g_grantRoleBy[p] <= 151) {
         return g_grantRoleBy[p] - 1;
     }
     return g_mark[(g_teller * 14) + p] - 1;
@@ -31519,7 +31619,7 @@ int BOTC_BoffinRoleOrderForSource (int src, int q) {
         return 0;
     }
     role = g_boffinRoleBy[src] - 1;
-    if (role < 0 || role > 150) {
+    if (role < 0 || role > 151) {
         return 0;
     }
     // 哲学家 / 炼金术士是一次性选择：完成选择后不再自动唤醒这两种能力本身。
@@ -31602,7 +31702,7 @@ int BOTC_GrantNightOrder (int q) {
     }
     role = g_grantRoleBy[q] - 1;
     first = g_grantFirstNight[q];
-    if (role < 0 || role > 150 || first < 1 || g_nightNum < first) {
+    if (role < 0 || role > 151 || first < 1 || g_nightNum < first) {
         return 0;
     }
     act = g_roleAct[role];
@@ -31639,7 +31739,7 @@ int BOTC_GrantWakeOrder (int q) {
     }
     role = g_grantRoleBy[q] - 1;
     own = g_mark[(g_teller * 14) + q] - 1;
-    if (role < 0 || role > 150 || role == own) {
+    if (role < 0 || role > 151 || role == own) {
         return 0;
     }
     if (role == 29 && g_courtUsed[q]) { return 0; }
@@ -31698,7 +31798,7 @@ bool BOTC_AbilityWorks (int q, int role) {
 // 只用于被动能力的全局查询，不用于【真身是什么】的身份登记。
 int BOTC_AbilitySeat (int role) {
     int q;
-    if (role < 0 || role > 150) {
+    if (role < 0 || role > 151) {
         return 0;
     }
     for (q = 1; q <= 13; q += 1) {
@@ -31731,7 +31831,7 @@ void BOTC_ProfessorResolve (int p, int seat) {
         return;
     }
     real = BOTC_RegRoleOf(seat);          // 是不是镇民按「互动干扰」那一层算
-    if (real < 0 || real > 150) {
+    if (real < 0 || real > 151) {
         return;
     }
     if (!BOTC_RegIsTownsfolk(seat)) {
@@ -32377,7 +32477,7 @@ int BOTC_CogTokOf (int tr) {
 }
 
 void BOTC_PutCogCover (int q, int card, int tok) {
-    if (q < 2 || q > 13 || card < 0 || card > 150 || tok < 0) {
+    if (q < 2 || q > 13 || card < 0 || card > 151 || tok < 0) {
         return;
     }
     g_mark[(g_teller * 14) + q] = card + 1;
@@ -32877,7 +32977,7 @@ void BOTC_WakeRender () {
     DialogControlSetVisible(g_specBtn, PlayerGroupSingle(g_teller), g_started || g_isNight);
     if (g_pdBtn > 0) {
         DialogControlSetVisible(g_pdBtn, PlayerGroupSingle(g_teller), g_isNight && g_pdRole > 0);
-        if (g_pdRole > 0 && g_pdRole <= 150) {
+        if (g_pdRole > 0 && g_pdRole <= 151) {
             libNtve_gf_SetDialogItemText(g_pdBtn, StringToText("说书人：" + g_roleName[g_pdRole - 1]), PlayerGroupSingle(g_teller));
         }
     }
@@ -32936,13 +33036,13 @@ int BOTC_WakeAbilityChoiceBuild (int q) {
     }
     own = g_mark[(g_teller * 14) + q] - 1;
     // 手动唤醒不受自动夜序 / 行动类别限制：本体与手工赋予的能力都应可选。
-    if (own >= 0 && own <= 150) {
+    if (own >= 0 && own <= 151) {
         g_wakeChoiceSource[0] = 0;
         g_wakeChoiceRole[0] = own;
         n = 1;
     }
     // 说书人手工赋予的附加能力：即使标记为醉酒，也仍然列入选择，只是执行时无效。
-    if (n < 6 && g_grantRoleBy[q] > 0 && g_grantRoleBy[q] <= 150) {
+    if (n < 6 && g_grantRoleBy[q] > 0 && g_grantRoleBy[q] <= 151) {
         grant = g_grantRoleBy[q] - 1;
         if (grant != own) {
             g_wakeChoiceSource[n] = -1;
@@ -33621,7 +33721,7 @@ bool BOTC_SummonerLmCheck (int target, int role) {
 }
 
 void BOTC_SummonerSummon (int p, int target, int role) {
-    if (p < 2 || p > 13 || target < 2 || target > 13 || role < 0 || role > 150) {
+    if (p < 2 || p > 13 || target < 2 || target > 13 || role < 0 || role > 151) {
         return;
     }
     if (g_nightNum != 3) {
@@ -33717,7 +33817,7 @@ void BOTC_ComboResolve (int p) {
         BOTC_Notice(g_who[p], "先选择目标1。");
         return;
     }
-    if (role < 0 || role > 150) {
+    if (role < 0 || role > 151) {
         BOTC_Notice(g_who[p], "请先选择一个角色。");
         return;
     }
@@ -34110,7 +34210,7 @@ bool BOTC_NonWakeOrderStep (int beforeOrd) {
     for (i = 0; i < g_seatN; i += 1) {
         q = g_seatList[i];
         r = g_mark[(g_teller * 14) + q] - 1;
-        if (r < 0 || r > 150 || !BOTC_ManualDeathTokenRole(r) || g_manualDeathDone[q]) {
+        if (r < 0 || r > 151 || !BOTC_ManualDeathTokenRole(r) || g_manualDeathDone[q]) {
             continue;
         }
         if (!BOTC_HasAbility(q, r)) {
@@ -34260,7 +34360,7 @@ void BOTC_AutoWakeNext () {
             g_insertWake[q] = false;
             continue;                       // 只作为夜序提示，不占唤醒位
         }
-        if (r < 0 || r > 150 || BOTC_NightOrderOf(q) <= 0 || BOTC_WakeSkipNow(q)) {
+        if (r < 0 || r > 151 || BOTC_NightOrderOf(q) <= 0 || BOTC_WakeSkipNow(q)) {
             g_insertWake[q] = false;
             continue;
         }
@@ -34287,7 +34387,7 @@ void BOTC_AutoWakeNext () {
             if (r == 136 || r == 141) {
                 continue;                   // 魔术师由邪恶信息直接处理；维齐尔在白天公开
             }
-            if (r < 0 || r > 150) {
+            if (r < 0 || r > 151) {
                 continue;
             }
             if (BOTC_NightOrderOf(q) <= 0) {
@@ -34528,7 +34628,7 @@ void BOTC_WakeApply (int q, bool manual) {
         return;
     }
     r = BOTC_ActRoleOf(q);
-    if (r < 0 || r > 150) {
+    if (r < 0 || r > 151) {
         BOTC_Notice(g_teller, "这个座位还没有身份，不能唤醒。");
         return;
     }
@@ -34585,7 +34685,7 @@ void BOTC_WakeApply (int q, bool manual) {
         }
     }
     else if (g_grantActing[q]) {
-        if (g_grantRoleBy[q] <= 0 || g_grantRoleBy[q] > 150 || (!manual && BOTC_SeatDead(q))) {
+        if (g_grantRoleBy[q] <= 0 || g_grantRoleBy[q] > 151 || (!manual && BOTC_SeatDead(q))) {
             BOTC_PmStore(g_teller, "【赋予能力】附加能力已经不存在或玩家死亡，这次唤醒取消。");
             g_grantActing[q] = false;
             return;
@@ -34885,7 +34985,7 @@ void BOTC_WakeApply (int q, bool manual) {
     }
     // 【被唤醒就直接弹技能面板】（用户 2026-09-20）：教父（39）只在「今天有外来者死」那晚才弹（首夜只听信息）
     // 【理发师（62）】（用户 2026-09-21）：他的面板由 BOTC_BarberOpen 自己开（要换成交换用的标题），这里跳过
-    if (g_started && r >= 0 && r <= 150 && g_roleTargets[r] > 0 && r != 36 && r != 62 && r != 64 && !(r == 119 && g_nightNum >= 2) && (r != 39 || BOTC_GodfatherCanKill())) {   // 逆臣：只有首夜选人
+    if (g_started && r >= 0 && r <= 151 && g_roleTargets[r] > 0 && r != 36 && r != 62 && r != 64 && !(r == 119 && g_nightNum >= 2) && (r != 39 || BOTC_GodfatherCanKill())) {   // 逆臣：只有首夜选人
         BOTC_SkillOpen(q);
     }
     // 【电脑玩家：唤醒之后自动替他选目标】（用户 2026-09-20）
@@ -34913,7 +35013,7 @@ void BOTC_SkillBtnRender () {
         r = g_mark[(g_teller * 14) + p] - 1;
         // 18 = 间谍：技能不用选目标（直接看说书人的魔典），所以也算「有技能按钮」的角色
         useBtn = false;
-        if (g_started && g_awake[p] && r >= 0 && r <= 150 && (g_roleTargets[r] > 0 || r == 18) && !(r == 119 && g_nightNum >= 2)) {   // 逆臣：只有首夜
+        if (g_started && g_awake[p] && r >= 0 && r <= 151 && (g_roleTargets[r] > 0 || r == 18) && !(r == 119 && g_nightNum >= 2)) {   // 逆臣：只有首夜
             useBtn = true;
         }
         // 每局限一次的角色：用掉了就不再给按钮（用户 2026-09-20）
@@ -34989,7 +35089,7 @@ void BOTC_SkillOpen (int p) {
         DialogSetVisible(g_skillDlg[p], PlayerGroupSingle(g_who[p]), false);
         return;
     }
-    if (g_grantActing[p] && (g_grantRoleBy[p] <= 0 || g_grantRoleBy[p] > 150)) {
+    if (g_grantActing[p] && (g_grantRoleBy[p] <= 0 || g_grantRoleBy[p] > 151)) {
         g_skillPicking[p] = false;
         DialogSetVisible(g_skillDlg[p], PlayerGroupSingle(g_who[p]), false);
         return;
@@ -35011,6 +35111,11 @@ void BOTC_SkillOpen (int p) {
     }
     // 卡扎力（135）：首夜自动唤醒后只与说书人私聊，不打开刀人面板；之后正常选人。
     if (!g_boffinActing[p] && r == 135 && BOTC_ActingIsFirstNight(p)) {
+        return;
+    }
+    // 熊孩子（151）：选择的是一张镇民角色，不是玩家座位。
+    if (r == 151 && !g_boffinActing[p] && !g_bnestActing[p]) {
+        BOTC_RascalOpen(p);
         return;
     }
     // 哲学家（56）：他选的也是**角色**不是座位 ---- 直接弹身份网格（只列善良角色，用户 2026-09-21）
@@ -35041,7 +35146,7 @@ void BOTC_SkillRender (int p) {
     //   麻脸巫婆的「生死无常」这类面板开在**玩家 1** 身上，他在魔典上没有身份（r = -1）----
     //   原来这里直接 return，于是槽位文字永远不刷新：说书人点座位看着像没反应。
     //   现在 p == g_teller 放行（标题留给调用方自己写，别覆盖）。
-    if (r < 0 || r > 150) {
+    if (r < 0 || r > 151) {
         if (g_who[p] != g_teller) {
             return;
         }
@@ -35262,7 +35367,7 @@ void BOTC_RangerOpen (int p, int target) {
 void BOTC_RangerPick (int role) {
     int t;
     t = g_rangerWho;
-    if (t < 2 || t > 13 || role < 0 || role > 150) {
+    if (t < 2 || t > 13 || role < 0 || role > 151) {
         return;
     }
     BOTC_SetSeatRole(g_teller, t, role);
@@ -35311,7 +35416,7 @@ void BOTC_WudOutsiderOpen (int seat) {
 void BOTC_WudOutsiderPick (int role) {
     int t;
     t = g_wudSeat;
-    if (t < 2 || t > 13 || role < 0 || role > 150) {
+    if (t < 2 || t > 13 || role < 0 || role > 151) {
         return;
     }
     BOTC_SetSeatRole(g_teller, t, role);
@@ -35369,7 +35474,7 @@ void BOTC_WudChangeOpen (int seat, int by) {
 void BOTC_WudChangePick (int role) {
     int t;
     t = g_wudSeat;
-    if (t < 2 || t > 13 || role < 0 || role > 150) {
+    if (t < 2 || t > 13 || role < 0 || role > 151) {
         return;
     }
     BOTC_SetSeatRole(g_teller, t, role);
@@ -35437,7 +35542,7 @@ void BOTC_DrossPick (int role) {
     g_pickMode[g_teller] = 0;
     g_pickWho[g_teller] = 0;
     DialogSetVisible(g_pickDlg, PlayerGroupSingle(g_teller), false);
-    if (p < 2 || p > 13 || role < 0 || role > 150) {
+    if (p < 2 || p > 13 || role < 0 || role > 151) {
         return;
     }
     if (BOTC_RoleTeam(role) != 0) {
@@ -35910,7 +36015,7 @@ void BOTC_SkillConfirm (int p) {
         DialogSetVisible(g_skillDlg[p], PlayerGroupSingle(g_who[p]), false);
         return;
     }
-    if (g_grantActing[p] && (g_grantRoleBy[p] <= 0 || g_grantRoleBy[p] > 150)) {
+    if (g_grantActing[p] && (g_grantRoleBy[p] <= 0 || g_grantRoleBy[p] > 151)) {
         g_skillPicking[p] = false;
         g_skillT1[p] = 0;
         g_skillT2[p] = 0;
@@ -36231,7 +36336,7 @@ void BOTC_SkillConfirm (int p) {
         }
         return;
     }
-    if (r < 0 || r > 150) {
+    if (r < 0 || r > 151) {
         return;
     }
     if (g_skillT1[p] <= 0) {
@@ -36386,7 +36491,7 @@ void BOTC_SkillConfirm (int p) {
     }
     g_skillPicking[p] = false;
     // 【炼金术士 × 间谍/寡妇】：猜中后的下一夜，恶魔必须选那个间谍/寡妇 —— 卡【确认】不卡选人；多刀只看目标里有没有他
-    if (g_alcGuess >= 2 && g_alcDay == g_nightNum && r >= 0 && r <= 150 && BOTC_RoleTeam(r) == 3) {
+    if (g_alcGuess >= 2 && g_alcDay == g_nightNum && r >= 0 && r <= 151 && BOTC_RoleTeam(r) == 3) {
         if (!BOTC_SeatDead(g_alcBy) && BOTC_AbilityWorks(g_alcBy, 95)) {
             if (g_skillT1[p] != g_alcGuess && g_skillT2[p] != g_alcGuess && g_skillT3[p] != g_alcGuess) {
                 BOTC_Notice(g_who[p], "炼金术士猜测正确，你今晚必须选择" + IntToString(g_alcGuess - 1) + BOTC_NameStr(g_alcGuess));
@@ -36721,14 +36826,14 @@ if (r == 49) {
             if (g_lmOn && g_tokOn[(((g_teller * 14) + t) * 256) + 134]) {
                 nr = g_mark[(g_teller * 14) + t] - 1;
                 snakeLm = true;
-                if (nr < 0 || nr > 150 || nr == 112) {
+                if (nr < 0 || nr > 151 || nr == 112) {
                     snakeOk = false;
                     BOTC_PmStore(g_teller, "【舞蛇人】" + BOTC_NameStr(p) + " 选了 " + BOTC_NameStr(t) + "（他在照看小怪宝）：魔典上读不出他本来的爪牙身份 → 这一次没有交换。");
                 }
             }
             // 【带宝的那位就是「恶魔」，不用再看他的角色队】（用户 2026-10-14 报「不是恶魔，无事发生」）----
             //   他的真身份是本来的**爪牙**（team 2），恶魔身份是靠 134 来的；所以这里必须跳过队判。
-            if (snakeOk && !snakeLm && (nr < 0 || nr > 150 || BOTC_RoleTeam(nr) != 3)) {
+            if (snakeOk && !snakeLm && (nr < 0 || nr > 151 || BOTC_RoleTeam(nr) != 3)) {
                 snakeOk = false;
                 BOTC_PmStore(g_teller, "【舞蛇人】" + BOTC_NameStr(p) + " 选了 " + BOTC_NameStr(t) + "：不是恶魔，无事发生。");
             }
@@ -36746,7 +36851,7 @@ if (r == 49) {
                 if (nrP == 112) {
                     nrP = g_mark[(g_teller * 14) + p] - 1;     // 【舞蛇人自己带着小怪宝】（用户 2026-10-14）：同样忽略 134 那层
                 }
-                if (nrP < 0 || nrP > 150 || nrP == rt) {
+                if (nrP < 0 || nrP > 151 || nrP == rt) {
                     nrP = 49;             // 兜底：真身读不出来（或跟恶魔同一个角色）时，退回原来的舞蛇人
                 }
                 // 【阵营检测】（用户 2026-10-02）：舞蛇人换恶魔 = 两人**交换阵营**。
@@ -37100,7 +37205,7 @@ bool BOTC_SeatIsMinion (int q) {
         return false;
     }
     r = g_mark[(g_teller * 14) + q] - 1;
-    if (r < 0 || r > 150) {
+    if (r < 0 || r > 151) {
         return false;
     }
     return (BOTC_RoleTeam(r) == 2);
@@ -37171,7 +37276,7 @@ void BOTC_DemonStrike (int src, int srcRole, int q, bool selfPromote) {
         return;
     }
     // 【相克规则：疯子 × 数学家】（用户 2026-09-21）：记下真恶魔今晚的第一个目标
-    if (g_demonTar < 2 && srcRole >= 0 && srcRole <= 150 && BOTC_RoleTeam(srcRole) == 3) {
+    if (g_demonTar < 2 && srcRole >= 0 && srcRole <= 151 && BOTC_RoleTeam(srcRole) == 3) {
         g_demonTar = q;
         BOTC_MalfLunCheck();
     }
@@ -37861,7 +37966,7 @@ bool BOTC_TwinBadInfo (int a) {
     if (!BOTC_SkillWorks(a)) {
         return true;
     }
-    if (g_tokOn[(((g_teller * 14) + a) * 256) + 84]) {
+    if (BOTC_InfoErrorOn(a)) {
         return true;
     }
     return false;
@@ -38060,7 +38165,7 @@ void BOTC_CerenOpen (int p) {
 }
 
 void BOTC_CerenApply (int who, int role) {
-    if (who < 1 || who > 13 || role < 0 || role > 150) {    // 允许 1（用户 2026-09-21）
+    if (who < 1 || who > 13 || role < 0 || role > 151) {    // 允许 1（用户 2026-09-21）
         return;
     }
     g_cerenWho = who;
@@ -38078,7 +38183,7 @@ void BOTC_CerenApply (int who, int role) {
 //   造出恶魔 → 当晚恶魔自己的刀无效，改由说书人在「生死无常」面板里决定 0~2 个人死（死因算她造成的）。
 void BOTC_ChangeRoleMsg (int q, int role) {
     string s;
-    if (q < 2 || q > 13 || role < 0 || role > 150) {
+    if (q < 2 || q > 13 || role < 0 || role > 151) {
         return;
     }
     // 【阵营没变就省略】（用户 2026-10-21）：比较改身份前 / 后的有效阵营。
@@ -38117,7 +38222,7 @@ void BOTC_HagOpen (int p) {
 void BOTC_HagApply (int who, int role) {
     int oldR;
     int oldA;
-    if (who < 1 || who > 13 || role < 0 || role > 150) {    // 允许 1（用户 2026-09-21）
+    if (who < 1 || who > 13 || role < 0 || role > 151) {    // 允许 1（用户 2026-09-21）
         return;
     }
     oldR = BOTC_SeatTrueRole(who);
@@ -38194,7 +38299,7 @@ void BOTC_HagApply (int who, int role) {
 
 // 造出恶魔 → 当晚死亡由说书人定：恶魔自己的刀无效 + 开「生死无常」面板
 void BOTC_HagDemonCheck (int role) {
-    if (role < 0 || role > 150) {
+    if (role < 0 || role > 151) {
         return;
     }
     if (BOTC_RoleTeam(role) != 3) {
@@ -38284,7 +38389,7 @@ void BOTC_HagBelieve (int role) {
     int oldA;
     who = g_hagWho;
     kind = g_cerenRole;
-    if (who < 2 || who > 13 || role < 0 || role > 150) {
+    if (who < 2 || who > 13 || role < 0 || role > 151) {
         return;
     }
     oldA = BOTC_SeatAlign(who);
@@ -38449,7 +38554,7 @@ void BOTC_CannOpen (int kind) {
 
 void BOTC_CannPick (int role) {
     int cs;
-    if (g_cannSeat < 2 || role < 0 || role > 150) {
+    if (g_cannSeat < 2 || role < 0 || role > 151) {
         return;
     }
     cs = g_cannSeat;
@@ -38673,6 +38778,48 @@ void BOTC_NoDashiiSync () {
         BOTC_PmStore(g_teller, "【诺-达鲺】与他相邻的两名镇民中毒：" + BOTC_NameStr(g_nodA) + "（顺时针）/ " + BOTC_NameStr(g_nodB) + "（逆时针）。");
         BOTC_GrimRender(g_teller);
     }
+}
+
+// 【熊孩子（151）】：选中的镇民角色真实对应玩家获得「捣蛋」；借用能力不算。
+void BOTC_RascalSync () {
+    int s;
+    int q;
+    int role;
+    for (q = 2; q <= 13; q += 1) {
+        g_tokOn[(((g_teller * 14) + q) * 256) + 170] = false;
+    }
+    for (s = 2; s <= 13; s += 1) {
+        if (!g_rascalActive[s]) {
+            continue;
+        }
+        if (!g_seatOn[s] || BOTC_SeatDead(s) || !BOTC_HasAbility(s, 151)) {
+            g_rascalActive[s] = false;
+            g_rascalRole[s] = 0;
+            continue;
+        }
+        role = g_rascalRole[s];
+        if (role < 0 || role > 151 || BOTC_RoleTeam(role) != 0) {
+            g_rascalActive[s] = false;
+            g_rascalRole[s] = 0;
+            continue;
+        }
+        for (q = 2; q <= 13; q += 1) {
+            if (g_seatOn[q] && BOTC_SeatTrueRole(q) == role) {
+                g_tokOn[(((g_teller * 14) + q) * 256) + 170] = true;
+            }
+        }
+    }
+    BOTC_GrimRender(g_teller);
+}
+
+void BOTC_RascalDuskClear () {
+    int q;
+    for (q = 2; q <= 13; q += 1) {
+        g_rascalActive[q] = false;
+        g_rascalRole[q] = 0;
+        g_tokOn[(((g_teller * 14) + q) * 256) + 170] = false;
+    }
+    BOTC_GrimRender(g_teller);
 }
 
 // 【涡流（71）】：只要他活着并且清醒，镇民玩家通过能力拿到的信息一定错 → 给镇民打提醒标记
@@ -39059,7 +39206,7 @@ void BOTC_TestHag (int role) {
         }
         for (i = 0; i < g_boardRoleN[b]; i += 1) {
             r = g_boardRole[(b * 256) + i];
-            if (r >= 0 && r <= 150 && BOTC_RoleTeam(r) == 3) {
+            if (r >= 0 && r <= 151 && BOTC_RoleTeam(r) == 3) {
                 pick = r;
                 break;
             }
@@ -39118,7 +39265,7 @@ void BOTC_SeatDump (int q) {
 // 【镜像双子 · 配对】（用户 2026-09-21）：说书人在「祖母那种面板」里填座位号 + 选身份（所有角色都能选）。
 //   他中毒 / 酒鬼时按规则两人不该知道对方身份 → 只记下来、不发信息，让说书人自己决定。
 void BOTC_TwinPair (int q, int role) {
-    if (q < 2 || q > 13 || role < 0 || role > 150) {
+    if (q < 2 || q > 13 || role < 0 || role > 151) {
         return;
     }
     if (g_twinA < 2) {
@@ -39212,7 +39359,7 @@ int BOTC_TargetsOf (int p) {
     if (p == 1 && g_boffinRecipientPick) {
         return 1;
     }
-    if (r < 0 || r > 150) {
+    if (r < 0 || r > 151) {
         return 0;
     }
     // 【理发师交换】（用户 2026-09-21）：恶魔被再次唤醒时也要两个目标槽
@@ -39675,7 +39822,7 @@ void BOTC_PromoteTo (int q) {
         return;
     }
     // 【变成同一只恶魔】（用户 2026-09-21）：以前固定改成小恶魔，现在看死掉的是哪一只
-    if (g_demonKind < 21 || g_demonKind > 150 || BOTC_RoleTeam(g_demonKind) != 3) {
+    if (g_demonKind < 21 || g_demonKind > 151 || BOTC_RoleTeam(g_demonKind) != 3) {
         g_demonKind = 21;
     }
     BOTC_SetSeatRole(g_teller, q, g_demonKind);
@@ -39833,7 +39980,7 @@ int BOTC_MayorPick (int mayor) {
             continue;
         }
         r = BOTC_SeatTrueRole(q);
-        if (r < 0 || r > 150) {
+        if (r < 0 || r > 151) {
             continue;
         }
         if (BOTC_RoleAlign(r) == 1) {
@@ -39853,7 +40000,7 @@ int BOTC_MayorPick (int mayor) {
                 continue;
             }
             r = BOTC_SeatTrueRole(q);
-            if (r < 0 || r > 150) {
+            if (r < 0 || r > 151) {
                 continue;
             }
             if (BOTC_RoleAlign(r) == 1) {
@@ -39878,7 +40025,7 @@ int BOTC_MayorPick (int mayor) {
             continue;
         }
         r = BOTC_SeatTrueRole(q);
-        if (r < 0 || r > 150) {
+        if (r < 0 || r > 151) {
             continue;
         }
         if (BOTC_RoleAlign(r) == 1) {
@@ -40205,12 +40352,12 @@ void BOTC_CheckWin () {
         //   （死亡 token 自动打红叉 / 复活 token 自动复活）之后再来判胜负；
         //   僵怖那种「盖了红叉但其实还活着」的座位也不算死。
         if (BOTC_SettledDead(q)) {
-            if (r >= 0 && r <= 150 && BOTC_RoleTeam(r) == 3) {
+            if (r >= 0 && r <= 151 && BOTC_RoleTeam(r) == 3) {
                 demonSeat = q;          // 已经公开死亡的恶魔（用来判断「是不是死于处决」）
             }
             continue;
         }
-        if (r < 0 || r > 150) {
+        if (r < 0 || r > 151) {
             continue;
         }
         if (BOTC_RoleTeam(r) == 3) {
@@ -40348,7 +40495,7 @@ bool BOTC_IsDemonSeat (int q) {
         return false;
     }
     r = BOTC_SeatTrueRole(q);
-    if (r >= 0 && r <= 150 && BOTC_RoleTeam(r) == 3) {
+    if (r >= 0 && r <= 151 && BOTC_RoleTeam(r) == 3) {
         return true;
     }
     if (g_lmOn && q == g_lmSeat) {
@@ -40379,7 +40526,7 @@ bool BOTC_GoodWinNow () {
             continue;
         }
         r = BOTC_SeatTrueRole(q);
-        if (r >= 0 && r <= 150 && BOTC_RoleTeam(r) == 3) {
+        if (r >= 0 && r <= 151 && BOTC_RoleTeam(r) == 3) {
             return false;
         }
     }
@@ -40927,7 +41074,7 @@ void BOTC_FtPick (int p, int q) {
 
 // 这个身份当假干扰项「有多合适」（权重；<= 0 = 不给这个身份）
 int BOTC_FtFakeWeight (int r) {
-    if (r < 0 || r > 150) {
+    if (r < 0 || r > 151) {
         return 0;
     }
     if (r == 8 || r == 11 || r == 4 || r == 12 || r == 15) {
@@ -42446,6 +42593,8 @@ void BOTC_SwapPerSeatRuntime (int x, int y) {
     b = g_cultDeclDone[x];   g_cultDeclDone[x] = g_cultDeclDone[y]; g_cultDeclDone[y] = b;
     b = g_damselPick[x];     g_damselPick[x] = g_damselPick[y]; g_damselPick[y] = b;
     b = g_damselDone[x];     g_damselDone[x] = g_damselDone[y]; g_damselDone[y] = b;
+    b = g_rascalActive[x];   g_rascalActive[x] = g_rascalActive[y]; g_rascalActive[y] = b;
+    t = g_rascalRole[x];     g_rascalRole[x] = g_rascalRole[y]; g_rascalRole[y] = t;
     b = g_moonDone[x];       g_moonDone[x] = g_moonDone[y];    g_moonDone[y] = b;
     t = g_moonPick[x];       g_moonPick[x] = g_moonPick[y];    g_moonPick[y] = t;
     b = g_moonOpen[x];       g_moonOpen[x] = g_moonOpen[y];    g_moonOpen[y] = b;
@@ -43284,7 +43433,7 @@ int BOTC_CatRoleN (int cat) {
     int r;
     int n;
     n = 0;
-    for (r = 0; r <= 150; r += 1) {
+    for (r = 0; r <= 151; r += 1) {
         if (!BOTC_CustomRoleVisible(r)) {
             continue;
         }
@@ -43304,7 +43453,7 @@ int BOTC_CatRoleAt (int cat, int i) {
     int r;
     int n;
     n = 0;
-    for (r = 0; r <= 150; r += 1) {
+    for (r = 0; r <= 151; r += 1) {
         if (!BOTC_CustomRoleVisible(r)) {
             continue;
         }
@@ -43326,7 +43475,7 @@ int BOTC_CatPicked (int cat) {
     int r;
     int n;
     n = 0;
-    for (r = 0; r <= 150; r += 1) {
+    for (r = 0; r <= 151; r += 1) {
         if (!BOTC_CustomRoleVisible(r)) {
             continue;
         }
@@ -43344,7 +43493,7 @@ int BOTC_CatPickedAll () {
     int r;
     int n;
     n = 0;
-    for (r = 0; r <= 150; r += 1) {
+    for (r = 0; r <= 151; r += 1) {
         if (!BOTC_CustomRoleVisible(r)) {
             continue;
         }
@@ -43450,7 +43599,7 @@ void BOTC_CustomRender () {
         }
         libNtve_gf_SetDialogItemText(g_cGrpLbl[i], TextWithColor(StringToText(BOTC_CustomCatName(i)), BOTC_RoleTeamColor(r)), PlayerGroupAll());
         used = BOTC_CustomSlotBase(i);
-        for (r = 0; r <= 150; r += 1) {
+        for (r = 0; r <= 151; r += 1) {
             if (!g_csel[r] || !BOTC_CustomRoleVisible(r)) {
                 continue;
             }
@@ -43704,7 +43853,7 @@ void BOTC_CustomOpenSlot (int slot) {
         return;                       // 点当前槽位不重载，避免丢掉未保存改动。
     }
     g_customSlot = slot;
-    for (i = 0; i <= 150; i += 1) {
+    for (i = 0; i <= 151; i += 1) {
         g_csel[i] = false;
     }
     g_bootText = "";
@@ -43728,7 +43877,7 @@ void BOTC_CustomOpen () {
         return;
     }
     g_customSlot = 0;
-    for (i = 0; i <= 150; i += 1) {
+    for (i = 0; i <= 151; i += 1) {
         g_csel[i] = false;
     }
     g_bootText = "";
@@ -43759,7 +43908,7 @@ void BOTC_CustomClear () {
     g_bootSavePending = false;
     g_bootSaveSlot = 0;
     BOTC_BootleggerEditRefresh();
-    for (r = 0; r <= 150; r += 1) {
+    for (r = 0; r <= 151; r += 1) {
         g_csel[r] = false;
     }
     BOTC_CustomRender();
@@ -43819,7 +43968,7 @@ void BOTC_CustomUnpick (int k) {
     //   现在照 BOTC_CustomRender 的排法逐组扫一遍，槽号对上才删。（两组循环必须保持一致）
     for (t = 0; t < 6; t += 1) {
         used = BOTC_CustomSlotBase(t);
-        for (r = 0; r <= 150; r += 1) {
+        for (r = 0; r <= 151; r += 1) {
             if (!g_csel[r]) {
                 continue;
             }
@@ -43868,7 +44017,7 @@ int BOTC_CustomBankApply (bank bk, string sec, bool bak) {
     if (n <= 0) {
         return 0;
     }
-    if (n > 150) {
+    if (n > 151) {
         n = 128;
     }
     for (i = 0; i < n; i += 1) {
@@ -43882,14 +44031,14 @@ int BOTC_CustomBankApply (bank bk, string sec, bool bak) {
             continue;
         }
         r = BankValueGetAsInt(bk, sec, k);
-        if (r >= 0 && r <= 150 && BOTC_CustomRoleVisible(r)) {
+        if (r >= 0 && r <= 151 && BOTC_CustomRoleVisible(r)) {
             g_csel[r] = true;
         }
     }
     // 【暴风捕手保护的角色】（用户 2026-10-10）：老存档没有这个键 → 保持默认（异教领袖）
     if (BankKeyExists(bk, sec, "storm")) {
         r = BankValueGetAsInt(bk, sec, "storm");
-        if (r >= 0 && r <= 150) {
+        if (r >= 0 && r <= 151) {
             g_cStormRole = r;
         }
     }
@@ -44183,7 +44332,7 @@ void BOTC_CustomSaveBank () {
     }
     oldN = BOTC_CustomBankCount(bk, sec, false);
     if (oldN > 0) {
-        if (oldN > 150) {
+        if (oldN > 151) {
             oldN = 128;
         }
         for (i = 0; i < oldN; i += 1) {
@@ -44197,7 +44346,7 @@ void BOTC_CustomSaveBank () {
         BankValueSetFromInt(bk, sec, "pn", oldN);
     }
     n = 0;
-    for (r = 0; r <= 150; r += 1) {
+    for (r = 0; r <= 151; r += 1) {
         if (!g_csel[r] || !BOTC_CustomRoleVisible(r)) {
             continue;
         }
@@ -44331,10 +44480,10 @@ void BOTC_CustomLoadBank (bool talk) {
     if (sp == 2) {
         BOTC_PmStore(g_teller, "【自定义板 " + IntToString(g_customSlot) + "】当前说书人的 bank 没有配置 → 已临时读取玩家 1 的旧存档；下次保存会写入当前说书人的 bank。");
     }
-    if (n > 150) {
+    if (n > 151) {
         n = 128;
     }
-    for (i = 0; i <= 150; i += 1) {
+    for (i = 0; i <= 151; i += 1) {
         g_csel[i] = false;                   // 真读到了才清空 + 套用
     }
     BOTC_CustomBankApply(bk, sec, useBak);
@@ -44364,7 +44513,7 @@ void BOTC_CustomStart () {
     //   结果下一局面板里没存档可读）—— 配置合法就先存一份，再开局。省得"配置好了却没存上"。
     BOTC_CustomSaveBank();
     n = 0;
-    for (r = 0; r <= 150; r += 1) {
+    for (r = 0; r <= 151; r += 1) {
         if (!g_csel[r] || !BOTC_CustomRoleVisible(r)) {
             continue;
         }
@@ -44386,7 +44535,7 @@ void BOTC_CustomStart () {
     // 【只收真正是「传奇 / 奇遇」的角色】（用户 2026-10-10 报「提线木偶 / 痢蛭 跑到传奇角色页里」）：
     //   原来扫 88..113 只看「选没选中」---- 那个区间里混着 93 提线木偶（爪牙）/ 100 痢蛭（恶魔）这些，
     //   一选中就把它们也塞进传奇列表了。改成**按阵营过滤**（4 传奇 / 5 奇遇），跟上面板子角色那段同一个口径。
-    for (r = 0; r <= 150; r += 1) {
+    for (r = 0; r <= 151; r += 1) {
         if (!g_csel[r]) { continue; }
         if (g_roleTeam[r] != 4 && g_roleTeam[r] != 5) { continue; }
         if (lg >= 4) { break; }
@@ -44395,7 +44544,7 @@ void BOTC_CustomStart () {
     }
     g_boardLegacyN[7] = lg;
     // 【自定义剧本 → 本局用他自己选的暴风捕手保护对象】（用户 2026-10-10）
-    if (g_cStormRole < 0 || g_cStormRole > 150) {
+    if (g_cStormRole < 0 || g_cStormRole > 151) {
         g_cStormRole = 106;
     }
     g_stormRole = g_cStormRole;
@@ -45100,7 +45249,7 @@ int BOTC_MarionetteFakeRole (int self) {
     n = 0;
     for (i = 0; i < g_boardRoleN[g_board]; i += 1) {
         r = g_boardRole[(g_board * 256) + i];
-        if (r < 0 || r > 150 || r == self) {
+        if (r < 0 || r > 151 || r == self) {
             continue;
         }
         if (BOTC_RoleTeam(r) != 0) {
@@ -45123,7 +45272,7 @@ int BOTC_MarionetteFakeRole (int self) {
     n = 0;
     for (i = 0; i < g_boardRoleN[g_board]; i += 1) {
         r = g_boardRole[(g_board * 256) + i];
-        if (r < 0 || r > 150 || r == self) {
+        if (r < 0 || r > 151 || r == self) {
             continue;
         }
         if (BOTC_RoleTeam(r) != 0) {
@@ -45253,7 +45402,7 @@ int BOTC_PickBoardRole (int t) {
     pick = -1;
     for (i = 0; i < g_boardRoleN[g_board]; i += 1) {
         r = g_boardRole[(g_board * 256) + i];
-        if (r < 0 || r > 150) {
+        if (r < 0 || r > 151) {
             continue;
         }
         if (BOTC_RoleTeam(r) != t) {
@@ -45551,6 +45700,8 @@ void BOTC_Deal () {
         g_psyDay[i] = -1;
         g_alsaOpen[i] = false;
         g_alsaDay[i] = -1;
+        g_rascalActive[i] = false;
+        g_rascalRole[i] = 0;
         g_gossipDay[i] = -1;
         g_psyDeclare[i] = false;
         g_cultDeclDone[i] = false;     // 异教领袖（106）：新一局，声称次数重新给（用户 2026-10-11）
@@ -45570,7 +45721,7 @@ void BOTC_Deal () {
     g_execUsedToday = false;
     libNtve_gf_SetDialogItemText(g_deadBtn, StringToText("死亡标记"), PlayerGroupSingle(g_teller));
     BOTC_BigHintHide(0);       // 新一局：顺手收掉长驻提示（全场）
-    for (i = 0; i < 151; i += 1) {
+    for (i = 0; i < 152; i += 1) {
         g_scrUsed[i] = false;
     }
 
@@ -46195,7 +46346,7 @@ void BOTC_LBluffRoll () {
         g_lbluffPick[i] = 0;
     }
     nPool = 0;
-    for (r = 0; r <= 150; r += 1) {
+    for (r = 0; r <= 151; r += 1) {
         if (!BOTC_BoardHasRole(r)) {
             continue;
         }
@@ -46221,7 +46372,7 @@ void BOTC_LBluffRoll () {
     if (RandomInt(1, 100) <= 25) {
         n = 0;
         pick = 0;
-        for (r = 0; r <= 150; r += 1) {
+        for (r = 0; r <= 151; r += 1) {
             if (!BOTC_BoardHasRole(r)) {
                 continue;
             }
@@ -46317,7 +46468,7 @@ void BOTC_BuildLBluff () {
 //   给恶魔的 3 个伪装里，这一类**最多只出现 1 个**（两个池都够抽的时候）。
 //   ⚠ 共情者 / 占卜师是**持续信息位**，**不算**在首夜信息位里 ---- 它们不受这条限制。
 bool BOTC_BluffRestricted (int idx) {
-    if (idx < 0 || idx > 150) {
+    if (idx < 0 || idx > 151) {
         return false;
     }
     if (BOTC_RoleTeam(idx) == 1) {
@@ -46352,7 +46503,7 @@ void BOTC_BluffRoll () {
     }
     for (i = 0; i < g_boardRoleN[b]; i += 1) {
         r = g_boardRole[(b * 256) + i];
-        if (r < 0 || r > 150) {
+        if (r < 0 || r > 151) {
             continue;
         }
         if (BOTC_RoleTeam(r) != 0 && BOTC_RoleTeam(r) != 1) {
@@ -46963,7 +47114,7 @@ void BOTC_BluffSendToDemons () {
             continue;
         }
         r = g_mark[(g_teller * 14) + q] - 1;
-        if (r < 0 || r > 150) {
+        if (r < 0 || r > 151) {
             continue;
         }
         if (BOTC_RoleTeam(r) != 3) {
@@ -47003,7 +47154,7 @@ void BOTC_BluffSendToMinions () {
             continue;
         }
         r = g_mark[(g_teller * 14) + q] - 1;
-        if (r < 0 || r > 150) {
+        if (r < 0 || r > 151) {
             continue;
         }
         if (BOTC_RoleTeam(r) != 2) {
@@ -48568,7 +48719,7 @@ int BOTC_AIPhiloRandomRole (int mode) {
     pick = -1;
     for (i = 0; i < g_boardRoleN[g_board]; i += 1) {
         r = g_boardRole[(g_board * 256) + i];
-        if (r < 0 || r > 150 || r == 56) {
+        if (r < 0 || r > 151 || r == 56) {
             continue;
         }
         if (mode < 0) {
@@ -48612,7 +48763,7 @@ void BOTC_TestAutoSkill (int p) {
         return;
     }
     r = BOTC_ActRoleOf(p);
-    if (r < 0 || r > 150) {
+    if (r < 0 || r > 151) {
         return;
     }
     // 卡扎力首夜只与说书人私聊；电脑玩家也不能由兜底逻辑替他选刀人目标。
@@ -48623,7 +48774,7 @@ void BOTC_TestAutoSkill (int p) {
     //   （跟别的角色「没自己选就帮他选」一个道理；纯随机，不往「猜中」偏）
     if (r == 27 && g_gambleWait[p]) {
         n = BOTC_RandomBoardRole();
-        if (n >= 0 && n <= 150) {
+        if (n >= 0 && n <= 151) {
             BOTC_GambleGuess(p, n);
         }
         return;
@@ -48683,7 +48834,7 @@ void BOTC_TestAutoSkill (int p) {
             return;
         }
         n = BOTC_RandomBoardRole();
-        if (n >= 0 && n <= 150) {
+        if (n >= 0 && n <= 151) {
             BOTC_CourtierPick(p, n);
         }
         return;
@@ -48786,7 +48937,7 @@ int BOTC_WakeSeconds (int r) {
     if (r == 18) {
         return 20;                 // 间谍：看魔典，给足 20 秒
     }
-    if (r >= 0 && r <= 150) {
+    if (r >= 0 && r <= 151) {
         if (g_roleTargets[r] > 0) {
             return 20;
         }

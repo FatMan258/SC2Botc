@@ -1,0 +1,99 @@
+{
+  "schema_version": 2,
+  "index": 151,
+  "name": "熊孩子",
+  "team": "townsfolk",
+  "alignment": "good",
+  "text": "每个夜晚，你要选择一个镇民角色：他的能力会产生错误信息，直到下个黄昏。",
+  "lore": "熊孩子会指定一个镇民角色，让该角色对应的玩家直到下个黄昏前都只能产生错误信息。",
+  "timing": "every_night",
+  "frequency": "always",
+  "action": "every_night",
+  "target_count": 0,
+  "first_night_order": 50,
+  "other_night_order": 27,
+  "role_keywords": "信息错误",
+  "target": {
+    "kind": "role",
+    "count": 1,
+    "living": false,
+    "allow_self": true,
+    "allow_repeat": true
+  },
+  "artwork": {
+    "source": "assets/source/role_151_rascal.png",
+    "role_icon": "botc_role151.dds",
+    "night_icon": "botc_night151.dds",
+    "token_icons": [
+      "botc_tk151.dds"
+    ]
+  },
+  "night_order": {
+    "section": "interference",
+    "anchor_role": "街头风琴手",
+    "relation": "before",
+    "first": 50,
+    "other": 27
+  },
+  "tokens": [
+    {
+      "id": "rascal_prank",
+      "index": 170,
+      "slot": 170,
+      "name": "捣蛋（熊孩子）",
+      "short": "捣蛋",
+      "effect": "该角色通过自身能力获得的信息必定错误。",
+      "place": "熊孩子清醒健康地选择该镇民角色后。",
+      "remove": "下个黄昏、熊孩子死亡或离场。",
+      "visibility": "storyteller",
+      "icon": "botc_tk151.dds",
+      "duration": "until_dusk"
+    }
+  ],
+  "jinxes": [
+    {
+      "role": "涡流",
+      "text": "双方各自使用独立的捣蛋与信息错误标记，不互相覆盖。"
+    }
+  ],
+  "resources": {
+    "role_icon": "botc_role151.dds",
+    "night_icon": "botc_night151.dds",
+    "token_icon": "botc_tk151.dds"
+  },
+  "effects": [
+    {
+      "kind": "custom",
+      "id": "choose_townsfolk_role_for_wrong_info",
+      "notes": "选择的是镇民角色而不是玩家；只影响真实拥有该角色的玩家，不影响仅借用该能力的玩家。角色后来进场时仍会获得捣蛋效果。"
+    }
+  ],
+  "randomness": {
+    "declared": false,
+    "notes": ""
+  },
+  "tests": [
+    "每夜只能选择一个镇民角色",
+    "选中的镇民在场时，该角色对应玩家获得捣蛋标记",
+    "通过哲学家等方式借用该角色能力但真实角色不同的玩家不受影响",
+    "选中角色后来进入游戏时立即获得捣蛋标记",
+    "捣蛋标记在下个黄昏移除",
+    "熊孩子死亡或离场时立即移除捣蛋标记",
+    "涡流的信息错误标记与熊孩子的捣蛋标记可以同时存在且不互相覆盖",
+    "熊孩子不进入全员追忆角色池"
+  ],
+  "implementation": {
+    "required_functions": [
+      "BOTC_RascalOpen",
+      "BOTC_RascalPick",
+      "BOTC_RascalSync",
+      "BOTC_RascalDuskClear",
+      "BOTC_InfoErrorOn"
+    ],
+    "required_symbols": [
+      "g_rascalActive",
+      "g_rascalRole",
+      "+ 170]"
+    ]
+  }
+}
