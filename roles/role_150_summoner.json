@@ -1,0 +1,124 @@
+{
+  "schema_version": 2,
+  "index": 150,
+  "name": "召唤师",
+  "team": "minion",
+  "alignment": "evil",
+  "text": "在首个夜晚，你会得知三个伪装。在第三个夜晚，你要选择一名玩家：他变成由你选择的邪恶恶魔。[无恶魔在场]",
+  "lore": "召唤师在开局时占用恶魔的位置，但场上没有恶魔；第三个夜晚他会创造一只新的恶魔。",
+  "timing": "every_night",
+  "frequency": "once_per_game",
+  "action": "conditional",
+  "target_count": 1,
+  "target": {
+    "kind": "player_and_role",
+    "count": 1,
+    "living": false,
+    "allow_self": true,
+    "allow_repeat": true
+  },
+  "artwork": {
+    "source": "assets/source/role_150_summoner.png；转换后的运行素材位于 assets/game",
+    "role_icon": "botc_role150.dds",
+    "night_icon": "botc_night150.dds",
+    "token_icons": []
+  },
+  "night_order": {
+    "section": "role_change",
+    "anchor_role": "疯子",
+    "relation": "before",
+    "first": null,
+    "other": 39
+  },
+  "tokens": [],
+  "jinxes": [
+    {
+      "role": "炼金术士",
+      "text": "获得召唤师能力的炼金术士不会获得伪装；他选择恶魔角色，由说书人决定哪名玩家转化。"
+    },
+    {
+      "role": "钟表匠",
+      "text": "召唤师会被钟表匠当作恶魔。"
+    },
+    {
+      "role": "罂粟种植者",
+      "text": "罂粟种植者在第三夜存活时，召唤师选择恶魔角色，由说书人决定目标玩家。"
+    },
+    {
+      "role": "侍臣",
+      "text": "存活的召唤师失去能力时，说书人获得召唤师能力。"
+    },
+    {
+      "role": "传教士",
+      "text": "存活的召唤师失去能力时，说书人获得召唤师能力。"
+    },
+    {
+      "role": "工程师",
+      "text": "召唤师离场时，说书人获得召唤师能力。"
+    },
+    {
+      "role": "帽匠",
+      "text": "如果召唤师创造了第二名存活的恶魔，当晚死亡由说书人决定。"
+    },
+    {
+      "role": "麻脸巫婆",
+      "text": "如果召唤师创造了第二名存活的恶魔，当晚死亡由说书人决定。"
+    },
+    {
+      "role": "卡扎力",
+      "text": "如果召唤师创造了第二名存活的恶魔，当晚死亡由说书人决定。"
+    },
+    {
+      "role": "提线木偶",
+      "text": "提线木偶应在恶魔之后进场，并与恶魔相邻。"
+    },
+    {
+      "role": "僵怖",
+      "text": "召唤师把已死亡玩家变成僵怖时，该玩家视为已经死过一次。"
+    },
+    {
+      "role": "普卡",
+      "text": "召唤师可以在第二个夜晚召唤普卡，替代第三个夜晚的召唤。"
+    },
+    {
+      "role": "军团",
+      "text": "召唤师召唤军团时，所有邪恶玩家会变成军团。"
+    },
+    {
+      "role": "堤丰之首",
+      "text": "召唤堤丰之首时，他必须与爪牙邻座，另一侧玩家变成邪恶爪牙。"
+    }
+  ],
+  "effects": [
+    {
+      "kind": "custom",
+      "id": "replace_initial_demon_with_townsfolk",
+      "notes": "召唤师在场时移除初始恶魔，并用一名不在场的镇民替换；不是把恶魔转成爪牙。"
+    },
+    {
+      "kind": "custom",
+      "id": "third_night_create_demon",
+      "notes": "第三夜选择一名玩家和一个恶魔角色；目标变为邪恶恶魔并在当晚行动。"
+    },
+    {
+      "kind": "win_condition",
+      "mode": "good_if_summoner_cannot_create_demon",
+      "notes": "召唤师在成功创造恶魔前死亡，或第三夜因中毒、醉酒等原因无法创造恶魔，善良阵营获胜。"
+    }
+  ],
+  "randomness": {
+    "declared": false,
+    "notes": ""
+  },
+  "tests": [
+    "召唤师在场时初始恶魔被替换为一名镇民，且没有把恶魔转成爪牙",
+    "前两夜没有存活恶魔时不会自动判定善良胜利",
+    "第三个夜晚可选择任意玩家，包括自己和死亡玩家",
+    "只列出一个恶魔角色且创建后目标变为邪恶",
+    "新恶魔在召唤当晚按恶魔夜序行动",
+    "召唤师在成功召唤前死亡时善良阵营获胜",
+    "第三夜召唤师中毒或醉酒时善良阵营获胜",
+    "成功召唤后没有恶魔时按正常无恶魔规则判善良胜",
+    "新恶魔不自动获得爪牙身份信息"
+  ]
+}
