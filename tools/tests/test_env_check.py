@@ -27,6 +27,11 @@ class EnvironmentCheckTests(unittest.TestCase):
         with patch("pathlib.Path.open", return_value=payload):
             self.assertFalse(is_lfs_pointer(Path("asset.bin")))
 
+    def test_powershell_tools_have_utf8_bom(self) -> None:
+        for path in TOOL_ROOT.glob("*.ps1"):
+            with self.subTest(path=path.name):
+                self.assertTrue(path.read_bytes().startswith(b"\xef\xbb\xbf"))
+
 
 if __name__ == "__main__":
     unittest.main()
