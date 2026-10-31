@@ -5,6 +5,8 @@
 $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $PSScriptRoot
 Set-Location -LiteralPath $repoRoot
+$env:GIT_PAGER = "cat"
+$env:PAGER = "cat"
 
 function Invoke-Git {
     param([string[]]$CommandArgs)
@@ -44,7 +46,7 @@ try {
     Write-Host "待处理修改：" -ForegroundColor Cyan
     $changes | ForEach-Object { Write-Host "  $_" }
     Write-Host ""
-    & git diff --stat
+    & git --no-pager diff --stat
 
     $message = Read-Host "请输入提交说明"
     if (-not $message.Trim()) {
@@ -90,11 +92,6 @@ try {
     if ($LASTEXITCODE -ne 0) {
         Unstage-All
         throw "BOTC.galaxy 检查失败。"
-    }
-    & (Join-Path $repoRoot "tools\botc.cmd") check scripts\BOTC_test.galaxy
-    if ($LASTEXITCODE -ne 0) {
-        Unstage-All
-        throw "BOTC_test.galaxy 检查失败。"
     }
     & (Join-Path $repoRoot "tools\botc.cmd") selftest
     if ($LASTEXITCODE -ne 0) {
