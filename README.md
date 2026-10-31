@@ -66,6 +66,15 @@ tools\botc.cmd build --script scripts\BOTC_test.txt --out work\BOTC_test.SC2Map 
 本地专用美术资源放入 `data/local_assets/` 后，一键构建会自动把它们注入地图包。
 该目录和生成地图不会上传到 Git。
 
+需要把源码修改提交到 GitHub 时，双击：
+
+```text
+一键上传到GitHub.cmd
+```
+
+它会显示改动、执行检查、要求填写提交说明、提交并推送。地图、Bank、本地素材和
+本机配置会被自动拦截。
+
 ## 配置
 
 默认构建输入已经放在仓库里：
