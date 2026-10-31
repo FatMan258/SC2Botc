@@ -135,7 +135,7 @@ python -m unittest discover -s tools\tests -v
 `.github/workflows/tests.yml` 会在每次 push 和 Pull Request 时自动执行：
 
 - Python 编译与单元测试。
-- 两份 Galaxy 脚本的括号、编码、函数重复和后置调用前置声明检查。
+- 正式 Galaxy 脚本的括号、编码、函数重复和后置调用前置声明检查。
 - 构建环境检查。
 - 实际构建唯一正式地图。
 - 回读构建产物的脚本、触发器和依赖结构。
