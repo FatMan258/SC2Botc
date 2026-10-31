@@ -8,7 +8,7 @@ TOOL_ROOT = Path(__file__).resolve().parent
 PROJECT_ROOT = TOOL_ROOT.parent
 
 SCRIPT_PATH = Path(
-    os.environ.get("BOTC_SCRIPT", str(PROJECT_ROOT / "scripts" / "BOTC.txt"))
+    os.environ.get("BOTC_SCRIPT", str(PROJECT_ROOT / "scripts" / "BOTC.galaxy"))
 )
 MAP_PATH = Path(
     os.environ.get("BOTC_MAP", str(PROJECT_ROOT / "base" / "BOTC.map"))

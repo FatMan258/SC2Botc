@@ -27,8 +27,8 @@
 
 ### 3.1 正式文件
 
-- 正式脚本：`scripts/BOTC.txt`。
-- 新角色测试脚本：`scripts/BOTC_test.txt`。
+- 正式脚本：`scripts/BOTC.galaxy`。
+- 新角色测试脚本：`scripts/BOTC_test.galaxy`。
 - 当前基础地图：`base/BOTC.map`。
 - UI 依赖源：由 `BOTC_UI_MOD` 指定。
 - 构建输出：由 `BOTC_BUILD_DIR` 指定，默认 `work/`。
@@ -111,14 +111,14 @@ tools\botc.cmd role audit 角色规格.json
 - 解包构建器无法写入当前地图格式。
 - 需要验证脚本源文件与编辑器编译器差异。
 
-回退后仍要把最终脚本同步回 `scripts\BOTC.txt`，下一次构建继续使用解包路线。
+回退后仍要把最终脚本同步回 `scripts\BOTC.galaxy`，下一次构建继续使用解包路线。
 
 ## 6. 修改安全规则
 
 1. 修改前先精确搜索：
 
 ```powershell
-rg -n -F -m 20 'BOTC_函数名' scripts\BOTC.txt
+rg -n -F -m 20 'BOTC_函数名' scripts\BOTC.galaxy
 ```
 
 2. 不知道函数名时，先用一个精确界面文字定位，再改用命中函数名搜索。

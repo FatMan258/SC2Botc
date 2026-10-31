@@ -48,7 +48,7 @@ git lfs pull
 
 tools\botc.cmd doctor
 tools\botc.cmd check
-tools\botc.cmd build --script scripts\BOTC_test.txt --out work\BOTC_test.SC2Map --split-script
+tools\botc.cmd build --script scripts\BOTC_test.galaxy --out work\BOTC_test.SC2Map --split-script
 ```
 
 成功后得到 `work/BOTC_test.SC2Map`，即可复制到星际 II 测试地图目录。
@@ -81,14 +81,14 @@ tools\botc.cmd build --script scripts\BOTC_test.txt --out work\BOTC_test.SC2Map 
 
 ```text
 base/BOTC.map
-scripts/BOTC.txt
-scripts/BOTC_test.txt
+scripts/BOTC.galaxy
+scripts/BOTC_test.galaxy
 ```
 
 通常不再需要设置路径。需要改用其他脚本或地图时，可以通过环境变量覆盖：
 
 ```powershell
-$env:BOTC_SCRIPT = (Join-Path $PWD "scripts\BOTC_test.txt")
+$env:BOTC_SCRIPT = (Join-Path $PWD "scripts\BOTC_test.galaxy")
 $env:BOTC_MAP = (Join-Path $PWD "base\BOTC.map")
 $env:BOTC_BUILD_DIR = (Join-Path $PWD "work")
 $env:BOTC_SC2_ROOT = "C:\Program Files (x86)\StarCraft II"
@@ -117,7 +117,7 @@ tools\botc.cmd build
 tools\botc.cmd test "work\地图.SC2Map"
 
 # 使用带新角色测试代码的脚本构建
-tools\botc.cmd build --script scripts\BOTC_test.txt --out work\BOTC_test.SC2Map
+tools\botc.cmd build --script scripts\BOTC_test.galaxy --out work\BOTC_test.SC2Map
 
 tools\botc.cmd design prompt "每个夜晚，你要选择一名玩家：你得知他的角色。"
 tools\botc.cmd design validate roles\role_dsl.example.json

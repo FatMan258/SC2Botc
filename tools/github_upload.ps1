@@ -86,15 +86,15 @@ try {
     }
 
     Write-Host "[3/4] 运行脚本检查和自动测试..."
-    & (Join-Path $repoRoot "tools\botc.cmd") check scripts\BOTC.txt
+    & (Join-Path $repoRoot "tools\botc.cmd") check scripts\BOTC.galaxy
     if ($LASTEXITCODE -ne 0) {
         Unstage-All
-        throw "BOTC.txt 检查失败。"
+        throw "BOTC.galaxy 检查失败。"
     }
-    & (Join-Path $repoRoot "tools\botc.cmd") check scripts\BOTC_test.txt
+    & (Join-Path $repoRoot "tools\botc.cmd") check scripts\BOTC_test.galaxy
     if ($LASTEXITCODE -ne 0) {
         Unstage-All
-        throw "BOTC_test.txt 检查失败。"
+        throw "BOTC_test.galaxy 检查失败。"
     }
     & (Join-Path $repoRoot "tools\botc.cmd") selftest
     if ($LASTEXITCODE -ne 0) {

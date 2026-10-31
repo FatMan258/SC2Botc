@@ -128,7 +128,7 @@ class GalaxyCheckTests(unittest.TestCase):
     def test_custom_role_visible_is_declared_before_sync_call(self) -> None:
         prototype = "bool   BOTC_CustomRoleVisible (int r);"
         definition = "bool BOTC_CustomRoleVisible (int r) {"
-        for name in ("BOTC.txt", "BOTC_test.txt"):
+        for name in ("BOTC.galaxy", "BOTC_test.galaxy"):
             source = (PROJECT_ROOT / "scripts" / name).read_text(
                 encoding="utf-8-sig"
             )

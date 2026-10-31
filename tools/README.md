@@ -9,8 +9,8 @@
 
 - Python：`py -3`、`python`，或通过 `BOTC_PYTHON` 指定解释器
 - StormLib：`tools\vendor\StormLib.dll`
-- 正式脚本：`scripts\BOTC.txt`
-- 测试脚本：`scripts\BOTC_test.txt`
+- 正式脚本：`scripts\BOTC.galaxy`
+- 测试脚本：`scripts\BOTC_test.galaxy`
 - 基础地图：`base\BOTC.map`
 - 构建输出：默认仓库根目录的 `work/`
 
@@ -18,7 +18,7 @@
 
 ```powershell
 $env:BOTC_MAP = (Join-Path $PWD "base\BOTC.map")
-$env:BOTC_SCRIPT = (Join-Path $PWD "scripts\BOTC.txt")
+$env:BOTC_SCRIPT = (Join-Path $PWD "scripts\BOTC.galaxy")
 $env:BOTC_BUILD_DIR = (Join-Path $PWD "work")
 $env:BOTC_SC2_ROOT = "C:\Program Files (x86)\StarCraft II"
 ```
@@ -49,7 +49,7 @@ py -3 tools\botc.py build
 py -3 tools\botc.py test "work\地图.SC2Map"
 
 # 使用带新角色测试代码的脚本
-py -3 tools\botc.py build --script scripts\BOTC_test.txt --out work\BOTC_test.SC2Map --split-script
+py -3 tools\botc.py build --script scripts\BOTC_test.galaxy --out work\BOTC_test.SC2Map --split-script
 ```
 
 `test` 会从 `DocumentInfo` 自动识别 `Void.SC2Campaign` 并传入 `-meleeMod Void`，
@@ -137,7 +137,7 @@ tools\botc.cmd design compile roles\role_dsl.example.json --out role_plan.md
 
 ## 禁区
 
-- 不要把整个 `MapScript.galaxy` 替换为 `scripts\BOTC.txt`。
+- 不要把整个 `MapScript.galaxy` 替换为 `scripts\BOTC.galaxy`。
 - 不要在采用直写构建后随意让编辑器重存整图。
 - 不要把 Trigger XML 生成路线和自己的正式脚本路线混用。
 - 新角色索引一旦超过 147，必须同步所有角色数组、扫描循环和索引表。

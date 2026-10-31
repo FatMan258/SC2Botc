@@ -18,7 +18,6 @@ work/*
 dist/
 
 # User-provided local source and game assets
-BOTC_脚本_*.txt
 /data/local_assets/
 *.dds
 *.png

@@ -42,17 +42,17 @@ try {
     Invoke-Botc @("doctor")
     Invoke-Botc @(
         "check",
-        $(if ($Mode -eq "test") { "scripts\BOTC_test.txt" } else { "scripts\BOTC.txt" })
+        $(if ($Mode -eq "test") { "scripts\BOTC_test.galaxy" } else { "scripts\BOTC.galaxy" })
     )
 
     Write-Host "[3/5] 运行自动测试..."
     Invoke-Botc @("selftest")
 
     $scriptPath = if ($Mode -eq "test") {
-        "scripts\BOTC_test.txt"
+        "scripts\BOTC_test.galaxy"
     }
     else {
-        "scripts\BOTC.txt"
+        "scripts\BOTC.galaxy"
     }
     $prefix = if ($Mode -eq "test") {
         "BOTC_test_sync"
