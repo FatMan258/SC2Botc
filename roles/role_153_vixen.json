@@ -1,0 +1,119 @@
+{
+  "schema_version": 2,
+  "index": 153,
+  "name": "狐媚娘",
+  "team": "minion",
+  "alignment": "evil",
+  "text": "在你的首个夜晚，你要选择一名玩家：他会知道狐媚娘在场。如果你死于处决，当晚他转变为邪恶阵营。",
+  "lore": "狐媚娘先选一名玩家暴露自身，再以自己的处决死亡为代价，让那名玩家在当夜堕入邪恶。",
+  "timing": "first_night",
+  "frequency": "once_per_game",
+  "action": "first_night",
+  "target_count": 1,
+  "first_night_order": 45,
+  "other_night_order": 35,
+  "role_keywords": "角色变化",
+  "target": {
+    "kind": "players",
+    "count": 1,
+    "living": false,
+    "allow_self": true,
+    "allow_repeat": false
+  },
+  "artwork": {
+    "source": "assets/source/role_153_vixen.png",
+    "role_icon": "botc_role153.dds",
+    "night_icon": "botc_night153.dds",
+    "token_icons": [
+      "botc_tk153.dds"
+    ]
+  },
+  "night_order": {
+    "section": "role_change",
+    "anchor_role": "灵言师",
+    "relation": "after",
+    "first": 45,
+    "other": 35
+  },
+  "tokens": [
+    {
+      "id": "vixen_charmed",
+      "index": 173,
+      "slot": 173,
+      "name": "被魅惑（狐媚娘）",
+      "short": "被魅惑",
+      "effect": "记录狐媚娘首夜选择的玩家，并提示受选者已经得知狐媚娘在场。",
+      "place": "狐媚娘首夜选择玩家后。",
+      "remove": "狐媚娘因处决死亡后的下一夜处理完毕，或狐媚娘以其他方式死亡 / 离场。",
+      "visibility": "storyteller",
+      "icon": "botc_tk153.dds",
+      "duration": "game"
+    },
+    {
+      "id": "vixen_charmed_invalid",
+      "index": 174,
+      "slot": 174,
+      "name": "被魅惑·未生效（狐媚娘）",
+      "short": "被魅惑×",
+      "effect": "表示狐媚娘已经完成选择，但受选者尚未得知狐媚娘在场。",
+      "place": "狐媚娘选择时中毒、醉酒或失去能力。",
+      "remove": "狐媚娘恢复能力并完成告知后换成正常被魅惑标记；其余移除时机同正常标记。",
+      "visibility": "storyteller",
+      "icon": "botc_tk153.dds",
+      "duration": "game"
+    }
+  ],
+  "jinxes": [
+    {
+      "role": "异端分子",
+      "text": "互为克星的角色在同一时间里只能有其中一个在场。"
+    },
+    {
+      "role": "瘟疫医生",
+      "text": "如果说书人本应获得狐媚娘能力，改为一名爪牙获得，且他会得知此事。"
+    }
+  ],
+  "effects": [
+    {
+      "kind": "custom",
+      "id": "chosen_player_knows_vixen",
+      "notes": "首夜选择后，能力正常时受选者立即得知狐媚娘在场；选人时能力失效则恢复后自动补发。"
+    },
+    {
+      "kind": "custom",
+      "id": "execution_turns_chosen_evil",
+      "notes": "狐媚娘因处决死亡后，在下一夜她的触发位让仍为善良的受选者转为邪恶。"
+    }
+  ],
+  "randomness": {
+    "declared": false,
+    "notes": ""
+  },
+  "tests": [
+    "首夜第 45 位选择任意玩家",
+    "能力正常时受选者立即得知狐媚娘在场",
+    "选人时中毒或醉酒不会泄露信息，恢复后自动补发",
+    "狐媚娘死于处决后的下一夜，善良受选者转为邪恶",
+    "受选者已经是邪恶阵营时阵营不变",
+    "非处决死亡不会触发阵营变化",
+    "被魅惑标记在触发处理或来源离场时移除",
+    "狐媚娘不进入全员追忆"
+  ],
+  "implementation": {
+    "required_functions": [
+      "BOTC_VixenChoose",
+      "BOTC_VixenSync",
+      "BOTC_VixenExecPending",
+      "BOTC_VixenNightStep",
+      "BOTC_VixenClear"
+    ],
+    "required_symbols": [
+      "g_vixenSeat",
+      "g_vixenTarget",
+      "g_vixenInfoSent",
+      "g_vixenExecPending",
+      "g_tokName[173]",
+      "g_tokName[174]"
+    ]
+  }
+}
