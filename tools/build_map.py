@@ -7,11 +7,13 @@ import shutil
 import tempfile
 from datetime import datetime
 from pathlib import Path
+from xml.etree import ElementTree
 
 from botc_config import (
     BUILD_DIR,
     LOCAL_ASSETS_DIR,
     MAP_PATH,
+    PROJECT_ROOT,
     SCRIPT_PATH,
     TRACKED_ASSETS_DIR,
     ensure_build_dir,
@@ -28,6 +30,13 @@ TRIGGERS_MEMBER = "Triggers"
 CUSTOM_SCRIPT_NAME = "BOTC_CustomLogic"
 CUSTOM_SCRIPT_MEMBER = f"{CUSTOM_SCRIPT_NAME}.galaxy"
 CUSTOM_SCRIPT_INCLUDE = f'include "{CUSTOM_SCRIPT_NAME}"'
+PRIVATE_DEPENDENCY_PREFIX = "file:Mods\\BOTC_Private"
+PRIVATE_DEPENDENCY_BNET_PREFIXES = (
+    "bnet:BOTC1",
+    "bnet:BOTC_Private",
+)
+PRIVATE_DEPENDENCY_BNET_DEFAULT = "bnet:BOTC1/1.0/188805"
+PRIVATE_DEPENDENCY_FILE = PROJECT_ROOT / "private" / "dependency_id.txt"
 CUSTOM_TRIGGER_INCLUDE = f"include &quot;{CUSTOM_SCRIPT_NAME}&quot;"
 CUSTOM_TRIGGER_PATTERN = re.compile(
     r'(<Element\s+Type="CustomScript"\s+Id="[^"]+">\s*<ScriptCode>)'
@@ -192,6 +201,31 @@ def verify_split_triggers(triggers: str) -> list[str]:
     return errors
 
 
+def set_private_dependency(document_info: str, dependency: str) -> str:
+    root = ElementTree.fromstring(document_info)
+    dependencies = root.find("Dependencies")
+    if dependencies is None:
+        dependencies = ElementTree.SubElement(root, "Dependencies")
+    for node in list(dependencies.findall("Value")):
+        value = (node.text or "").strip()
+        if value.startswith(
+            (
+                PRIVATE_DEPENDENCY_PREFIX,
+                *PRIVATE_DEPENDENCY_BNET_PREFIXES,
+            )
+        ):
+            dependencies.remove(node)
+    node = ElementTree.SubElement(dependencies, "Value")
+    node.text = dependency
+    ElementTree.indent(root, space="    ")
+    body = ElementTree.tostring(root, encoding="unicode")
+    return (
+        '<?xml version="1.0" encoding="utf-8"?>\r\n'
+        + body.replace("\n", "\r\n")
+        + "\r\n"
+    )
+
+
 def build_map(
     map_path: Path,
     script_path: Path,
@@ -201,6 +235,7 @@ def build_map(
     split_script: bool = False,
     tracked_assets: Path | None = None,
     local_assets: Path | None = None,
+    private_mode: str | None = None,
 ) -> Path:
     map_path = require_file(Path(map_path), "基础地图")
     script_path = require_file(Path(script_path), "Galaxy 脚本")
@@ -213,11 +248,29 @@ def build_map(
             raise ValueError("Galaxy 静态检查失败：\n" + "\n".join(errors))
 
     source = script_path.read_text(encoding="utf-8-sig")
+    private_dependency = None
+    packed_document_info = None
+    if private_mode is not None:
+        private_dependency = os.environ.get(
+            "BOTC_PRIVATE_DEPENDENCY", ""
+        ).strip()
+        if not private_dependency and PRIVATE_DEPENDENCY_FILE.is_file():
+            private_dependency = PRIVATE_DEPENDENCY_FILE.read_text(
+                encoding="utf-8-sig"
+            ).strip()
+        if not private_dependency:
+            private_dependency = PRIVATE_DEPENDENCY_BNET_DEFAULT
+
     with MPQArchive(map_path, writable=False) as archive:
         map_script = archive.read_text(MAP_SCRIPT)
         triggers = (
             archive.read_text(TRIGGERS_MEMBER) if split_script else None
         )
+        if private_dependency is not None:
+            packed_document_info = set_private_dependency(
+                archive.read_text("DocumentInfo"),
+                private_dependency,
+            )
 
     clean_source = source.lstrip("\ufeff").replace("\r\n", "\n").rstrip("\n")
     external_payload = (clean_source + "\r\n").encode("utf-8")
@@ -249,6 +302,17 @@ def build_map(
     try:
         temp_map_path.write_bytes(packed_script.encode("utf-8"))
         payloads = [(MAP_SCRIPT, temp_map_path)]
+        temp_document_info_path: Path | None = None
+        if packed_document_info is not None:
+            fd, temp_info_name = tempfile.mkstemp(
+                prefix="botc-documentinfo-", suffix=".xml"
+            )
+            os.close(fd)
+            temp_document_info_path = Path(temp_info_name)
+            temp_document_info_path.write_bytes(
+                packed_document_info.encode("utf-8")
+            )
+            payloads.append(("DocumentInfo", temp_document_info_path))
         if split_script:
             fd, temp_external_name = tempfile.mkstemp(
                 prefix="botc-customlogic-", suffix=".galaxy"
@@ -281,6 +345,8 @@ def build_map(
             temp_external_path.unlink(missing_ok=True)
         if temp_triggers_path is not None:
             temp_triggers_path.unlink(missing_ok=True)
+        if temp_document_info_path is not None:
+            temp_document_info_path.unlink(missing_ok=True)
 
     with MPQArchive(output, writable=False) as archive:
         check_back = archive.read_text(MAP_SCRIPT)
@@ -296,6 +362,15 @@ def build_map(
             (member, archive.read_bytes(member) == path.read_bytes())
             for member, path in asset_payloads
         ]
+        if private_dependency is not None:
+            document_info_check = archive.read_text("DocumentInfo")
+            if private_dependency not in document_info_check:
+                errors_document_info = "DocumentInfo 未写入私有依赖"
+            else:
+                errors_document_info = ""
+        else:
+            document_info_check = ""
+            errors_document_info = ""
     if split_script:
         errors = verify_split_map_script(check_back)
         if check_custom != external_payload:
@@ -308,10 +383,14 @@ def build_map(
     for member, matches in asset_results:
         if not matches:
             errors.append(f"本地素材回读不一致：{member}")
+    if errors_document_info:
+        errors.append(errors_document_info)
     if errors:
         raise ValueError("回读校验失败：\n" + "\n".join(errors))
     if asset_payloads:
         print(f"assets   : 已注入 {len(asset_payloads)} 个素材（仓库 + 本地）")
+    if private_dependency is not None:
+        print(f"private  : {private_dependency}")
 
     return output
 
@@ -333,6 +412,12 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--local-assets", type=Path, default=LOCAL_ASSETS_DIR)
     parser.add_argument("--no-local-assets", action="store_true")
+    parser.add_argument(
+        "--private-mode",
+        choices=("auto", "release", "test", "none"),
+        default="auto",
+        help="生成并挂载同一个 BOTC_Private_Core 私有依赖",
+    )
     args = parser.parse_args(argv)
 
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -350,6 +435,11 @@ def main(argv: list[str] | None = None) -> int:
         else:
             raise FileNotFoundError(f"本地素材目录不存在：{local_assets}")
     tracked_assets = TRACKED_ASSETS_DIR if TRACKED_ASSETS_DIR.is_dir() else None
+    private_mode = args.private_mode
+    if private_mode != "none":
+        private_mode = "release"
+    if private_mode == "none":
+        private_mode = None
     built = build_map(
         args.map,
         args.script,
@@ -359,6 +449,7 @@ def main(argv: list[str] | None = None) -> int:
         split_script=args.split_script,
         tracked_assets=tracked_assets,
         local_assets=local_assets,
+        private_mode=private_mode,
     )
     print(f"OK       : {built} ({built.stat().st_size} bytes)")
     return 0
