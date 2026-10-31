@@ -1,0 +1,108 @@
+{
+  "schema_version": 2,
+  "index": 154,
+  "name": "饕餮",
+  "team": "demon",
+  "alignment": "evil",
+  "text": "每个夜晚*，你要选择任意数量的非旅行者玩家或一名旅行者玩家：如果他们的角色类型均不相同，他们死亡。[+1外来者]",
+  "lore": "饕餮会在夜里选中任意数量的玩家；只要其中出现两种相同的角色类型，它就什么也吃不到。",
+  "timing": "other_nights",
+  "frequency": "always",
+  "action": "second_night_plus",
+  "target_count": 1,
+  "first_night_order": null,
+  "other_night_order": 63,
+  "role_keywords": "额外死亡|设置调整",
+  "target": {
+    "kind": "players",
+    "count": 1,
+    "living": false,
+    "allow_self": true,
+    "allow_repeat": false
+  },
+  "death_token_slot": 175,
+  "artwork": {
+    "source": "assets/source/role_154_taotie.png",
+    "source_url": "https://clocktower-wiki.gstonegames.com/index.php?title=%E9%A5%95%E9%A4%AE",
+    "role_icon": "botc_role154.dds",
+    "night_icon": "botc_night154.dds",
+    "token_icons": [
+      "botc_tk154.dds"
+    ]
+  },
+  "night_order": {
+    "section": "kill",
+    "anchor_role": "混沌",
+    "relation": "after",
+    "first": null,
+    "other": 63
+  },
+  "tokens": [
+    {
+      "id": "taotie_death",
+      "index": 175,
+      "slot": 175,
+      "name": "死亡（饕餮）",
+      "short": "饕餮死亡",
+      "effect": "记录由饕餮能力造成的夜间恶魔死亡，并作为天亮时结算该玩家死亡的依据。",
+      "place": "饕餮确认目标且所选目标的角色类型均不相同后，对可以死亡的每名目标放置。",
+      "remove": "天亮公开死亡后可由说书人移除；复活或新局时清除。",
+      "visibility": "storyteller",
+      "icon": "botc_tk154.dds",
+      "duration": "game"
+    }
+  ],
+  "jinxes": [],
+  "effects": [
+    {
+      "kind": "custom",
+      "id": "setup_plus_one_outsider",
+      "notes": "饕餮在场时，设置阶段将一名镇民替换为一名外来者。"
+    },
+    {
+      "kind": "custom",
+      "id": "distinct_role_types_only",
+      "notes": "可选择零到十二名玩家；只有所有目标的真实角色类型均不相同，才按选择顺序结算死亡。目标类型有重复时无人死亡。"
+    }
+  ],
+  "randomness": {
+    "declared": false,
+    "notes": ""
+  },
+  "tests": [
+    "第二夜起自动显示使用技能按钮并打开十二座位多选面板",
+    "可以选择零名、一名或全部十二名玩家",
+    "两名镇民和一名外来者同时被选时无人死亡",
+    "镇民、外来者、爪牙、恶魔各选一名时四名目标全部死亡",
+    "未选择玩家时不造成死亡",
+    "饕餮中毒、醉酒或失去能力时选择不造成死亡",
+    "死亡按点击选择顺序依次结算",
+    "心上人使饕餮在结算中途醉酒时，后续目标不死亡",
+    "士兵、僧侣、旅店老板、弄臣等正常经过统一死亡拦截",
+    "换位后多选面板仍绑定原玩家与逻辑座位",
+    "新局清空多选状态与选择顺序",
+    "饕餮在场时配比变为外来者加一、镇民减一",
+    "饕餮进入自定义剧本和赋予能力角色网格",
+    "饕餮不进入全员追忆"
+  ],
+  "implementation": {
+    "required_functions": [
+      "BOTC_BuildTaotie",
+      "BOTC_TaotieOpen",
+      "BOTC_TaotieRender",
+      "BOTC_TaotieToggle",
+      "BOTC_TaotieSubmit",
+      "BOTC_TaotieNone",
+      "BOTC_TaotieClear"
+    ],
+    "required_symbols": [
+      "g_taotieList",
+      "g_taotiePick",
+      "g_taotieOrder",
+      "g_roleName[154]",
+      "g_roleTargets[154]",
+      "g_roleDeathTok[154]",
+      "g_tokName[175]"
+    ]
+  }
+}
