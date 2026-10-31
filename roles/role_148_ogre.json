@@ -1,0 +1,73 @@
+{
+  "schema_version": 2,
+  "index": 148,
+  "name": "食人魔",
+  "team": "outsider",
+  "alignment": "good",
+  "text": "在你的首个夜晚，你要选择除你以外的一名玩家：你转变为他的阵营，即使你已醉酒或中毒，但你不知道你转变后的阵营。",
+  "lore": "食人魔把一名玩家当作挚友，并立即加入挚友当时的阵营。无论朋友之后走向哪里，食人魔都不会自动跟随，也不会主动得知自己最终站在哪一边。",
+  "timing": "first_night",
+  "frequency": "once_per_game",
+  "action": "first_night",
+  "target": {
+    "kind": "players",
+    "count": 1,
+    "living": false,
+    "allow_self": false,
+    "allow_repeat": true
+  },
+  "artwork": {
+    "source": "未提供专属角色图；使用失忆外来者身份图与夜序图占位",
+    "role_icon": "botc_role144.dds",
+    "night_icon": "botc_night144.dds",
+    "token_icons": []
+  },
+  "night_order": {
+    "section": "role_change",
+    "anchor_role": "哲学家",
+    "relation": "after",
+    "first": 28,
+    "other": null
+  },
+  "tokens": [],
+  "jinxes": [
+    {
+      "role": "陌客",
+      "text": "如果陌客被食人魔当作邪恶阵营，食人魔会得知自己转变为邪恶。"
+    },
+    {
+      "role": "间谍",
+      "text": "间谍必定被食人魔当作邪恶阵营。"
+    },
+    {
+      "role": "麻脸巫婆",
+      "text": "被麻脸巫婆创造的邪恶食人魔，无法因为自身能力转变为善良阵营。"
+    },
+    {
+      "role": "科学怪人",
+      "text": "恶魔无法拥有食人魔的能力。"
+    }
+  ],
+  "effects": [
+    {
+      "kind": "custom",
+      "id": "set_alignment_from_target",
+      "notes": "选择后立即按目标当时的登记阵营设置善良或邪恶。该能力即使食人魔醉酒或中毒也生效；通常不告知食人魔最终阵营。"
+    }
+  ],
+  "randomness": {
+    "declared": false,
+    "notes": ""
+  },
+  "tests": [
+    "首夜选择善良玩家后保持善良，且不收到阵营提示",
+    "首夜选择邪恶玩家后变成邪恶，且不收到阵营提示",
+    "食人魔中毒或醉酒时选择仍然生效",
+    "食人魔中毒或醉酒时仍按目标的登记阵营，而不按其看错后的阵营",
+    "选择被当作邪恶的陌客时收到邪恶阵营提示",
+    "选择间谍时必定变成邪恶",
+    "麻脸巫婆创造的邪恶食人魔不能通过自身能力变回善良",
+    "科学怪人的能力列表及嵌套哲学家列表中都不出现食人魔",
+    "食人魔中途被创造时在当晚进入首夜目标面板"
+  ]
+}
