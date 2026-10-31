@@ -1,0 +1,46 @@
+include "LibBOTC_Private_h"
+
+// BOTC private dependency library implementation.
+void libBOTC_Private_BanListInit () {
+    libBOTC_Private_gv_banHandleN = @@BAN_COUNT@@;
+@@BAN_LINES@@
+}
+
+bool libBOTC_Private_HandleIsBanned (string h) {
+    int i;
+    for (i = 0; i < libBOTC_Private_gv_banHandleN; i += 1) {
+        if (i > 31) {
+            break;
+        }
+        if (StringLength(libBOTC_Private_gv_banHandle[i]) <= 0) {
+            continue;
+        }
+        if (StringFind(h, libBOTC_Private_gv_banHandle[i], false) >= 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
+void libBOTC_Private_gf_BanCheck () {
+    int p;
+    string h;
+    libBOTC_Private_BanListInit();
+    if (libBOTC_Private_gv_banHandleN <= 0) {
+        return;
+    }
+    for (p = 2; p <= 13; p += 1) {
+        if (PlayerType(p) != 1) {
+            continue;
+        }
+        h = PlayerHandle(p);
+        if (StringLength(h) <= 0) {
+            continue;
+        }
+        if (!libBOTC_Private_HandleIsBanned(h)) {
+            continue;
+        }
+        UIDisplayMessage(PlayerGroupAll(), c_messageAreaSubtitle, StringToText("【黑名单】") + PlayerName(p) + StringToText(" 已被移出游戏。"));
+        KickFromGame(PlayerGroupSingle(p));
+    }
+}
