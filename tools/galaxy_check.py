@@ -116,6 +116,15 @@ FUNCTION_DECL = re.compile(
     re.MULTILINE,
 )
 FUNCTION_CALL = re.compile(r"\b([A-Za-z_][A-Za-z0-9_]*)\s*\(")
+ARRAY_DECL = re.compile(
+    rf"^[ \t]*(?:{'|'.join(RETURN_TYPES)})\s*"
+    r"\[\s*(\d+)\s*\]\s+([A-Za-z_][A-Za-z0-9_]*)\s*;",
+    re.MULTILINE,
+)
+ARRAY_CAPACITY_GROUPS = (
+    ("g_jinxA", "g_jinxB", "g_jinxText", "g_jinxText2", "g_jinxText3"),
+)
+ARRAY_COUNT_CAPACITY = (("g_jinxCount", "g_jinxA"),)
 
 
 def mask_galaxy_comments_and_strings(text: str) -> str:
@@ -227,6 +236,62 @@ def find_forward_call_errors(text: str) -> list[str]:
     return errors
 
 
+def find_literal_array_index_errors(text: str) -> list[str]:
+    clean = mask_galaxy_comments_and_strings(text)
+    arrays: dict[str, int] = {
+        match.group(2): int(match.group(1))
+        for match in ARRAY_DECL.finditer(clean)
+    }
+    errors: list[str] = []
+    for name, capacity in arrays.items():
+        access = re.compile(
+            rf"\b{re.escape(name)}\s*\[\s*(-?\d+)\s*\]"
+        )
+        for match in access.finditer(clean):
+            index = int(match.group(1))
+            if 0 <= index < capacity:
+                continue
+            line = text.count("\n", 0, match.start()) + 1
+            errors.append(
+                f"{name}[{index}] 超出数组容量 {capacity}（第 {line} 行）"
+            )
+    return errors
+
+
+def find_array_capacity_errors(text: str) -> list[str]:
+    clean = mask_galaxy_comments_and_strings(text)
+    arrays: dict[str, int] = {
+        match.group(2): int(match.group(1))
+        for match in ARRAY_DECL.finditer(clean)
+    }
+    errors: list[str] = []
+    for names in ARRAY_CAPACITY_GROUPS:
+        present = [(name, arrays[name]) for name in names if name in arrays]
+        capacities = {capacity for _, capacity in present}
+        if len(capacities) > 1:
+            detail = ", ".join(f"{name}[{capacity}]" for name, capacity in present)
+            errors.append(f"配套数组容量不一致：{detail}")
+
+    for count_name, array_name in ARRAY_COUNT_CAPACITY:
+        if count_name not in clean or array_name not in arrays:
+            continue
+        assignment = re.search(
+            rf"\b{re.escape(count_name)}\s*=\s*(\d+)\s*;",
+            clean,
+        )
+        if assignment is None:
+            continue
+        count = int(assignment.group(1))
+        capacity = arrays[array_name]
+        if count > capacity:
+            line = text.count("\n", 0, assignment.start()) + 1
+            errors.append(
+                f"{count_name} = {count} 超出 {array_name} "
+                f"容量 {capacity}（第 {line} 行）"
+            )
+    return errors
+
+
 def check_script(path: Path) -> tuple[list[str], list[str]]:
     path = require_file(Path(path), "Galaxy 脚本")
     raw = path.read_bytes()
@@ -264,11 +329,13 @@ def check_script(path: Path) -> tuple[list[str], list[str]]:
     for name in duplicates:
         errors.append(f"函数定义重复：{name}")
     errors.extend(find_forward_call_errors(text))
+    errors.extend(find_literal_array_index_errors(text))
+    errors.extend(find_array_capacity_errors(text))
 
     if "void BOTC_Init (" not in text and "void BOTC_Init()" not in text:
         errors.append("找不到 BOTC_Init()")
-    if "for (i = 0; i <= 147; i += 1)" not in text:
-        warnings.append("没有发现当前角色上限 147 的扫描循环，确认是否已扩展")
+    if "for (i = 0; i <= 154; i += 1)" not in text:
+        warnings.append("没有发现当前角色上限 154 的扫描循环，确认是否已扩展")
 
     return errors, warnings
 
