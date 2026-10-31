@@ -121,6 +121,9 @@ tools\botc.cmd design compile roles\role_dsl.example.json --out role_plan.md
 10. 用 `botc.py test` 启动构建产物，检查是否产生新的 `ScriptError.txt`。
 11. 用构建产物进游戏验收，不直接用编辑器保存自动构建地图。
 
+白天公开发动能力统一进入【声称】按钮及 `BOTC_Declare*()` 流程。不得制作只有真实角色
+可见的专用按钮；假声称者也必须看到同样的入口和反馈流程。
+
 ## 角色规格审核
 
 `role audit` 会检查：
