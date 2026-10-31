@@ -1982,6 +1982,7 @@ int    BOTC_SummonerSeat ();
 void   BOTC_SummonerInitialSetup ();
 bool   BOTC_SummonerWaiting ();
 void   BOTC_SummonerFail ();
+bool   BOTC_SummonerLmCheck (int target, int role);
 void   BOTC_SummonerSummon (int p, int target, int role);
 void   BOTC_OgreResolve (int p, int target);
 int    BOTC_TargetsOf (int p);                 // 这个角色这次要选几个目标（珀带标记时是 3）
@@ -10215,7 +10216,8 @@ void BOTC_LmDetectNoDemon () {
         }
     }
     g_lmOn = false;
-    if (demonN == 0 && minionN > 0) {
+    // 召唤师局在前两夜会故意处于“无恶魔、有爪牙”状态，不能误认成小怪宝局。
+    if (demonN == 0 && minionN > 0 && !BOTC_SummonerWaiting()) {
         g_lmOn = true;
         BOTC_PmStore(g_teller, "【小怪宝】开局检测：场上没有恶魔、共有 " + IntToString(minionN) + " 名爪牙 → 本局按小怪宝局处理。第 1 夜不会自动打开恶人频道。");
     }
@@ -33608,6 +33610,16 @@ void BOTC_SummonerFail () {
     BOTC_ShowWin(0, "召唤师未能创造出新的恶魔。", "善良阵营立即获胜。");
 }
 
+bool BOTC_SummonerLmCheck (int target, int role) {
+    if (target < 2 || target > 13 || role != 112) {
+        return false;
+    }
+    g_lmOn = true;
+    g_lmSeat = target;
+    BOTC_PmStore(g_teller, "【召唤师×小怪宝】" + BOTC_NameStr(target) + " 被召唤为小怪宝，本局切换为小怪宝结算。");
+    return true;
+}
+
 void BOTC_SummonerSummon (int p, int target, int role) {
     if (p < 2 || p > 13 || target < 2 || target > 13 || role < 0 || role > 150) {
         return;
@@ -33637,6 +33649,7 @@ void BOTC_SummonerSummon (int p, int target, int role) {
     if (role == 43 && BOTC_SeatDead(target)) {
         g_zombUsed[target] = true;
     }
+    BOTC_SummonerLmCheck(target, role);
     g_summonerPending = false;
     g_summonerDone = true;
     g_awake[target] = false;
