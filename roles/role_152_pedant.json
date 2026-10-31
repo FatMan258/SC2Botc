@@ -1,0 +1,110 @@
+{
+  "schema_version": 2,
+  "index": 152,
+  "name": "书生",
+  "team": "outsider",
+  "alignment": "good",
+  "text": "恶魔知道书生在场。每局游戏限一次，恶魔可以拜访说书人并猜测你是书生。如果恶魔猜测正确，即使你已死亡，当晚该恶魔可以选择一名玩家：他死亡。",
+  "lore": "本图由说书人手动处理拜访与猜测。正确的恶魔由说书人放置「已猜测」token，并在书生夜序获得一次额外攻击。",
+  "timing": "passive",
+  "frequency": "once_per_game",
+  "action": "passive",
+  "target_count": 0,
+  "first_night_order": 20,
+  "other_night_order": 70,
+  "role_keywords": "",
+  "target": {
+    "kind": "none",
+    "count": 0,
+    "living": false,
+    "allow_self": false,
+    "allow_repeat": true
+  },
+  "artwork": {
+    "source": "assets/source/role_152_pedant.png",
+    "role_icon": "botc_role152.dds",
+    "night_icon": "botc_night152.dds",
+    "token_icons": [
+      "botc_tk152.dds"
+    ]
+  },
+  "night_order": {
+    "section": "kill",
+    "anchor_role": "刺客",
+    "relation": "before",
+    "first": 20,
+    "other": 70
+  },
+  "tokens": [
+    {
+      "id": "pedant_guessed",
+      "slot": 171,
+      "name": "已猜测（书生）",
+      "short": "已猜测",
+      "effect": "该玩家可在今晚书生夜序额外选择一名玩家死亡。",
+      "place": "说书人手动确认恶魔正确猜测书生后。",
+      "remove": "点击进入白天时，或开始新一局时。",
+      "visibility": "storyteller",
+      "icon": "botc_tk152.dds",
+      "duration": "current_night"
+    },
+    {
+      "id": "pedant_death",
+      "slot": 172,
+      "name": "死亡（书生）",
+      "short": "书生死亡",
+      "effect": "记录由书生能力造成的额外死亡。",
+      "place": "带已猜测 token 的玩家完成书生刀人后。",
+      "remove": "按普通死亡 token 规则在复活或新局时移除。",
+      "visibility": "storyteller",
+      "icon": "botc_tk152.dds",
+      "duration": "game"
+    }
+  ],
+  "jinxes": [],
+  "resources": {
+    "role_icon": "botc_role152.dds",
+    "night_icon": "botc_night152.dds",
+    "token_icon": "botc_tk152.dds"
+  },
+  "effects": [
+    {
+      "kind": "custom",
+      "id": "manual_guessed_token_extra_kill",
+      "notes": "说书人负责恶魔拜访和猜测。只有带 171 token 的玩家在书生夜序打开单目标刀人面板；死亡记录为 172。"
+    }
+  ],
+  "randomness": {
+    "declared": false,
+    "notes": ""
+  },
+  "tests": [
+    "首夜在书生顺位告知所有恶魔书生在场",
+    "首夜不唤醒书生本人",
+    "说书人手动在恶魔身上放置已猜测 token",
+    "已猜测玩家在书生夜序获得一次单目标刀人",
+    "刀人结算记为死亡（书生），不是恶魔攻击",
+    "同一夜晚不会重复触发",
+    "进入白天时清除已猜测 token",
+    "开始新一局时清除已猜测 token 和行动状态",
+    "书生不进入全员追忆角色池"
+  ],
+  "implementation": {
+    "required_functions": [
+      "BOTC_PedantOpen",
+      "BOTC_PedantResolve",
+      "BOTC_PedantDawnClear",
+      "BOTC_PedantWakeSeat",
+      "BOTC_PedantInPlay",
+      "BOTC_PedantDealInfo"
+    ],
+    "required_symbols": [
+      "g_pedantActing",
+      "g_pedantDoneNight",
+      "g_pedantInfoNight",
+      "+ 171]",
+      "g_deathTok[21] = 172",
+      "g_tokName[172]"
+    ]
+  }
+}
