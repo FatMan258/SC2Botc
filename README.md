@@ -48,20 +48,19 @@ git lfs pull
 
 tools\botc.cmd doctor
 tools\botc.cmd check
-tools\botc.cmd build --script scripts\BOTC_test.galaxy --out work\BOTC_test.SC2Map --split-script
+tools\botc.cmd build --out work\BOTC_BOTC1.SC2Map --split-script
 ```
 
-成功后得到 `work/BOTC_test.SC2Map`，即可复制到星际 II 测试地图目录。
+成功后得到 `work/BOTC_BOTC1.SC2Map`，即可复制到星际 II 地图目录。
 
 ## 一键同步
 
 日常从 GitHub 同步并构建时，可以直接双击项目根目录：
 
-- `一键同步并构建测试版.cmd`
-- `一键同步并构建正式版.cmd`
+- `tools\quick_sync.ps1`
 
-它们会自动同步 `main`、运行检查、构建地图，把成品放到星际 II 的
-`Maps\Test` 目录，并只保留最近两张同步产物。
+它会自动同步 `main`、运行检查、构建唯一地图，把成品放到星际 II 的
+`Maps\Test` 目录。
 
 可上传的游戏素材放入 `assets/game/`，原图放入 `assets/source/`。一键构建会自动
 把 `assets/game/` 注入地图包；`assets/source/` 只用于保存和后续加工。
@@ -83,13 +82,12 @@ tools\botc.cmd build --script scripts\BOTC_test.galaxy --out work\BOTC_test.SC2M
 ```text
 base/BOTC.map
 scripts/BOTC.galaxy
-scripts/BOTC_test.galaxy
 ```
 
 通常不再需要设置路径。需要改用其他脚本或地图时，可以通过环境变量覆盖：
 
 ```powershell
-$env:BOTC_SCRIPT = (Join-Path $PWD "scripts\BOTC_test.galaxy")
+$env:BOTC_SCRIPT = (Join-Path $PWD "scripts\BOTC.galaxy")
 $env:BOTC_MAP = (Join-Path $PWD "base\BOTC.map")
 $env:BOTC_BUILD_DIR = (Join-Path $PWD "work")
 $env:BOTC_SC2_ROOT = "C:\Program Files (x86)\StarCraft II"
@@ -117,8 +115,8 @@ tools\botc.cmd check
 tools\botc.cmd build
 tools\botc.cmd test "work\地图.SC2Map"
 
-# 使用带新角色测试代码的脚本构建
-tools\botc.cmd build --script scripts\BOTC_test.galaxy --out work\BOTC_test.SC2Map
+# 构建唯一正式地图
+tools\botc.cmd build --out work\BOTC_BOTC1.SC2Map
 
 tools\botc.cmd design prompt "每个夜晚，你要选择一名玩家：你得知他的角色。"
 tools\botc.cmd design validate roles\role_dsl.example.json
@@ -139,7 +137,7 @@ python -m unittest discover -s tools\tests -v
 - Python 编译与单元测试。
 - 两份 Galaxy 脚本的括号、编码、函数重复和后置调用前置声明检查。
 - 构建环境检查。
-- 实际构建正式版和测试版地图。
+- 实际构建唯一正式地图。
 - 回读构建产物的脚本、触发器和依赖结构。
 
 任何一步失败都会让 GitHub Actions 变红。建议在 GitHub 仓库的
@@ -151,7 +149,7 @@ python -m unittest discover -s tools\tests -v
 | 路径 | 用途 |
 | --- | --- |
 | `base/` | 可直接克隆构建的 SC2Map 基线 |
-| `scripts/` | 正式脚本与测试脚本 |
+| `scripts/` | 唯一正式 Galaxy 主脚本 |
 | `roles/` | 角色规格、DSL 示例和接入计划 |
 | `data/` | 本地附加资源接口 |
 | `assets/` | 可提交的素材源文件与地图运行素材 |
