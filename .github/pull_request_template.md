@@ -5,7 +5,6 @@
 ## 验证
 
 - [ ] `tools\botc.cmd check scripts\BOTC.galaxy`
-- [ ] `tools\botc.cmd check scripts\BOTC_test.galaxy`
 - [ ] `python -m unittest discover -s tools\tests -v`
 - [ ] `tools\botc.cmd build --split-script`
 - [ ] 已进入游戏确认实际效果
