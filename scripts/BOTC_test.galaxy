@@ -2725,6 +2725,7 @@ text BOTC_KeyColor (text t) {
     t = BOTC_PutWord(t, "酒鬼", Color(0, 191, 255));
     t = BOTC_PutWord(t, "陌客", Color(0, 191, 255));
     t = BOTC_PutWord(t, "圣徒", Color(0, 191, 255));
+    t = BOTC_PutWord(t, "食人魔", Color(0, 191, 255));
     // 爪牙（橙）
     t = BOTC_PutWord(t, "投毒者", Color(255, 69, 0));
     t = BOTC_PutWord(t, "间谍", Color(255, 69, 0));
@@ -8819,6 +8820,7 @@ void BOTC_InitGloss () {
     g_roleKey[141] = "投票|处决|免死|暴露角色";
     g_roleKey[142] = "首个夜晚";
     g_roleKey[147] = "中毒|设置调整|回溯型能力";
+    g_roleKey[148] = "首个夜晚";
 
 
     // ---- 词条（按官方 Wiki Glossary / Vortox 词条整理为中文）----
