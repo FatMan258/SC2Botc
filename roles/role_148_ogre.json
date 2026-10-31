@@ -17,7 +17,7 @@
     "allow_repeat": true
   },
   "artwork": {
-    "source": "用户提供的食人魔图标；转为本地 DDS 测试资源，不进入公开仓库",
+    "source": "assets/source/role_148_ogre.png；转换后的运行素材位于 assets/game",
     "role_icon": "botc_role148.dds",
     "night_icon": "botc_night148.dds",
     "token_icons": []

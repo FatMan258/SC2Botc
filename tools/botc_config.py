@@ -21,6 +21,11 @@ LOCAL_ASSETS_DIR = Path(
         "BOTC_LOCAL_ASSETS", str(PROJECT_ROOT / "data" / "local_assets")
     )
 )
+TRACKED_ASSETS_DIR = Path(
+    os.environ.get(
+        "BOTC_TRACKED_ASSETS", str(PROJECT_ROOT / "assets" / "game")
+    )
+)
 ROLE_SPEC_DIR = PROJECT_ROOT / "roles"
 STORM_DLL = TOOL_ROOT / "vendor" / "StormLib.dll"
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -11,6 +12,7 @@ sys.path.insert(0, str(TOOL_ROOT))
 
 from build_map import (
     collect_local_assets,
+    merge_asset_payloads,
     replace_custom_script,
     split_custom_script,
     split_trigger_custom_scripts,
@@ -30,6 +32,14 @@ class BuildMapTests(unittest.TestCase):
             [name for name, _ in assets],
             ["example.bin", "nested/data.dat"],
         )
+
+    def test_merge_rejects_duplicate_asset_members(self) -> None:
+        with tempfile.TemporaryDirectory() as first:
+            with tempfile.TemporaryDirectory() as second:
+                Path(first, "same.bin").write_bytes(b"first")
+                Path(second, "same.bin").write_bytes(b"second")
+                with self.assertRaisesRegex(ValueError, "素材路径冲突"):
+                    merge_asset_payloads(Path(first), Path(second))
 
     def test_replaces_only_custom_region(self) -> None:
         generated = "\r\n".join(

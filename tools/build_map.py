@@ -13,6 +13,7 @@ from botc_config import (
     LOCAL_ASSETS_DIR,
     MAP_PATH,
     SCRIPT_PATH,
+    TRACKED_ASSETS_DIR,
     ensure_build_dir,
     require_file,
 )
@@ -62,6 +63,23 @@ def collect_local_assets(root: Path | None) -> list[tuple[str, Path]]:
             ) from error
         assets.append((member, path))
     return assets
+
+
+def merge_asset_payloads(
+    *roots: Path | None,
+) -> list[tuple[str, Path]]:
+    merged: list[tuple[str, Path]] = []
+    seen: dict[str, Path] = {}
+    for root in roots:
+        for member, path in collect_local_assets(root):
+            previous = seen.get(member)
+            if previous is not None:
+                raise ValueError(
+                    f"素材路径冲突：{member}（{previous} / {path}）"
+                )
+            seen[member] = path
+            merged.append((member, path))
+    return merged
 
 
 def replace_custom_script(map_script: str, source: str) -> str:
@@ -181,6 +199,7 @@ def build_map(
     compact: bool = True,
     skip_check: bool = False,
     split_script: bool = False,
+    tracked_assets: Path | None = None,
     local_assets: Path | None = None,
 ) -> Path:
     map_path = require_file(Path(map_path), "基础地图")
@@ -213,7 +232,7 @@ def build_map(
         verification = verify_packed_script(packed_script, source)
     if verification:
         raise ValueError("\n".join(verification))
-    asset_payloads = collect_local_assets(local_assets)
+    asset_payloads = merge_asset_payloads(tracked_assets, local_assets)
 
     output = Path(output).resolve()
     output.parent.mkdir(parents=True, exist_ok=True)
@@ -292,7 +311,7 @@ def build_map(
     if errors:
         raise ValueError("回读校验失败：\n" + "\n".join(errors))
     if asset_payloads:
-        print(f"assets   : 已注入 {len(asset_payloads)} 个本地素材")
+        print(f"assets   : 已注入 {len(asset_payloads)} 个素材（仓库 + 本地）")
 
     return output
 
@@ -330,6 +349,7 @@ def main(argv: list[str] | None = None) -> int:
             local_assets = None
         else:
             raise FileNotFoundError(f"本地素材目录不存在：{local_assets}")
+    tracked_assets = TRACKED_ASSETS_DIR if TRACKED_ASSETS_DIR.is_dir() else None
     built = build_map(
         args.map,
         args.script,
@@ -337,6 +357,7 @@ def main(argv: list[str] | None = None) -> int:
         compact=not args.no_compact,
         skip_check=args.skip_check,
         split_script=args.split_script,
+        tracked_assets=tracked_assets,
         local_assets=local_assets,
     )
     print(f"OK       : {built} ({built.stat().st_size} bytes)")

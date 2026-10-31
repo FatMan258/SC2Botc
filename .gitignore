@@ -19,10 +19,6 @@ dist/
 
 # User-provided local source and game assets
 /data/local_assets/
-*.dds
-*.png
-*.jpg
-*.jpeg
 *.ogg
 *.m3
 

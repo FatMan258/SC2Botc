@@ -5,7 +5,8 @@
 1. 阅读 `AGENTS.md` 和 `tools/README.md`。
 2. 一个分支只处理一个功能或一个 Bug。
 3. 新角色先创建 `roles` 下的 JSON 规格。
-4. 不要提交地图、Bank、账号信息、构建产物或未授权素材。
+4. 可发布素材放入 `assets/source/` 和 `assets/game/`；不要提交地图、Bank、账号信息、
+   构建产物或 `data/local_assets/` 中的仅本地素材。
 
 ## 修改流程
 

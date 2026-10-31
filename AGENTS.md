@@ -10,7 +10,7 @@
 - 玩家 1 通常是说书人，玩家 2..13 是参与者；换座位后说书人可位于任意物理座位。
 - 最终验收以游戏内实际效果为准，不使用“代码看起来正确”代替实测。
 - 对外输出使用中文，先说结果，少堆实现细节。
-- 开源化时不得包含账号凭据、私有 Battle.net 依赖、未授权素材或个人信息。
+- 开源化时不得包含账号凭据、私有 Battle.net 依赖或个人信息。
 
 ## 2. 当前状态
 
@@ -31,6 +31,8 @@
 - 新角色测试脚本：`scripts/BOTC_test.galaxy`。
 - 当前基础地图：`base/BOTC.map`。
 - UI 依赖源：由 `BOTC_UI_MOD` 指定。
+- 可提交素材：`assets/source/` 保存原图，`assets/game/` 保存自动注入地图的运行素材。
+- 仅本地素材：`data/local_assets/`。
 - 构建输出：由 `BOTC_BUILD_DIR` 指定，默认 `work/`。
 - 工具目录：仓库内的 `tools/`。
 
@@ -335,7 +337,7 @@ rg -n -F -m 20 'BOTC_函数名' scripts\BOTC.galaxy
 - 私聊提示使用 `BOTC_PmInfo()`；系统提示使用 `BOTC_Notice()` / `BOTC_SubMsg()`。
 - `BOTC_TellSkillChoice(p, role)` 的第二个参数是角色索引；若能力选择的是玩家座位，
   必须在清空 `g_skillT1..3[p]` 前调用 `BOTC_TellSkillChoice(p, -1)`，不得把座位号当角色索引。
-- 新增 UI 文件属于资源变更，必须进入 `ui_embed.py` 或基础地图，不能手工塞一次。
+- 新增 UI 文件属于资源变更，必须进入 `assets/game/` 或基础地图，不能手工塞一次。
 
 ## 16. 昼夜、死亡与胜利
 
@@ -438,7 +440,8 @@ rg -n -F -m 20 'BOTC_函数名' scripts\BOTC.galaxy
 
 ## 21. 开源协作与发布
 
-- 不提交 StormLib 之外来源不明的二进制；第三方依赖必须附版本、许可证和 SHA256。
+- 角色原图放入 `assets/source/`，DDS 等运行素材放入 `assets/game/`，并记录来源。
+- 不提交 StormLib 之外来源不明的程序二进制；第三方依赖必须附版本、许可证和 SHA256。
 - 不提交账号、Cookie、Battle.net 缓存、私有依赖或本机绝对凭据。
 - 新角色必须附带角色规格、能力文本、测试场景、图标和相克说明。
 - 一句话生成结果只能作为草稿，不能绕过人工规则审查。

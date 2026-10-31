@@ -64,8 +64,9 @@ py -3 tools\botc.py build --script scripts\BOTC_test.galaxy --out work\BOTC_test
 `build` 会先运行源码检查，再复制基础地图、替换自定义脚本、回读校验并输出新地图。
 公开基线已经内嵌 UI，不需要外部 UI 模块。
 
-如果存在 `data\local_assets\`，构建器会递归注入其中的本地素材并逐文件回读校验。
-该目录不会进入 Git。额外指定目录可使用：
+构建器会递归注入 `assets\game\` 中的仓库素材，并在存在
+`data\local_assets\` 时继续注入其中的仅本地素材；两类文件都会逐文件回读校验。
+`assets\source\` 只保存原图，不进入地图包。额外指定本地目录可使用：
 
 ```powershell
 tools\botc.cmd build --local-assets "D:\local\my-assets"

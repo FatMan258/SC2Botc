@@ -63,8 +63,9 @@ tools\botc.cmd build --script scripts\BOTC_test.galaxy --out work\BOTC_test.SC2M
 它们会自动同步 `main`、运行检查、构建地图，把成品放到星际 II 的
 `Maps\Test` 目录，并只保留最近两张同步产物。
 
-本地专用美术资源放入 `data/local_assets/` 后，一键构建会自动把它们注入地图包。
-该目录和生成地图不会上传到 Git。
+可上传的游戏素材放入 `assets/game/`，原图放入 `assets/source/`。一键构建会自动
+把 `assets/game/` 注入地图包；`assets/source/` 只用于保存和后续加工。
+完全不希望上传的临时素材仍可放入 `data/local_assets/`，该目录和生成地图不会进入 Git。
 
 需要把源码修改提交到 GitHub 时，双击：
 
@@ -72,7 +73,7 @@ tools\botc.cmd build --script scripts\BOTC_test.galaxy --out work\BOTC_test.SC2M
 一键上传到GitHub.cmd
 ```
 
-它会显示改动、执行检查、要求填写提交说明、提交并推送。地图、Bank、本地素材和
+它会显示改动、执行检查、要求填写提交说明、提交并推送。地图、Bank、仅本地素材和
 本机配置会被自动拦截。
 
 ## 配置
@@ -153,13 +154,15 @@ python -m unittest discover -s tools\tests -v
 | `scripts/` | 正式脚本与测试脚本 |
 | `roles/` | 角色规格、DSL 示例和接入计划 |
 | `data/` | 本地附加资源接口 |
+| `assets/` | 可提交的素材源文件与地图运行素材 |
 | `probes/` | 独立诊断工具 |
 | `tools/` | 构建、检查、角色 DSL 和测试工具 |
 | `work/` | 被 Git 忽略的构建和测试输出 |
 | `docs/` | 开发和 GitHub 发布指南 |
 | `AGENTS.md` | 项目工程约定 |
 
-角色图片源文件、官方规则原文整理资料和本地 Bank 不进入本仓库；构建所需的基线地图和两个代码脚本已经包含。
+角色图片源文件放在 `assets/source/`，DDS 等地图运行素材放在 `assets/game/`；
+本地 Bank、构建产物和 `data/local_assets/` 不进入本仓库。
 
 ## 开发规则
 
@@ -167,10 +170,5 @@ python -m unittest discover -s tools\tests -v
 
 ## 许可证
 
-许可证尚未确定。在仓库公开前必须完成以下确认：
-
-- 代码采用哪种开源许可证。
-- 角色图片、DDS、音频和其他素材是否允许再分发。
-- 地图名称、规则文本和第三方角色设计是否符合对应授权。
-
-在许可证确定前，默认保留全部权利，不应直接设为公开仓库。
+代码许可证尚未确定。素材按项目所有者的发布决定随地图仓库保存；新增素材时应记录
+来源，并避免提交账号信息或不属于该地图工程的私有文件。
