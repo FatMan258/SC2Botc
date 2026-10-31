@@ -675,6 +675,8 @@ bool[14]    g_cultDeclDone;    // 今天已经声称过【异教领袖】了（�
 bool[14]    g_damselPick;      // 他正在「点头像猜落难」
 bool[14]    g_damselDone;      // 这个玩家已经公开猜过一次了
 bool        g_damselFailed;    // 已经有真爪牙猜错过 → 后面的猜测都无效
+bool        g_damselSpySeen;   // 间谍真实进场过（落难少女相克）
+bool        g_damselWidowSeen; // 寡妇真实进场过（落难少女相克）
 // 【夜半狂欢 · 第 7 批】87 哈迪寂亚（用户 2026-09-26）：三个目标依次选活着 / 死亡
 int[14]     g_hdDlg;
 int[14]     g_hdTitle;
@@ -20219,6 +20221,7 @@ void BOTC_SeatStateSync () {
     BOTC_VizierSync();
     BOTC_PhiloDrunkSync();
     BOTC_BoffinSyncKnowledge();
+    BOTC_DamselPoisonSync();
     BOTC_LeviathanTokenWin();
 }
 
@@ -26701,8 +26704,15 @@ void BOTC_DamselGuess (int p, int q) {
 
 void BOTC_DamselPoisonSync () {
     int i;
-    // 【相克 · 落难少女 × 间谍/寡妇】（用户 2026-10-03）：间谍或寡妇在场（或在板子上）→ 落难少女中毒（通用中毒 token 7）
-    if (BOTC_RoleInPlay(18) || BOTC_RoleOnBoard(18) || BOTC_RoleInPlay(75) || BOTC_RoleOnBoard(75)) {
+    // 【相克 · 落难少女 × 间谍/寡妇】：只认真实进场；角色仅在板子可选池里不算。
+    //   一旦真实进场过，即使之后离场，中毒仍保持。
+    if (BOTC_RoleTrueInPlay(18)) {
+        g_damselSpySeen = true;
+    }
+    if (BOTC_RoleTrueInPlay(75)) {
+        g_damselWidowSeen = true;
+    }
+    if (g_damselSpySeen || g_damselWidowSeen) {
         for (i = 2; i <= 13; i += 1) {
             if (g_seatOn[i] && BOTC_HasAbility(i, 82)) {
                 if (!g_tokOn[(((g_teller * 14) + i) * 256) + 7]) {
@@ -45535,6 +45545,8 @@ void BOTC_Deal () {
         g_damselDone[i] = false;
     }
     g_damselFailed = false;
+    g_damselSpySeen = false;
+    g_damselWidowSeen = false;
     g_slayAskPsy = false;
 
     BOTC_HdHide();
