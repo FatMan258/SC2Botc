@@ -10,6 +10,7 @@ from pathlib import Path
 
 from botc_config import (
     BUILD_DIR,
+    LOCAL_ASSETS_DIR,
     MAP_PATH,
     SCRIPT_PATH,
     ensure_build_dir,
@@ -33,6 +34,34 @@ CUSTOM_TRIGGER_PATTERN = re.compile(
     r"(</ScriptCode>)",
     re.DOTALL,
 )
+RESERVED_MEMBERS = {
+    MAP_SCRIPT,
+    TRIGGERS_MEMBER,
+    CUSTOM_SCRIPT_MEMBER,
+}
+
+
+def collect_local_assets(root: Path | None) -> list[tuple[str, Path]]:
+    if root is None:
+        return []
+    root = Path(root)
+    if not root.is_dir():
+        return []
+    assets: list[tuple[str, Path]] = []
+    for path in sorted(root.rglob("*")):
+        if not path.is_file() or path.is_symlink():
+            continue
+        member = path.relative_to(root).as_posix()
+        if member in RESERVED_MEMBERS:
+            raise ValueError(f"本地素材不能覆盖保留成员：{member}")
+        try:
+            member.encode("ascii")
+        except UnicodeEncodeError as error:
+            raise ValueError(
+                f"地图内素材路径必须为 ASCII：{member}"
+            ) from error
+        assets.append((member, path))
+    return assets
 
 
 def replace_custom_script(map_script: str, source: str) -> str:
@@ -152,6 +181,7 @@ def build_map(
     compact: bool = True,
     skip_check: bool = False,
     split_script: bool = False,
+    local_assets: Path | None = None,
 ) -> Path:
     map_path = require_file(Path(map_path), "基础地图")
     script_path = require_file(Path(script_path), "Galaxy 脚本")
@@ -183,6 +213,7 @@ def build_map(
         verification = verify_packed_script(packed_script, source)
     if verification:
         raise ValueError("\n".join(verification))
+    asset_payloads = collect_local_assets(local_assets)
 
     output = Path(output).resolve()
     output.parent.mkdir(parents=True, exist_ok=True)
@@ -214,14 +245,17 @@ def build_map(
             temp_triggers_path = Path(temp_triggers_name)
             temp_triggers_path.write_bytes(packed_triggers.encode("utf-8"))
             payloads.append((TRIGGERS_MEMBER, temp_triggers_path))
+        payloads.extend(asset_payloads)
         with MPQArchive(output, writable=True) as archive:
             for member_name, local_path in payloads:
                 archive.put_file(
                     member_name,
                     local_path,
                     replace=True,
-                    compact=compact,
+                    compact=False,
                 )
+            if compact:
+                archive.compact()
     finally:
         temp_map_path.unlink(missing_ok=True)
         if temp_external_path is not None:
@@ -239,6 +273,10 @@ def build_map(
         check_triggers = (
             archive.read_text(TRIGGERS_MEMBER) if split_script else None
         )
+        asset_results = [
+            (member, archive.read_bytes(member) == path.read_bytes())
+            for member, path in asset_payloads
+        ]
     if split_script:
         errors = verify_split_map_script(check_back)
         if check_custom != external_payload:
@@ -248,8 +286,13 @@ def build_map(
         errors.extend(verify_split_triggers(check_triggers))
     else:
         errors = verify_packed_script(check_back, source)
+    for member, matches in asset_results:
+        if not matches:
+            errors.append(f"本地素材回读不一致：{member}")
     if errors:
         raise ValueError("回读校验失败：\n" + "\n".join(errors))
+    if asset_payloads:
+        print(f"assets   : 已注入 {len(asset_payloads)} 个本地素材")
 
     return output
 
@@ -269,6 +312,8 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help=f"把主逻辑写入 {CUSTOM_SCRIPT_MEMBER}，MapScript 只保留 include",
     )
+    parser.add_argument("--local-assets", type=Path, default=LOCAL_ASSETS_DIR)
+    parser.add_argument("--no-local-assets", action="store_true")
     args = parser.parse_args(argv)
 
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -278,6 +323,13 @@ def main(argv: list[str] | None = None) -> int:
     print(f"map      : {args.map}")
     print(f"script   : {args.script}")
     print(f"output   : {output}")
+    local_assets = None if args.no_local_assets else args.local_assets
+    if local_assets is not None and not local_assets.is_dir():
+        if local_assets == LOCAL_ASSETS_DIR:
+            print(f"assets   : 未找到 {local_assets}，不注入本地素材")
+            local_assets = None
+        else:
+            raise FileNotFoundError(f"本地素材目录不存在：{local_assets}")
     built = build_map(
         args.map,
         args.script,
@@ -285,6 +337,7 @@ def main(argv: list[str] | None = None) -> int:
         compact=not args.no_compact,
         skip_check=args.skip_check,
         split_script=args.split_script,
+        local_assets=local_assets,
     )
     print(f"OK       : {built} ({built.stat().st_size} bytes)")
     return 0

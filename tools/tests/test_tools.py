@@ -10,6 +10,7 @@ PROJECT_ROOT = TOOL_ROOT.parent
 sys.path.insert(0, str(TOOL_ROOT))
 
 from build_map import (
+    collect_local_assets,
     replace_custom_script,
     split_custom_script,
     split_trigger_custom_scripts,
@@ -22,6 +23,14 @@ from role_workflow import default_spec
 
 
 class BuildMapTests(unittest.TestCase):
+    def test_collects_local_assets_with_relative_paths(self) -> None:
+        root = Path(__file__).resolve().parent / "fixtures" / "local-assets"
+        assets = collect_local_assets(root)
+        self.assertEqual(
+            [name for name, _ in assets],
+            ["example.bin", "nested/data.dat"],
+        )
+
     def test_replaces_only_custom_region(self) -> None:
         generated = "\r\n".join(
             [

@@ -64,6 +64,19 @@ py -3 tools\botc.py build --script scripts\BOTC_test.txt --out work\BOTC_test.SC
 `build` 会先运行源码检查，再复制基础地图、替换自定义脚本、回读校验并输出新地图。
 公开基线已经内嵌 UI，不需要外部 UI 模块。
 
+如果存在 `data\local_assets\`，构建器会递归注入其中的本地素材并逐文件回读校验。
+该目录不会进入 Git。额外指定目录可使用：
+
+```powershell
+tools\botc.cmd build --local-assets "D:\local\my-assets"
+```
+
+完全禁用素材注入：
+
+```powershell
+tools\botc.cmd build --no-local-assets
+```
+
 创建角色规格：
 
 ```powershell

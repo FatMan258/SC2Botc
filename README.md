@@ -63,6 +63,9 @@ tools\botc.cmd build --script scripts\BOTC_test.txt --out work\BOTC_test.SC2Map 
 它们会自动同步 `main`、运行检查、构建地图，把成品放到星际 II 的
 `Maps\Test` 目录，并只保留最近两张同步产物。
 
+本地专用美术资源放入 `data/local_assets/` 后，一键构建会自动把它们注入地图包。
+该目录和生成地图不会上传到 Git。
+
 ## 配置
 
 默认构建输入已经放在仓库里：

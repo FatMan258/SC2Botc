@@ -16,6 +16,11 @@ MAP_PATH = Path(
 BUILD_DIR = Path(
     os.environ.get("BOTC_BUILD_DIR", str(PROJECT_ROOT / "work"))
 )
+LOCAL_ASSETS_DIR = Path(
+    os.environ.get(
+        "BOTC_LOCAL_ASSETS", str(PROJECT_ROOT / "data" / "local_assets")
+    )
+)
 ROLE_SPEC_DIR = PROJECT_ROOT / "roles"
 STORM_DLL = TOOL_ROOT / "vendor" / "StormLib.dll"
 
