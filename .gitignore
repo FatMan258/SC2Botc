@@ -13,9 +13,12 @@ venv/
 *.SC2Bank
 *.bank
 !base/BOTC.map
+!private/BOTC_Private.template.SC2Mod
 work/*
 !work/README.md
 dist/
+private/generated/
+private/dependency_id.txt
 
 # User-provided local source and game assets
 /data/local_assets/
