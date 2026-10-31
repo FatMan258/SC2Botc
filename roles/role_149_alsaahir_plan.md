@@ -11,7 +11,7 @@
 
 ## 效果
 - 新增胜利条件（good_if_all_current_minions_and_demons_are_publicly_guessed）
-- 自定义效果 public_multi_seat_classification：声称面板中每名玩家可在未选、爪牙、恶魔三态间循环，允许多名爪牙和多只恶魔；死亡角色同样参与判断，军团按恶魔判断，邪恶旅行者排除。
+- 自定义效果 public_multi_seat_classification：声称后按杂耍艺人的形式逐行输入座位号，再选择爪牙或恶魔；允许填写多行，死亡角色同样参与判断，军团按恶魔判断，邪恶旅行者排除。
 
 ## Token
 - 无 token
@@ -27,7 +27,7 @@ g_roleAct[149] = 3;
 ## 已接入位置
 - [x] BOTC_HasAbility / BOTC_AbilityWorks / BOTC_AbilitySeat
 - [x] 声称按钮、BOTC_DeclareOpen / BOTC_PickChoose
-- [x] 多目标三态面板：未选 / 爪牙 / 恶魔
+- [x] 多行“座位号 + 爪牙 / 恶魔分类”面板
 - [x] 每名玩家每个白天一次，跨日与新局重置
 - [x] BOTC_CheckWin / BOTC_ShowWin 即时善良胜利
 - [x] 异端分子等既有胜负改写层

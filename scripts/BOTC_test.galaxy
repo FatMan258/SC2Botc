@@ -636,12 +636,14 @@ bool[14]    g_declareUsed;    // 这一局已经声称过【猎手】了（猎�
 // 【戏法师（149）】白天公开猜测：13 个座位分别循环 未选 / 爪牙 / 恶魔，允许复数目标。
 int         g_alsaDlg;
 int         g_alsaTitle;
-int[14]     g_alsaSeatBtn;
+int[12]     g_alsaSeatEdit;
+int[12]     g_alsaTypeBtn;
 int         g_alsaOk;
 int         g_alsaCancel;
 bool[14]    g_alsaOpen;       // 按客户端玩家号：猜测面板是否打开
 int[14]     g_alsaDay;        // 按客户端玩家号：已经提交过哪一天的猜测
-int[196]    g_alsaChoice;     // 客户端玩家号 × 14 + 逻辑格：0 未选 / 1 爪牙 / 2 恶魔
+int[168]    g_alsaRowType;    // 客户端玩家号 × 12 + 行：0 未选 / 1 爪牙 / 2 恶魔
+int[196]    g_alsaChoice;     // 提交时还原成客户端玩家号 × 14 + 逻辑格
 // 【猎手请求】真人说书专用：猎手点头像之后弹出「是否让他击杀」的面板（智能说书不弹，直接按规则自动判）
 int         g_slayDlg;        // 弹窗本体
 int         g_slayTitle;
@@ -1781,7 +1783,7 @@ void   BOTC_JugglerOpen (int p);
 void   BOTC_BuildAlsaahir ();
 void   BOTC_AlsaahirOpen (int p);
 void   BOTC_AlsaahirRender (int p);
-void   BOTC_AlsaahirSeatClick (int p, int q);
+void   BOTC_AlsaahirTypeClick (int p, int row);
 void   BOTC_AlsaahirSubmit (int p);
 void   BOTC_AlsaahirCancel (int p);
 int    BOTC_AlsaahirTruthKind (int q);
@@ -6499,9 +6501,9 @@ bool BOTC_ClickDo (bool testConds, bool runActions) {
         BOTC_AlsaahirCancel(p);
         return true;
     }
-    for (q = 2; q <= 13; q += 1) {
-        if (c == g_alsaSeatBtn[q]) {
-            BOTC_AlsaahirSeatClick(p, q);
+    for (q = 0; q < 12; q += 1) {
+        if (c == g_alsaTypeBtn[q]) {
+            BOTC_AlsaahirTypeClick(p, q);
             return true;
         }
     }
@@ -27746,64 +27748,48 @@ void BOTC_JugglerCancel (int p) {
     }
 }
 
-// 【戏法师（149）】白天公开猜测：每名玩家可分别标成爪牙或恶魔，允许复数目标。
+// 【戏法师（149）】白天公开猜测：输入座位号，再选择该玩家是爪牙或恶魔。
 void BOTC_BuildAlsaahir () {
-    int q;
-    int col;
-    int row;
-    DialogCreate(710, 420, c_anchorRight, 185, -70, false);
+    int i;
+    int y;
+    DialogCreate(710, 520, c_anchorRight, 185, -70, false);
     g_alsaDlg = DialogLastCreated();
     DialogSetVisible(g_alsaDlg, PlayerGroupAll(), false);
-    g_alsaTitle = BOTC_NewLabel(g_alsaDlg, 674, 34, 18, 8, StringToText("公开猜测所有爪牙和恶魔：点击玩家切换 未选 / 爪牙 / 恶魔"));
+    g_alsaTitle = BOTC_NewLabel(g_alsaDlg, 674, 34, 18, 8, StringToText("公开猜测：填座位号（1~12），再选他是爪牙还是恶魔"));
     libNtve_gf_SetDialogItemStyle(g_alsaTitle, "ModLeftSize20Bold", PlayerGroupAll());
     libNtve_gf_SetDialogItemAcceptMouse(g_alsaTitle, false, PlayerGroupAll());
-    for (q = 1; q <= 13; q += 1) {
-        if (q < 2) {
-            col = 0;
-            row = 0;
-        }
-        else {
-            col = (q - 2) % 3;
-            row = (q - 2) / 3;
-        }
-        g_alsaSeatBtn[q] = BOTC_NewButton(g_alsaDlg, 210, 58, 18 + (col * 225), 50 + (row * 76), "");
-        libNtve_gf_SetDialogItemStyle(g_alsaSeatBtn[q], "ModLeftSize16Bold", PlayerGroupAll());
-        DialogControlSetVisible(g_alsaSeatBtn[q], PlayerGroupAll(), false);
+    for (i = 0; i < 12; i += 1) {
+        y = 44 + (i * 33);
+        g_alsaSeatEdit[i] = BOTC_NewEdit(g_alsaDlg, 86, 28, 27, y);
+        g_alsaTypeBtn[i] = BOTC_NewButton(g_alsaDlg, 378, 28, 126, y, "未选");
+        libNtve_gf_SetDialogItemStyle(g_alsaTypeBtn[i], "ModLeftSize16Bold", PlayerGroupAll());
     }
-    g_alsaOk = BOTC_NewButton(g_alsaDlg, 216, 40, 126, 366, "确定（公开猜测）");
-    g_alsaCancel = BOTC_NewButton(g_alsaDlg, 144, 40, 378, 366, "取消");
+    g_alsaOk = BOTC_NewButton(g_alsaDlg, 216, 40, 126, 446, "确定（公开猜测）");
+    g_alsaCancel = BOTC_NewButton(g_alsaDlg, 144, 40, 378, 446, "取消");
 }
 
 void BOTC_AlsaahirRender (int p) {
-    int q;
+    int i;
     int st;
-    text lbl;
+    string s;
     if (p < 1 || p > 13 || !g_alsaOpen[p]) {
         return;
     }
-    for (q = 1; q <= 13; q += 1) {
-        if (q < 2 || !g_seatOn[q]) {
-            DialogControlSetVisible(g_alsaSeatBtn[q], PlayerGroupSingle(p), false);
-            continue;
-        }
-        st = g_alsaChoice[(p * 14) + q];
-        lbl = BOTC_PlayerNameText(q) + StringToText("：");
+    for (i = 0; i < 12; i += 1) {
+        st = g_alsaRowType[(p * 12) + i];
+        s = "第 " + IntToString(i + 1) + " 个：";
         if (st == 1) {
-            lbl = lbl + TextWithColor(StringToText("爪牙"), Color(255, 69, 0));
+            s = s + "爪牙";
         }
         else {
             if (st == 2) {
-                lbl = lbl + TextWithColor(StringToText("恶魔"), Color(255, 0, 0));
+                s = s + "恶魔";
             }
             else {
-                lbl = lbl + StringToText("未选");
+                s = s + "未选";
             }
         }
-        if (BOTC_PublicDead(q)) {
-            lbl = lbl + StringToText("（已死）");
-        }
-        libNtve_gf_SetDialogItemText(g_alsaSeatBtn[q], lbl, PlayerGroupSingle(p));
-        DialogControlSetVisible(g_alsaSeatBtn[q], PlayerGroupSingle(p), true);
+        libNtve_gf_SetDialogItemText(g_alsaTypeBtn[i], StringToText(s), PlayerGroupSingle(p));
     }
 }
 
@@ -27834,23 +27820,27 @@ void BOTC_AlsaahirOpen (int p) {
     g_pickWho[p] = 0;
     for (q = 0; q <= 13; q += 1) {
         g_alsaChoice[(p * 14) + q] = 0;
+        if (q < 12) {
+            g_alsaRowType[(p * 12) + q] = 0;
+            libNtve_gf_SetDialogItemText(g_alsaSeatEdit[q], StringToText(""), PlayerGroupSingle(p));
+        }
     }
     g_alsaOpen[p] = true;
     BOTC_AlsaahirRender(p);
     DialogSetVisible(g_alsaDlg, PlayerGroupSingle(p), true);
-    BOTC_Notice(p, "逐个点击玩家：未选 → 爪牙 → 恶魔。所有爪牙和恶魔都标好后点【确定】。");
+    BOTC_Notice(p, "每一行先填座位号（1~12），再点右侧按钮循环选择爪牙 / 恶魔；填几行就是猜几名玩家。");
 }
 
-void BOTC_AlsaahirSeatClick (int p, int q) {
+void BOTC_AlsaahirTypeClick (int p, int row) {
     int st;
-    if (p < 1 || p > 13 || q < 2 || q > 13 || !g_alsaOpen[p] || !g_seatOn[q]) {
+    if (p < 1 || p > 13 || row < 0 || row >= 12 || !g_alsaOpen[p]) {
         return;
     }
-    st = g_alsaChoice[(p * 14) + q] + 1;
+    st = g_alsaRowType[(p * 12) + row] + 1;
     if (st > 2) {
         st = 0;
     }
-    g_alsaChoice[(p * 14) + q] = st;
+    g_alsaRowType[(p * 12) + row] = st;
     BOTC_AlsaahirRender(p);
 }
 
@@ -27889,23 +27879,62 @@ bool BOTC_AlsaahirCorrect (int p) {
 }
 
 void BOTC_AlsaahirSubmit (int p) {
+    int i;
     int q;
     int seat;
     int st;
+    int n;
+    int num;
+    string raw;
     bool works;
     string sm;
     string sd;
-    text line;
     if (p < 1 || p > 13 || !g_alsaOpen[p]) {
         return;
     }
     seat = BOTC_PosOf(p);
+    for (q = 0; q <= 13; q += 1) {
+        g_alsaChoice[(p * 14) + q] = 0;
+    }
+    n = 0;
+    for (i = 0; i < 12; i += 1) {
+        st = g_alsaRowType[(p * 12) + i];
+        raw = libNtve_gf_DialogItemEditValue(g_alsaSeatEdit[i], p);
+        if (StringLength(raw) <= 0) {
+            if (st > 0) {
+                BOTC_Notice(p, "第 " + IntToString(i + 1) + " 行选了爪牙 / 恶魔，但没有填座位号。");
+                return;
+            }
+            continue;
+        }
+        num = BOTC_TextNum(raw);
+        if (num < 1 || num > 12) {
+            BOTC_Notice(p, "第 " + IntToString(i + 1) + " 行座位号无效：请填 1~12。");
+            return;
+        }
+        if (st <= 0) {
+            BOTC_Notice(p, "第 " + IntToString(i + 1) + " 行填了座位号，但右侧还没有选择爪牙 / 恶魔。");
+            return;
+        }
+        q = num + 1;
+        if (!g_seatOn[q]) {
+            BOTC_Notice(p, "第 " + IntToString(i + 1) + " 行座位 " + IntToString(num) + " 上没有玩家。");
+            return;
+        }
+        if (g_alsaChoice[(p * 14) + q] > 0) {
+            BOTC_Notice(p, "座位 " + IntToString(num) + " 重复出现，请把重复的那一行删掉或留空。");
+            return;
+        }
+        g_alsaChoice[(p * 14) + q] = st;
+        n = n + 1;
+    }
+    if (n <= 0) {
+        BOTC_Notice(p, "至少输入一组座位号和爪牙 / 恶魔分类。");
+        return;
+    }
     sm = "";
     sd = "";
     for (q = 2; q <= 13; q += 1) {
-        if (!g_seatOn[q]) {
-            continue;
-        }
         st = g_alsaChoice[(p * 14) + q];
         if (st == 1) {
             if (StringLength(sm) > 0) {
@@ -27956,6 +27985,10 @@ void BOTC_AlsaahirCancel (int p) {
     DialogSetVisible(g_alsaDlg, PlayerGroupSingle(p), false);
     for (q = 0; q <= 13; q += 1) {
         g_alsaChoice[(p * 14) + q] = 0;
+        if (q < 12) {
+            g_alsaRowType[(p * 12) + q] = 0;
+            libNtve_gf_SetDialogItemText(g_alsaSeatEdit[q], StringToText(""), PlayerGroupSingle(p));
+        }
     }
 }
 
