@@ -333,6 +333,8 @@ rg -n -F -m 20 'BOTC_函数名' scripts\BOTC.galaxy
 - 类别内翻页统一使用同尺寸 `<`、`>`，不显示页码。
 - 整页切换和类别翻页不得共用状态。
 - 私聊提示使用 `BOTC_PmInfo()`；系统提示使用 `BOTC_Notice()` / `BOTC_SubMsg()`。
+- `BOTC_TellSkillChoice(p, role)` 的第二个参数是角色索引；若能力选择的是玩家座位，
+  必须在清空 `g_skillT1..3[p]` 前调用 `BOTC_TellSkillChoice(p, -1)`，不得把座位号当角色索引。
 - 新增 UI 文件属于资源变更，必须进入 `ui_embed.py` 或基础地图，不能手工塞一次。
 
 ## 16. 昼夜、死亡与胜利

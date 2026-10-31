@@ -2941,7 +2941,7 @@ text BOTC_LineText (string line, int who) {
 // 身份图标文件名（打包在依赖的 Mod 里）
 string BOTC_IconName (int idx) {
     if (idx == 148) {
-        return "botc_role144.dds";               // 食人魔：暂用「失忆外来者」占位
+        return "botc_role148.dds";
     }
     if (idx < 10) {
         return "botc_role0" + IntToString(idx) + ".dds";
@@ -2952,7 +2952,7 @@ string BOTC_IconName (int idx) {
 // 夜序表面板用的 85×85 小图（跟身份图同一套编号规则）
 string BOTC_NightIconName (int idx) {
     if (idx == 148) {
-        return "botc_night144.dds";              // 食人魔：暂用「失忆外来者」占位
+        return "botc_night148.dds";
     }
     if (idx < 10) {
         return "botc_night0" + IntToString(idx) + ".dds";
@@ -35415,11 +35415,11 @@ void BOTC_SkillConfirm (int p) {
             BOTC_Notice(g_who[p], "请选择一名其他玩家。");
             return;
         }
+        BOTC_TellSkillChoice(p, -1);
         g_skillPicking[p] = false;
         g_skillT1[p] = 0;
         g_skillT2[p] = 0;
         g_skillT3[p] = 0;
-        BOTC_TellSkillChoice(p, t);
         DialogSetVisible(g_skillDlg[p], PlayerGroupSingle(g_who[p]), false);
         BOTC_OgreResolve(p, t);
         return;

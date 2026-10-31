@@ -17,9 +17,9 @@
     "allow_repeat": true
   },
   "artwork": {
-    "source": "未提供专属角色图；使用失忆外来者身份图与夜序图占位",
-    "role_icon": "botc_role144.dds",
-    "night_icon": "botc_night144.dds",
+    "source": "用户提供的食人魔图标；转为本地 DDS 测试资源，不进入公开仓库",
+    "role_icon": "botc_role148.dds",
+    "night_icon": "botc_night148.dds",
     "token_icons": []
   },
   "night_order": {
