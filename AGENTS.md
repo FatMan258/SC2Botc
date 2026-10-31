@@ -19,8 +19,10 @@
 - 当前地图约有 550 个包内成员，公开构建采用 `MapScript.galaxy` +
   `BOTC_CustomLogic.galaxy` 的分离脚本结构。
 - 当前基础地图只依赖虚空之遗战役，UI 文件已经内嵌。
-- 当前有 12 张固定板子、动态“自定义剧本”和“全员追忆”板子。
-- 136..142、147、148、149、150 是实验性角色；143..146 是全员追忆占位身份。
+- 构建产物额外依赖同一个已上传模块 `bnet:BOTC1/1.0/188805`。
+  基础地图本身不直接修改依赖表。
+- 当前有 13 张固定板子、动态“自定义剧本”和“全员追忆”板子。
+- 136..142、147 是实验性角色；148..154 是新增自定义角色；143..146 是全员追忆占位身份。
 - 151 起为“华灯初上”角色，单独进入自定义角色池，不加入全员追忆。
 - `BOTC_DevPlayer()` 固定关闭；【赋予能力】和【发送特定信息】是保留的说书人工具。
 
@@ -29,13 +31,16 @@
 ### 3.1 正式文件
 
 - 正式脚本：`scripts/BOTC.galaxy`。
-- 新角色测试脚本：`scripts/BOTC_test.galaxy`。
 - 当前基础地图：`base/BOTC.map`。
 - UI 依赖源：由 `BOTC_UI_MOD` 指定。
 - 可提交素材：`assets/source/` 保存原图，`assets/game/` 保存自动注入地图的运行素材。
 - 仅本地素材：`data/local_assets/`。
 - 构建输出：由 `BOTC_BUILD_DIR` 指定，默认 `work/`。
 - 工具目录：仓库内的 `tools/`。
+- 私有依赖源与生成目录：`private/`；本地黑名单：
+  `data/private/ban_handles.txt`。
+- 已上传私有依赖的完整 `bnet:` ID 写入未跟踪文件
+  `private/dependency_id.txt`，默认构建会优先使用它。
 
 ### 3.2 固定环境
 
@@ -56,6 +61,8 @@ tools\botc.cmd design validate 角色DSL.json
 tools\botc.cmd design compile 角色DSL.json --out 角色计划.md
 tools\botc.cmd role list
 tools\botc.cmd role audit 角色规格.json
+tools\botc.cmd build --private-mode release
+tools\botc.cmd build --private-mode test
 ```
 
 ## 4. 标准开发循环
@@ -74,6 +81,8 @@ tools\botc.cmd role audit 角色规格.json
 8. 能登录 Battle.net 时运行 `botc.cmd test`，并人工确认实际画面。
 9. 检查最新 `ScriptError.txt`、`Alerts.txt`、`UI.txt` 和 `Text.txt`。
 10. 确认没有自动创建备份，也没有更新项目记忆。
+11. 确认构建输出 `DocumentInfo` 挂载的是预期私有依赖：
+    - `BOTC.galaxy` 挂载 `bnet:BOTC1/1.0/188805`
 
 `test` 报告 `ALIVE` 只表示进程存活且没有新 `ScriptError`，不等于地图已成功显示。
 网易账号登录页、Battle.net 未登录或线上依赖未解析时，必须由用户手动确认。
@@ -152,8 +161,7 @@ rg -n -F -m 20 'BOTC_函数名' scripts\BOTC.galaxy
 - 正式源脚本保持 UTF-8 BOM 和 CRLF。
 - 包内 `MapScript.galaxy` 写入时必须去除 BOM，并保持 CRLF。
 - 高频逻辑不得在 `BOTC_Tick_Func()` 或每次魔典重绘中遍历全部能力来源。
-- 正式脚本角色扫描上限为 147，相关数组长度为 148；测试脚本已扩到角色
-  151「熊孩子」，数组长度为 152。实验角色在测试图通过验收后再决定是否同步正式脚本。
+- 主脚本角色扫描上限为 154，相关数组长度为 155。
 - 每条板子的角色容量为 256，`g_boardRole` 总长度为 4096。
 
 ## 8. 座位、观察者与真值
@@ -214,18 +222,23 @@ rg -n -F -m 20 'BOTC_函数名' scripts\BOTC.galaxy
 | 149 | 戏法师 |
 | 150 | 召唤师 |
 | 151 | 熊孩子 |
+| 152 | 书生 |
+| 153 | 狐媚娘 |
+| 154 | 饕餮 |
 
 - 阵营代码：0 镇民、1 外来者、2 爪牙、3 恶魔、4 传奇、5 奇遇。
 - 自定义剧本隐藏未完成的 123/124/126。
 - 骑士 122、杂技演员 129 必须可选。
 - 143..146 不进入普通角色池。
-- 新索引一旦超过 147，必须同步数组长度、扫描上限、全部表格和资源。
+- 新索引一旦超过 154，必须同步数组长度、扫描上限、全部表格和资源。
 
 ## 11. 板子与全员追忆
 
-- 板子 1..13：暗流涌动、黯月初升、梦殒春宵、瓦釜雷鸣、夜半狂欢、罂粟花开、
-  自定义剧本、横行霸道、何方教众、风雅集、心理博弈 XI、信口雌黄、全员追忆。
-- `BOTC_BoardCount()` 返回 12。
+- 板子 1..14：暗流涌动、黯月初升、梦殒春宵、瓦釜雷鸣、夜半狂欢、罂粟花开、
+  自定义剧本、横行霸道、何方教众、风雅集、心理博弈 XI、信口雌黄、全员追忆、成双成对。
+- `BOTC_BoardCount()` 返回 13。
+- 选板页第一页显示固定板 1..13；第二页只显示板子 14“成双成对”，位置与第一页
+  第一块板子对齐。自定义剧本入口不参与翻页，切页后仍保留原位置。
 - 全员追忆包含 0..147 中除华灯角色 115/116/117/118/119/121、
   未完成角色 123/124/126 和本板不用的 113 外的全部角色。
 - 全员追忆发牌时，玩家只看到对应阵营的失忆占位身份，真实身份只在真值行。
@@ -354,7 +367,14 @@ rg -n -F -m 20 'BOTC_函数名' scripts\BOTC.galaxy
 - 私聊提示使用 `BOTC_PmInfo()`；系统提示使用 `BOTC_Notice()` / `BOTC_SubMsg()`。
 - `BOTC_TellSkillChoice(p, role)` 的第二个参数是角色索引；若能力选择的是玩家座位，
   必须在清空 `g_skillT1..3[p]` 前调用 `BOTC_TellSkillChoice(p, -1)`，不得把座位号当角色索引。
+- 夜间“选择任意数量玩家”的技能统一复用饕餮模板：按【使用技能】后直接点击圆桌座位
+  选择或取消，最多允许当前参与者数量；只显示紧凑的已选列表、确认和“一个也不选”，
+  不得生成一长列座位按钮，也不得用面板盖住圆桌。确认时必须走正常目标选择联动
+  （如莽夫、悟道者、疯子），并按点击顺序进入后续结算。
 - 新增 UI 文件属于资源变更，必须进入 `assets/game/` 或基础地图，不能手工塞一次。
+- 黑名单必须来自私有依赖，不得重新写回主脚本；`BOTC_DevPlayer()` 固定关闭。
+- `data/private/ban_handles.txt` 不得提交到公开仓库。
+- Bank 初始化与 `BankList.xml` 当前仍保留在主图，不随私有依赖迁移。
 
 ## 16. 昼夜、死亡与胜利
 
@@ -369,6 +389,9 @@ rg -n -F -m 20 'BOTC_函数名' scripts\BOTC.galaxy
 - 判定存活目标时必须统一排除红叉、死亡 token 和僵怖假死。
 - 胜利检查统一走 `BOTC_CheckWin()`。
 - 新局清空全部观察者的 token、死人票、提名票、处决名额和复活动画。
+- 书生通过手动 token `171` 在夜序 70 插入一次额外行动；进入白天清除该 token。
+- 书生首夜顺位为 20，在所有恶魔信息之后直接告知每名恶魔“书生在场”，不唤醒书生本人。
+- 书生造成的死亡使用 token `172`，属于夜间非恶魔攻击，不触发恶魔攻击相关结算。
 
 ## 17. Bank 与统计
 
@@ -414,6 +437,12 @@ rg -n -F -m 20 'BOTC_函数名' scripts\BOTC.galaxy
   `BOTC_DeathToggle()`、`BOTC_MarkDeath*()`、`BOTC_DeathBlocker()`、`BOTC_CheckWin()`。
 - 夜间行动：`BOTC_WakeApply()`、`BOTC_WakeToggle()`、`BOTC_AutoWakeNext()`、
   `BOTC_NightOrder*()`、`BOTC_TellerPmTo()`。
+- 书生：`BOTC_PedantWakeSeat()`、`BOTC_PedantOpen()`、`BOTC_PedantResolve()`、
+  `BOTC_PedantDawnClear()`。
+- 狐媚娘：`BOTC_VixenChoose()`、`BOTC_VixenSync()`、`BOTC_VixenExecPending()`、
+  `BOTC_VixenNightStep()`、`BOTC_VixenClear()`。
+- 饕餮：`BOTC_BuildTaotie()`、`BOTC_TaotieOpen()`、`BOTC_TaotieToggle()`、
+  `BOTC_TaotieSubmit()`、`BOTC_TaotieNone()`、`BOTC_TaotieClear()`。
 - 提名：`BOTC_NomOpen()`、`BOTC_NomClose()`、`BOTC_NomPick()`、`BOTC_NomTally()`、
   `BOTC_PhaseSet()`。
 - 存档：`BOTC_BankInit()`、`BOTC_MyBank()`、`BOTC_BankReloadFor()`、
@@ -449,7 +478,29 @@ rg -n -F -m 20 'BOTC_函数名' scripts\BOTC.galaxy
   才通过 `BOTC_SummonerLmCheck()` 进入小怪宝结算。
 - 落难少女的间谍/寡妇相克只认真正进场历史，不得使用 `BOTC_RoleOnBoard()` 把板子可选池误当成在场。
 - 熊孩子的“捣蛋”只标记真实拥有所选镇民角色的玩家，不标记借用能力者。
+- 熊孩子的目标数为 0，但被唤醒后仍必须自动打开镇民角色网格，不能只按
+  `g_roleTargets > 0` 判断是否显示技能面板。
+- 熊孩子从说书人格 `p=1` 发动时，状态同步与黄昏清理也必须包含座位 1；
+  仅允许在座位 1 保存动作，实际“捣蛋”token 仍只能落到真实玩家座位 2..13。
+- 说书人格测试角色即使使用专用身份网格、`g_roleTargets` 为 0，也必须显示
+  【使用技能】按钮；熊孩子不得被通用“目标数 > 0”条件隐藏按钮。
 - 熊孩子的 token 170 与涡流的 token 84 独立存在，不得互相覆盖。
+- 召唤师第二夜可召唤普卡并替代第三夜；只有这一种情况允许第二夜行动。
+- 召唤师从全部有效恶魔角色中选择，不限制为当前板子已经登记的角色。
+- 召唤师把已死亡玩家变成僵怖时，保留公开的假死外观，但 `g_zombFake` 必须为真、内部按存活处理，
+  清除旧死亡 token / 日期 / 待公布状态，并且首次假死已经消耗；不得因为暂时没有
+  “存活恶魔”而立即判善良胜。
+- 召唤师未成功召唤、死亡或失去能力时不自动判胜，只提示说书人并交由说书人手动裁定。
+- 书生不进入普通唤醒链；只有带 token 171 的存活玩家在夜序 70 触发一次额外行动。
+- 书生首夜顺位 20 的告知属于被动步骤，不得因此把书生角色加入普通唤醒位。
+- 书生的 token 171 在点击进入白天时清除，token 172 的死亡不得改为恶魔攻击。
+- 狐媚娘首夜顺位 45 选择一名玩家；能力失效时不泄露信息，恢复后自动补发。
+- 狐媚娘因处决死亡后的下一夜顺位 35，将仍为善良的受选者改为邪恶并移除魅惑标记。
+- 非处决死亡、来源离场或新局必须清除狐媚娘的魅惑状态。
+- 饕餮使用紧凑确认面板，但通过正常点击圆桌座位选目标：`g_roleTargets[154] = 1`
+  只是启用主动技能的哨兵值，不得改回三目标槽或十二行长按钮。所选目标角色类型有重复时
+  无人死亡；否则按点击顺序逐一经过 `BOTC_DemonStrike()`，并使用专属 token 175
+  「死亡（饕餮）」。选择时必须触发莽夫、悟道者等正常目标选择联动。
 - 第二局不得残留死亡、票、token、面板状态或上一夜技能状态。
 
 ## 20. 日志与验收
@@ -469,6 +520,8 @@ rg -n -F -m 20 'BOTC_函数名' scripts\BOTC.galaxy
 - 角色原图放入 `assets/source/`，DDS 等运行素材放入 `assets/game/`，并记录来源。
 - 不提交 StormLib 之外来源不明的程序二进制；第三方依赖必须附版本、许可证和 SHA256。
 - 不提交账号、Cookie、Battle.net 缓存、私有依赖或本机绝对凭据。
+- 发布前先单独上传正式私有依赖，再把构建地图中的本地 `file:Mods\...`
+  依赖替换为对应的 `bnet:` 依赖 ID。
 - 新角色必须附带角色规格、能力文本、测试场景、图标和相克说明。
 - 一句话生成结果只能作为草稿，不能绕过人工规则审查。
 - 发布前至少运行：
