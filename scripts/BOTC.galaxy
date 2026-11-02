@@ -11362,6 +11362,7 @@ void BOTC_GameStartCancel () {
     if (g_startPending && !g_started) {
         BOTC_StartCdStop();
         g_startPending = false;
+        BOTC_ClearAllLogs();
         g_swapUnlocked = true;      // 【取消正式开始 → 放回"换座位"按钮】（用户 2026-10-07）
         BOTC_PlaySfx(g_sfxStartName);
         libNtve_gf_SetDialogItemText(g_grimStart, StringToText("游戏正式开始"), PlayerGroupSingle(g_teller));

@@ -446,7 +446,7 @@ class GameStartLogTests(unittest.TestCase):
         cancel_start = source.index("void BOTC_GameStartCancel () {")
         cancel_end = source.index("\n}\n", cancel_start)
         cancel = source[cancel_start:cancel_end]
-        self.assertIn("BOTC_ClearAllLogs();", cancel)
+        self.assertEqual(cancel.count("BOTC_ClearAllLogs();"), 2)
 
 
 if __name__ == "__main__":
