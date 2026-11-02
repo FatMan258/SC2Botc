@@ -773,6 +773,12 @@ int         g_winSub;
 int         g_winBtn;
 int         g_winSide;            // 0 = 善良胜 / 1 = 邪恶胜
 bool        g_gameOver;           // 本局已经分出胜负
+// 【说书人评分】（用户 2026-11-02）：结算阶段每个玩家（除说书人）给说书人打 1..5 分；
+//   分数累加进说书人自己账号 bank 的 stats/rs、stats/rc，统计页显示平均分。
+int         g_rateDlg;
+int         g_rateLbl;
+int[5]      g_rateBtn;
+bool[14]    g_ratedP;             // 本局该物理座位是否已经评过分
 // 传位面板（恶魔死了之后：说书人点一名活着的爪牙让他变成新的小恶魔；智能说书会自己随机挑）
 int         g_promDlg;
 int         g_promTitle;
@@ -2417,6 +2423,9 @@ bool   BOTC_WinAdminClick (int p, int c);
 bool   BOTC_HereticOn ();        // 【异端分子(101)】：场上有没有生效的异端分子（死后仍生效 / 中毒酒鬼失效）
 void   BOTC_BuildWin ();
 void   BOTC_BuildWinCongrats ();
+void   BOTC_BuildRate ();          // 【说书人评分】结算面板下方的打分行
+void   BOTC_RateShowAll ();        // 结算时把打分框发给除说书人以外的所有玩家
+void   BOTC_RateSubmit (int p, int v);
 text   BOTC_CongratsText ();
 text   BOTC_CongratsStText ();
 void   BOTC_ReplayReveal ();
@@ -2685,6 +2694,7 @@ void   BOTC_CustomLoadBank (bool talk);
 string BOTC_CustomSection (int slot);
 void   BOTC_CustomSaveBootOnly (int slot, string s);
 bank   BOTC_MyBank ();          // 【存档】取「当前说书人的账号」银行（换座位后自动跟随新人）
+void   BOTC_BankInit ();
 void   BOTC_StatsRecord ();
 void   BOTC_StatsRender (int p);
 void   BOTC_BankReloadFor (int p);
@@ -2778,8 +2788,12 @@ text BOTC_PlayerNameText (int p) {
     // 【名字取"这个位置现在的人"】（用户 2026-10-06）：位置 p 上现在坐的是物理座位 g_who[p] 那个人。
     // 【"说书人那一格"按位置判】（用户 2026-10-07）：g_teller 是**物理座位**，换说书人之后
     //   坐进这一格的是别人（g_who[1] == g_teller）→ 用 g_who[p] 判，否则这一格会被刷成红色。
+    // 【已退出标记】（用户 2026-11-02）：游戏正式开始后中途退出的玩家，名字后面补「（已退出）」。
     if (g_who[p] == g_teller || p == 1) {
         return StringToText(BOTC_NameTag(p)) + TextWithColor(PlayerName(g_who[p]), libNtve_gf_ConvertPlayerColorToColor(g_seatColor[1]));   // 【说书人 = 游戏原生粉】（用户 2026-10-14）：色号 15
+    }
+    if (g_started && g_leftKeepP[g_who[p]]) {
+        return StringToText(BOTC_NameTag(p)) + TextWithColor(PlayerName(g_who[p]), libNtve_gf_ConvertPlayerColorToColor(g_seatColor[p])) + TextWithColor(StringToText("（已退出）"), Color(160, 160, 160));
     }
     return StringToText(BOTC_NameTag(p)) + TextWithColor(PlayerName(g_who[p]), libNtve_gf_ConvertPlayerColorToColor(g_seatColor[p]));
 }
@@ -5372,6 +5386,13 @@ bool BOTC_ClickDo (bool testConds, bool runActions) {
             BOTC_ReplayReveal();
         }
         return true;
+    }
+    // 【说书人评分】（用户 2026-11-02）：结算阶段点 1..5 分
+    for (q = 0; q < 5; q += 1) {
+        if (c == g_rateBtn[q]) {
+            BOTC_RateSubmit(p, q + 1);
+            return true;
+        }
     }
     // 传位面板：说书人点一名爪牙 → 他变成新的恶魔（跟死掉的那只同一种）
     for (q = 0; q < 12; q += 1) {
@@ -11002,6 +11023,10 @@ void BOTC_ResetGameVars () {
     for (i = 1; i <= 13; i += 1) {
         g_leftKeepP[i] = false;
         g_leftDeadP[i] = false;
+        g_ratedP[i] = false;           // 【说书人评分】新一局重新允许评分
+    }
+    if (g_rateDlg != 0) {
+        DialogSetVisible(g_rateDlg, PlayerGroupAll(), false);
     }
     for (i = 0; i <= 13; i += 1) { g_taotieOpen[i] = false; g_taotieActor[i] = 0; g_taotieN[i] = 0; }
     for (i = 0; i < 196; i += 1) { g_taotiePick[i] = false; }
@@ -19543,6 +19568,10 @@ void BOTC_GrimRender (int ob) {
         //   `g_who[q]`（这个位置现在坐的**人**），不能写 `PlayerName(q)`（那是物理座位 q 上的人，
         //   换说书人时人对调了、物理座位没动 → 会显示成对方的名字）。颜色仍按位置 g_seatColor[q]。
         libNtve_gf_SetDialogItemText(g_grimName[q], StringToText(IntToString(g_lab[q] + g_nameNumShift) + " [") + TextWithColor(PlayerName(g_who[q]), libNtve_gf_ConvertPlayerColorToColor(g_seatColor[q])) + StringToText("]"), PlayerGroupSingle(ob));
+        // 【已退出标记】（用户 2026-11-02）：游戏正式开始后中途退出的人，魔典名字后面补「（已退出）」。
+        if (g_started && g_leftKeepP[g_who[q]] && g_who[q] != g_teller && q != 1) {
+            libNtve_gf_SetDialogItemText(g_grimName[q], StringToText(IntToString(g_lab[q] + g_nameNumShift) + " [") + TextWithColor(PlayerName(g_who[q]), libNtve_gf_ConvertPlayerColorToColor(g_seatColor[q])) + StringToText("]") + TextWithColor(StringToText("（已退出）"), Color(160, 160, 160)), PlayerGroupSingle(ob));
+        }
         libNtve_gf_SetDialogItemStyle(g_grimName[q], g_grimNameStyle, PlayerGroupSingle(ob));
         // 死亡红叉：只有「公开死亡」（处决 / 死亡标记 / 小恶魔天亮刀 / 猎手射中）才给全桌显示；
         //   单纯用死亡 token 记的（只给技能检测用）别人看不到红叉
@@ -20185,11 +20214,11 @@ void BOTC_TimerAiInit () {
 void BOTC_PreNoticeRender () {
     string ttl;
     ttl = BOTC_TellerTitle();
-    libNtve_gf_SetDialogItemText(g_preLbl, TextWithColor(StringToText("当前说书人："), Color(255, 0, 0)) + TextWithColor(PlayerName(g_teller), libNtve_gf_ConvertPlayerColorToColor(g_seatColor[1])), PlayerGroupSingle(g_teller));
-    // 【说书人称号】（用户 2026-11-02）：显示在「当前说书人」下面一行。
-    libNtve_gf_SetDialogItemText(g_preTitleLbl, TextWithColor(StringToText("称号："), Color(255, 0, 0)) + TextWithColor(StringToText(ttl), Color(255, 215, 0)), PlayerGroupSingle(g_teller));
-    DialogControlSetVisible(g_preTitleLbl, PlayerGroupAll(), false);
-    DialogControlSetVisible(g_preTitleLbl, PlayerGroupSingle(g_teller), true);
+    // 【称号对所有人可见】（用户 2026-11-02）：原来只给说书人看，现在所有玩家都能看到
+    //   当前说书人是谁以及他的称号等级。
+    libNtve_gf_SetDialogItemText(g_preLbl, TextWithColor(StringToText("当前说书人："), Color(255, 0, 0)) + TextWithColor(PlayerName(g_teller), libNtve_gf_ConvertPlayerColorToColor(g_seatColor[1])), PlayerGroupAll());
+    libNtve_gf_SetDialogItemText(g_preTitleLbl, TextWithColor(StringToText("称号："), Color(255, 0, 0)) + TextWithColor(StringToText(ttl), Color(255, 215, 0)), PlayerGroupAll());
+    DialogControlSetVisible(g_preTitleLbl, PlayerGroupAll(), true);
 }
 
 // 计时面板收起 / 展开（参考私聊面板那套）
@@ -42723,6 +42752,7 @@ void BOTC_ShowWinNow () {
     BOTC_EvilClose();
     libNtve_gf_SetDialogItemText(g_winSub, BOTC_NameSubst(g_winReason), PlayerGroupAll());   // 结算面板的正文：名字换成真名
     DialogSetVisible(g_winDlg, PlayerGroupAll(), true);
+    BOTC_RateShowAll();             // 【说书人评分】结算面板下方的打分行发给除说书人以外的玩家
     // 【换座位后的说书人也要能点】（用户 2026-10-18）：继续 / 复盘按钮按「现在的」说书人露出来
     DialogControlSetVisible(g_winBtn, PlayerGroupAll(), false);
     DialogControlSetVisible(g_winBtn, PlayerGroupSingle(g_teller), true);
@@ -42770,6 +42800,98 @@ libNtve_gf_SetDialogItemStyle(g_winSub, "ModLeftSize20Bold", PlayerGroupAll());
     g_replayBtn = BOTC_NewButton(g_winDlg, 240, 40, 80, 180, "复盘（公开魔典）");
     DialogControlSetVisible(g_replayBtn, PlayerGroupAll(), false);
     DialogControlSetPosition(g_winBtn, PlayerGroupAll(), c_anchorTopLeft, 340, 180);
+}
+
+// 【说书人评分】（用户 2026-11-02）：结算面板下方的 1..5 分打分框。
+//   只发给除说书人以外的在场真人；点完一次后本局不能再改。
+void BOTC_BuildRate () {
+    int i;
+    DialogCreate(660, 46, c_anchorCenter, 150, 150, false);
+    g_rateDlg = DialogLastCreated();
+    DialogSetVisible(g_rateDlg, PlayerGroupAll(), false);
+    DialogSetImageVisible(g_rateDlg, false);
+    g_rateLbl = BOTC_NewLabel(g_rateDlg, 170, 30, 8, 8, StringToText("为说书人打分："));
+    libNtve_gf_SetDialogItemStyle(g_rateLbl, "ModLeftSize16Bold", PlayerGroupAll());
+    libNtve_gf_SetDialogItemAcceptMouse(g_rateLbl, false, PlayerGroupAll());
+    for (i = 0; i < 5; i += 1) {
+        g_rateBtn[i] = BOTC_NewButton(g_rateDlg, 84, 30, 178 + (i * 92), 8, IntToString(i + 1) + " 分");
+        libNtve_gf_SetDialogItemStyle(g_rateBtn[i], "ModLeftSize16Bold", PlayerGroupAll());
+        DialogControlSetVisible(g_rateBtn[i], PlayerGroupAll(), false);
+    }
+}
+
+void BOTC_RateShowAll () {
+    int p;
+    int i;
+    DialogSetVisible(g_rateDlg, PlayerGroupAll(), false);
+    for (i = 0; i < 5; i += 1) {
+        DialogControlSetVisible(g_rateBtn[i], PlayerGroupAll(), false);
+    }
+    if (g_teller < 1 || g_teller > 13) {
+        return;
+    }
+    if (PlayerType(g_teller) != 1) {
+        return;                            // 电脑说书人不接受评分
+    }
+    for (p = 2; p <= 13; p += 1) {
+        if (p == g_teller) {
+            continue;
+        }
+        if (PlayerType(p) != 1) {
+            continue;
+        }
+        if (PlayerStatus(p) == 2) {
+            continue;
+        }
+        libNtve_gf_SetDialogItemText(g_rateLbl, StringToText("为说书人打分："), PlayerGroupSingle(p));
+        for (i = 0; i < 5; i += 1) {
+            DialogControlSetVisible(g_rateBtn[i], PlayerGroupSingle(p), true);
+        }
+        DialogSetVisible(g_rateDlg, PlayerGroupSingle(p), true);
+    }
+}
+
+void BOTC_RateSubmit (int p, int v) {
+    bank bk;
+    int rs;
+    int rc;
+    int i;
+    if (!g_gameOver) {
+        return;
+    }
+    if (p < 2 || p > 13 || p == g_teller) {
+        return;
+    }
+    if (g_ratedP[p]) {
+        return;
+    }
+    if (v < 1 || v > 5) {
+        return;
+    }
+    if (g_teller < 1 || g_teller > 13 || PlayerType(g_teller) != 1) {
+        return;
+    }
+    if (PlayerType(p) != 1 || PlayerStatus(p) == 2) {
+        return;
+    }
+    g_ratedP[p] = true;
+    BOTC_BankInit();
+    bk = g_bank[g_teller];
+    rs = 0;
+    rc = 0;
+    if (BankKeyExists(bk, "stats", "rs")) {
+        rs = BankValueGetAsInt(bk, "stats", "rs");
+    }
+    if (BankKeyExists(bk, "stats", "rc")) {
+        rc = BankValueGetAsInt(bk, "stats", "rc");
+    }
+    BankValueSetFromInt(bk, "stats", "rs", rs + v);
+    BankValueSetFromInt(bk, "stats", "rc", rc + 1);
+    BankSave(bk);
+    libNtve_gf_SetDialogItemText(g_rateLbl, StringToText("已评分：" + IntToString(v) + " 分，感谢反馈。"), PlayerGroupSingle(p));
+    for (i = 0; i < 5; i += 1) {
+        DialogControlSetVisible(g_rateBtn[i], PlayerGroupSingle(p), false);
+    }
 }
 
 // 胜利面板上面那条「恭喜...获胜」：单独一个对话框，放在胜利面板正上方
@@ -42890,6 +43012,7 @@ void BOTC_GrimResetPerPlayer () {
 void BOTC_WinClose () {
     DialogSetVisible(g_winDlg, PlayerGroupAll(), false);
     DialogSetVisible(g_congratsDlg, PlayerGroupAll(), false);   // 上面那条「恭喜...」一起收掉
+    DialogSetVisible(g_rateDlg, PlayerGroupAll(), false);       // 【说书人评分】打分框一起收掉
     g_gameOver = false;
     // ⚠ 这里**不**停胜利曲：面板收掉之后胜利 BGM 还要一直放着，
     //   直到说书人点【取消正式开始】（那一步会 BOTC_MusicStop）。
@@ -46383,6 +46506,10 @@ void BOTC_StatsRender (int p) {
     int g;
     int e;
     int s;
+    int rs;
+    int rc;
+    int avg10;
+    bool hasBk;
     text line;
     text rowName;
     BOTC_BankInit();
@@ -46402,7 +46529,12 @@ void BOTC_StatsRender (int p) {
         g = 0;
         e = 0;
         s = 0;
+        rs = 0;
+        rc = 0;
+        hasBk = false;
         if (pid == p) {
+            bk = g_bank[p];
+            hasBk = true;
             t = BOTC_StatsOwnGet(g_bank[p], "t");
             g = BOTC_StatsOwnGet(g_bank[p], "g");
             e = BOTC_StatsOwnGet(g_bank[p], "e");
@@ -46411,10 +46543,20 @@ void BOTC_StatsRender (int p) {
         else {
             if (pid >= 1 && pid <= 13 && PlayerType(pid) == 1) {
                 bk = g_bank[pid];
+                hasBk = true;
                 t = BOTC_StatsOwnGet(bk, "t");
                 g = BOTC_StatsOwnGet(bk, "g");
                 e = BOTC_StatsOwnGet(bk, "e");
                 s = BOTC_StatsOwnGet(bk, "s");
+            }
+        }
+        // 【说书人平均分】（用户 2026-11-02）：历史累计 rs / rc，显示一位小数。
+        if (hasBk) {
+            if (BankKeyExists(bk, "stats", "rs")) {
+                rs = BankValueGetAsInt(bk, "stats", "rs");
+            }
+            if (BankKeyExists(bk, "stats", "rc")) {
+                rc = BankValueGetAsInt(bk, "stats", "rc");
             }
         }
         // 【玩家 ID + 大厅自选色】（用户 2026-10-20）：不写「玩家N」，直接用实际玩家名。
@@ -46428,6 +46570,11 @@ void BOTC_StatsRender (int p) {
         line = line + TextWithColor(StringToText("邪恶 " + IntToString(e)), Color(255, 0, 0));
         line = line + StringToText("        ");
         line = line + TextWithColor(StringToText("说书人 " + IntToString(s)), Color(255, 215, 0));
+        if (rc > 0) {
+            avg10 = ((rs * 10) + (rc / 2)) / rc;
+            line = line + StringToText("        ");
+            line = line + TextWithColor(StringToText("平均分 " + IntToString(avg10 / 10) + "." + IntToString(avg10 - ((avg10 / 10) * 10)) + "（" + IntToString(rc) + " 次）"), Color(255, 150, 0));
+        }
         DialogControlAddItem(g_tipList, PlayerGroupSingle(p), line);
         // 每名玩家之间多留一行空白。
         DialogControlAddItem(g_tipList, PlayerGroupSingle(p), StringToText("    "));
@@ -51321,6 +51468,7 @@ void BOTC_Init () {
     BOTC_BuildCustom();            // 【自定义剧本】面板（用户 2026-10-03）
     BOTC_ChatBgApply();            // 黑底透明度（默认值在 GrimInitData 里设，这里应用一次）
     BOTC_BuildWin();
+    BOTC_BuildRate();          // 【说书人评分】结算面板下方的 1..5 分打分框
     BOTC_BuildWinCongrats();
     BOTC_BuildPromote();
     BOTC_BuildBigNotice();
