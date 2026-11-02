@@ -376,8 +376,8 @@ rg -n -F -m 20 'BOTC_函数名' scripts\BOTC.galaxy
   私聊；夜间、公聊、提名阶段不得同意白天残留的私聊申请（`BOTC_DissolveAllSess()` /
   `BOTC_PmStageBlocked()`，说书人例外）。
 - 【说书人称号】按账号 bank 的 `stats/title` 优先，否则说书人场次 `s > 5` 为「见习说书人」、
-  其余「临时说书人」，显示在选板页「当前说书人：X」下一行，仅说书人可见。
-- 主界面顶部的开局前提示（`BOTC_PreNoticeRender()`）对说书人显示“当前说书人：X”，
+  其余「临时说书人」，显示在选板页「当前说书人：X」下一行，对所有玩家可见。
+- 主界面顶部的开局前提示（`BOTC_PreNoticeRender()`）对所有玩家显示“当前说书人：X”和称号，
   只在选板页（`g_boardOpen`）显示，换座位后由 `BOTC_NomUI()` 刷新。
 - 【聊天：公聊/私聊】按钮文案带“（Tab切换）”，按钮宽度必须容得下完整提示。
 - 公聊窗和私聊窗使用 `BOTC_FrameSilver()` 银色圆角外框，不使用金色直边。
