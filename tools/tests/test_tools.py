@@ -430,7 +430,7 @@ class PendingReviveTests(unittest.TestCase):
 
 
 class GameStartLogTests(unittest.TestCase):
-    def test_logs_clear_after_countdown_but_not_on_cancel(self) -> None:
+    def test_logs_clear_after_countdown_and_on_cancel(self) -> None:
         source = (PROJECT_ROOT / "scripts" / "BOTC.galaxy").read_text(
             encoding="utf-8-sig"
         )
@@ -446,7 +446,7 @@ class GameStartLogTests(unittest.TestCase):
         cancel_start = source.index("void BOTC_GameStartCancel () {")
         cancel_end = source.index("\n}\n", cancel_start)
         cancel = source[cancel_start:cancel_end]
-        self.assertNotIn("BOTC_ClearAllLogs();", cancel)
+        self.assertIn("BOTC_ClearAllLogs();", cancel)
 
 
 if __name__ == "__main__":
