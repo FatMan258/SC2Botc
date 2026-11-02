@@ -496,6 +496,7 @@ bool         g_tmHidden;           // 计时面板是不是收起了
 // 【开局前提示】（用户 2026-09-19）：游戏正式开始之前，屏幕中上方那行大红字
 int          g_preDlg;
 int          g_preLbl;
+int          g_preTitleLbl;      // 【说书人称号】显示在「当前说书人」下面一行
 bool         g_tmOn;               // 正在走表
 bool         g_tmAiDone;           // AI 模式已经按投票填过一次
 int          g_tmPub; int g_tmPm; int g_tmFree;              // 设定值（秒）
@@ -1633,6 +1634,10 @@ int[14]     g_joinWho;
 bool[14]    g_joinPending;
 bool[196]   g_joinVote;
 bool[14]    g_hidden;
+int[14]     g_reqSec;            // 私聊请求剩余拍数（30 拍 = 15 秒，超时自动拒绝）
+int[14]     g_askSec;            // 换座位请求剩余拍数（30 拍 = 15 秒，超时自动拒绝）
+int[196]    g_pmCool;            // 私聊拒绝冷却：索引 (发起人 * 14) + 目标
+bool        g_sessSilent;        // 批量解散私聊时不播「退出私聊」消息
 
 trigger     g_tClick;
 trigger     g_tChat;
@@ -1644,6 +1649,8 @@ trigger     g_tHotKey;
 string BOTC_NameStr (int p);
 text   BOTC_LineText (string line, int who);
 void   BOTC_PosOfDump (int p);       // 【-pos】把"座位 ↔ 位置"表打进自己私聊（用户 2026-10-07）
+string BOTC_TellerTitle ();          // 【说书人称号】按账号 bank 的 stats/title 或说书人场次推算
+void   BOTC_TitleSet (int pid, string t);   // 【说书人称号】写入某玩家账号（供后续星级称号使用）
 int    BOTC_PosOf (int seat);        // 【物理座位 → 逻辑位置】（用户 2026-10-07）：换说书人后"人"≠"位置"
 string BOTC_SayToken (int seat);     // 【说话人占位符】（用户 2026-10-07）：按**人**记，换位后名字不跟格子跑
 color  BOTC_SayColor (int seat);     // 【说话人那一行的颜色】：按位置取色，说书人那一格 = 白
@@ -2544,7 +2551,6 @@ void   BOTC_HotSwitch (int p);
 void   BOTC_ChatBtnRender ();
 void   BOTC_PubSay (int p, string tag, string msg);
 void   BOTC_RequestChat (int p, int q);
-bool   BOTC_SessStSolo (int s);
 void   BOTC_OnYes (int p);
 void   BOTC_OnNo (int p);
 void   BOTC_CreateSess (int a, int b);
@@ -3749,6 +3755,7 @@ void BOTC_ShowReq (int p, string msg) {
     DialogControlSetVisible(g_reqLabel[p], PlayerGroupSingle(p), true);
     DialogControlSetVisible(g_reqYes[p], PlayerGroupSingle(p), true);
     DialogControlSetVisible(g_reqNo[p], PlayerGroupSingle(p), true);
+    g_reqSec[p] = 30;                 // 【15 秒应答窗口】（用户 2026-11-02）：超时自动拒绝
 }
 
 void BOTC_ClearReq (int p) {
@@ -3756,6 +3763,7 @@ void BOTC_ClearReq (int p) {
     DialogControlSetVisible(g_reqLabel[p], PlayerGroupSingle(p), false);
     DialogControlSetVisible(g_reqYes[p], PlayerGroupSingle(p), false);
     DialogControlSetVisible(g_reqNo[p], PlayerGroupSingle(p), false);
+    g_reqSec[p] = 0;
 }
 
 void BOTC_RefreshSessList (int p) {
@@ -3764,6 +3772,7 @@ void BOTC_RefreshSessList (int p) {
     int k;
     string desc;
     int n;
+    int o;
     DialogControlRemoveAllItems(g_sessList[p], PlayerGroupSingle(p));
     k = 0;
     for (s = 1; s <= 13; s += 1) {
@@ -3795,7 +3804,16 @@ void BOTC_RefreshSessList (int p) {
             k = k + 1;
             desc = "私聊" + IntToString(s) + "：";
             n = 0;
+            // 【房主名字排最前】（用户 2026-11-02）：换房主后列表里的第一个名字也跟着换。
+            o = g_sessOwner[s];
+            if (o >= 1 && o <= 13 && g_member[(s * 14) + o]) {
+                desc = desc + BOTC_NameStr(BOTC_PosOf(o));
+                n = n + 1;
+            }
             for (i = 1; i <= 13; i += 1) {
+                if (i == o) {
+                    continue;
+                }
                 if (g_member[(s * 14) + i]) {
                     if (n > 0) {
                         desc = desc + "、";
@@ -4339,6 +4357,16 @@ void BOTC_RequestChat (int p, int q) {
         BOTC_RequestJoinSess(p, g_mySess[q]);
         return;
     }
+    // 【15 秒应答窗口内不得被顶掉】（用户 2026-11-02）：对方正在处理别的请求时先别发。
+    if (g_reqFrom[q] != 0 || g_reqJoinSess[q] != 0 || g_reqSec[q] > 0) {
+        BOTC_Notice(p, BOTC_NameStr(BOTC_PosOf(q)) + " 正在处理另一个请求，请稍后再试。");
+        return;
+    }
+    // 【被拒绝后的 15 秒冷却】（用户 2026-11-02）：同一对玩家不能立刻重复发起。
+    if (g_pmCool[(p * 14) + q] > 0) {
+        BOTC_Notice(p, "对方刚拒绝过你的私聊请求，请 " + IntToString((g_pmCool[(p * 14) + q] + 1) / 2) + " 秒后再试。");
+        return;
+    }
     g_reqFrom[q] = p;
     BOTC_ShowReq(q, BOTC_NameStr(BOTC_PosOf(p)) + " 请求与你私聊，是否同意？");
     BOTC_Notice(p, "已向 " + BOTC_NameStr(BOTC_PosOf(q)) + " 发出私聊请求，等待对方同意。");
@@ -4399,9 +4427,17 @@ void BOTC_JoinSess (int who, int s) {
         BOTC_Notice(who, "你已经在这个私聊里。");
         return;
     }
+    // 【说书人直入时先清掉还在排队的加入请求】（用户 2026-11-02）：不能让房主再点一个已经没意义的框。
+    if (g_joinPending[s]) {
+        BOTC_RejectJoin(s);
+    }
     BOTC_ForceLeave(who);
     g_member[(s * 14) + who] = true;
     g_mySess[who] = s;
+    // 【说书人进私聊立刻成为房主】（用户 2026-11-02）：直到说书人主动退出才移交房主。
+    if (who == g_teller || g_sessOwner[s] < 1) {
+        g_sessOwner[s] = who;
+    }
     // 加入私聊：自动进入私聊模式（说书人也一样，用户 2026-09-30）
     g_chatSay[who] = 1;
     BOTC_SayRender(who);
@@ -4550,16 +4586,78 @@ void BOTC_CloseSessIfAlone (int s) {
                 g_mySess[i] = 0;
                 // 【私聊结束也不切公聊】（用户 2026-10-16）：保持每个人当前那个模式，按钮文案也保持「聊天：私聊」
                 libNtve_gf_SetDialogItemText(g_sayBtnP[i], StringToText("聊天：私聊（Tab切换）"), PlayerGroupSingle(i));
-                BOTC_Notice(i, "私聊已结束。");
+                if (!g_sessSilent) {
+                    BOTC_Notice(i, "私聊已结束。");
+                }
             }
         }
         g_sessAlive[s] = false;
         g_joinPending[s] = false;
         g_joinWho[s] = 0;
+        g_sessOwner[s] = 0;        // 【房主随会话结束一起清】（用户 2026-11-02）
         if (s == g_lmSess) {
             g_lmSess = 0;          // 【小怪宝恶人频道】没人了自动关：号清掉（用户 2026-10-12）
         }
     }
+}
+
+// 【按阶段解散私聊】（用户 2026-11-02）
+//   keepTeller = false：全部解散（白天 ↔ 黑夜切换用，说书人的私聊也一起收）
+//   keepTeller = true ：只保留说书人所在的那条私聊，其余全部解散（私聊阶段 → 公聊 / 提名阶段）
+//   同时清掉所有残留的私聊请求框：夜里 / 公聊 / 提名阶段不能答应白天遗留的申请。
+void BOTC_DissolveAllSess (bool keepTeller) {
+    int s;
+    int i;
+    g_sessSilent = true;
+    g_bulkLeave = true;
+    for (s = 1; s <= 13; s += 1) {
+        if (!g_sessAlive[s]) {
+            continue;
+        }
+        if (keepTeller && g_member[(s * 14) + g_teller]) {
+            for (i = 1; i <= 13; i += 1) {
+                if (i == g_teller) {
+                    continue;
+                }
+                if (g_member[(s * 14) + i]) {
+                    g_member[(s * 14) + i] = false;
+                    g_mySess[i] = 0;
+                    BOTC_SayRender(i);
+                    BOTC_NoticeKeep(i, "私聊已随阶段切换结束。");
+                }
+            }
+            g_sessOwner[s] = g_teller;
+            g_joinPending[s] = false;
+            g_joinWho[s] = 0;
+            continue;
+        }
+        for (i = 1; i <= 13; i += 1) {
+            if (!g_member[(s * 14) + i]) {
+                continue;
+            }
+            g_member[(s * 14) + i] = false;
+            g_mySess[i] = 0;
+            BOTC_SayRender(i);
+            BOTC_NoticeKeep(i, "私聊已随阶段切换结束。");
+        }
+        g_sessAlive[s] = false;
+        g_joinPending[s] = false;
+        g_joinWho[s] = 0;
+        g_sessOwner[s] = 0;
+        if (s == g_lmSess) {
+            g_lmSess = 0;
+        }
+    }
+    for (i = 1; i <= 13; i += 1) {
+        g_reqFrom[i] = 0;
+        g_reqJoinSess[i] = 0;
+        g_reqJoinWho[i] = 0;
+        g_reqSec[i] = 0;
+        BOTC_ClearReq(i);
+    }
+    g_sessSilent = false;
+    g_bulkLeave = false;
+    BOTC_RefreshSessListAll();
 }
 
 void BOTC_SessRepair () {
@@ -4582,6 +4680,7 @@ void BOTC_SessRepair () {
             g_sessAlive[s] = false;
             g_joinPending[s] = false;
             g_joinWho[s] = 0;
+            g_sessOwner[s] = 0;
         }
     }
     for (p = 1; p <= 13; p += 1) {
@@ -4611,6 +4710,7 @@ void BOTC_SessRepair () {
 void BOTC_Leave (int p) {
     int s;
     int i;
+    int nb;
     s = g_mySess[p];
     if (s == 0) {
         for (i = 1; i <= 13; i += 1) {
@@ -4621,7 +4721,9 @@ void BOTC_Leave (int p) {
         }
         // 【退出私聊不再自动切回公聊】（用户 2026-10-10）：聊天模式是玩家自己选的，脚本不替他切
         BOTC_SayRender(p);
-        BOTC_Notice(p, "你当前不在私聊中（已帮你清掉残留状态）。");
+        if (!g_sessSilent) {
+            BOTC_Notice(p, "你当前不在私聊中（已帮你清掉残留状态）。");
+        }
         if (!g_bulkLeave) {
             BOTC_RefreshSessListAll();
         }
@@ -4631,11 +4733,40 @@ void BOTC_Leave (int p) {
     g_mySess[p] = 0;
     // 【退出私聊不再自动切回公聊】（用户 2026-10-10）：保持他当前选的那个模式
     BOTC_SayRender(p);
-    BOTC_Notice(p, "你退出了私聊。");
-
+    if (!g_sessSilent) {
+        BOTC_Notice(p, "你退出了私聊。");
+    }
+    // 【房主继承】（用户 2026-11-02）：房主退出后，由剩余成员中的一名继承（说书人优先）。
+    if (g_sessOwner[s] == p) {
+        nb = 0;
+        for (i = 1; i <= 13; i += 1) {
+            if (i == p) {
+                continue;
+            }
+            if (g_member[(s * 14) + i]) {
+                if (nb == 0) {
+                    nb = i;
+                }
+                if (i == g_teller) {
+                    nb = i;
+                    break;
+                }
+            }
+        }
+        g_sessOwner[s] = nb;
+        if (nb >= 1 && !g_sessSilent) {
+            for (i = 1; i <= 13; i += 1) {
+                if (g_member[(s * 14) + i]) {
+                    BOTC_AppendPm(i, BOTC_NameStr(BOTC_PosOf(nb)) + " 成为房主。");
+                }
+            }
+        }
+    }
     for (i = 1; i <= 13; i += 1) {
         if (g_member[(s * 14) + i]) {
-            BOTC_AppendPm(i, BOTC_NameStr(BOTC_PosOf(p)) + " 退出了私聊。");
+            if (!g_sessSilent) {
+                BOTC_AppendPm(i, BOTC_NameStr(BOTC_PosOf(p)) + " 退出了私聊。");
+            }
         }
     }
     BOTC_CloseSessIfAlone(s);
@@ -4653,6 +4784,28 @@ void BOTC_ForceLeave (int p) {
 //--------------------------------------------------------------------------------------------------
 // 请求应答
 //--------------------------------------------------------------------------------------------------
+// 【拒绝后的 15 秒冷却】（用户 2026-11-02）：同一名发起人对同一名玩家不能立刻重复发起。
+void BOTC_PmCooldown (int from, int to) {
+    if (from < 1 || from > 13 || to < 1 || to > 13) {
+        return;
+    }
+    g_pmCool[(from * 14) + to] = 30;
+}
+
+// 【阶段拦截】（用户 2026-11-02）：夜晚 / 公聊 / 提名阶段不处理白天残留的私聊申请。
+bool BOTC_PmStageBlocked () {
+    if (g_isNight) {
+        return true;
+    }
+    if (g_chatMode == 2 && !g_cultOn) {
+        return true;
+    }
+    if (g_phase != 0 && !g_cultOn) {
+        return true;
+    }
+    return false;
+}
+
 void BOTC_OnYes (int p) {
     int from;
     if (g_reqJoinSess[p] != 0) {
@@ -4661,6 +4814,16 @@ void BOTC_OnYes (int p) {
     }
     from = g_reqFrom[p];
     if (from == 0) {
+        return;
+    }
+    // 【阶段拦截】：白天遗留下来的请求在夜里 / 公聊 / 提名阶段一率不能同意。
+    //   说书人例外：他要随时能给玩家发私聊（跟「说书人的私聊不清算」同一条口径）。
+    if (p != g_teller && BOTC_PmStageBlocked()) {
+        g_reqFrom[p] = 0;
+        BOTC_ClearReq(p);
+        BOTC_PmCooldown(from, p);
+        BOTC_Notice(p, "当前时段不能接受私聊请求，已自动拒绝。");
+        BOTC_Notice(from, BOTC_NameStr(BOTC_PosOf(p)) + " 拒绝了你的私聊请求。");
         return;
     }
     g_reqFrom[p] = 0;
@@ -4684,39 +4847,13 @@ void BOTC_OnNo (int p) {
     }
     g_reqFrom[p] = 0;
     BOTC_ClearReq(p);
+    BOTC_PmCooldown(from, p);
     BOTC_AppendPm(from, BOTC_NameStr(BOTC_PosOf(p)) + " 拒绝了你的私聊请求。");
 }
 
 //--------------------------------------------------------------------------------------------------
-// 加入私聊（全体成员同意 / 说书人单独私聊时由说书人一个人拍板）
+// 加入私聊（用户 2026-11-02：只需房主同意）
 //--------------------------------------------------------------------------------------------------
-// 这条私聊是不是「说书人跟某一名玩家单独私聊」：成员正好两个、其中一个是说书人。
-//   用户 2026-09-17：这种私聊里别人要加入，**只需要说书人本人同意**；
-//   说书人「介入」玩家之间的私聊（3 人以上）不算，那种还是走原来的「全体成员同意」。
-bool BOTC_SessStSolo (int s) {
-    int i;
-    int cnt;
-    if (s < 1 || s > 13) {
-        return false;
-    }
-    if (!g_sessAlive[s]) {
-        return false;
-    }
-    if (!g_member[(s * 14) + g_teller]) {
-        return false;
-    }
-    cnt = 0;
-    for (i = 1; i <= 13; i += 1) {
-        if (g_member[(s * 14) + i]) {
-            cnt = cnt + 1;
-        }
-    }
-    if (cnt != 2) {
-        return false;
-    }
-    return true;
-}
-
 void BOTC_RequestJoin (int p) {
     int sel;
     int s;
@@ -4736,9 +4873,10 @@ void BOTC_RequestJoin (int p) {
 }
 
 // 发起者 p 请求加入会话 s。列表按钮和「点一个正在私聊的人发起私聊」共用这一条路径。
+//   【房主审批】（用户 2026-11-02）：只有房主收到请求框，房主点【是】就放行。
 void BOTC_RequestJoinSess (int p, int s) {
     int i;
-    int who2;
+    int ow;
     BOTC_SessRepair();
     if (p < 1 || p > 13) {
         return;
@@ -4766,38 +4904,39 @@ void BOTC_RequestJoinSess (int p, int s) {
         return;
     }
     // 【说书人介入私聊】（用户 2026-09-22）：说书人进任何私聊都不用成员同意，直接进去 ----
-    //   以前走的是下面那套「全体成员同意」，玩家不点【是】就永远进不去。
+    //   并且立刻成为房主，直到他自己主动退出（用户 2026-11-02）。
     if (p == g_teller) {
-        BOTC_ForceLeave(g_teller);
-        g_joinPending[s] = true;
-        g_joinWho[s] = g_teller;
-        BOTC_FinishJoin(s);
+        BOTC_JoinSess(g_teller, s);
         return;
     }
     if (g_joinPending[s]) {
         BOTC_Notice(p, "该私聊正在处理另一个加入请求，请稍后再试。");
         return;
     }
-    // 【说书人跟某名玩家单独私聊】时，别人要加入**只问说书人一个人**（用户 2026-09-17 要求）：
-    //   说书人「介入」别人私聊（3 人以上）不算，那种还是走下面的「全体成员同意」
-    if (p != g_teller && BOTC_SessStSolo(s)) {
-        who2 = 0;
-        for (i = 2; i <= 13; i += 1) {
+    // 找房主：房主不在了就由剩余成员里第一个顶上。
+    ow = g_sessOwner[s];
+    if (ow < 1 || ow > 13 || !g_member[(s * 14) + ow]) {
+        ow = 0;
+        for (i = 1; i <= 13; i += 1) {
             if (g_member[(s * 14) + i]) {
-                who2 = i;
+                ow = i;
+                break;
             }
         }
-        g_joinPending[s] = true;
-        g_joinWho[s] = p;
-        for (i = 1; i <= 13; i += 1) {
-            g_joinVote[(s * 14) + i] = false;
-        }
-        g_reqJoinSess[g_teller] = s;
-        g_reqJoinWho[g_teller] = p;
-        BOTC_ShowReq(g_teller, BOTC_NameStr(BOTC_PosOf(p)) + " 请求加入你和 " + BOTC_NameStr(BOTC_PosOf(who2)) + " 的私聊，是否同意？");
-        BOTC_PlaySfxTo(g_sfxReqName, g_teller);
-        BOTC_Notice(who2, BOTC_NameStr(BOTC_PosOf(p)) + " 想与你私聊，已向说书人发出加入你们私聊的请求。");
-        BOTC_Notice(p, "已向说书人发出加入请求，等说书人同意。");
+        g_sessOwner[s] = ow;
+    }
+    if (ow < 1) {
+        BOTC_Notice(p, "该私聊已经没有可审批的房主。");
+        return;
+    }
+    // 【15 秒应答窗口内不得被顶掉】：房主正在处理别的请求就等一等。
+    if (g_reqFrom[ow] != 0 || g_reqJoinSess[ow] != 0 || g_reqSec[ow] > 0) {
+        BOTC_Notice(p, BOTC_NameStr(BOTC_PosOf(ow)) + " 正在处理另一个请求，请稍后再试。");
+        return;
+    }
+    // 【被拒绝后的 15 秒冷却】：同一名发起人不能立刻重复申请。
+    if (g_pmCool[(p * 14) + ow] > 0) {
+        BOTC_Notice(p, "房主刚拒绝过你的请求，请 " + IntToString((g_pmCool[(p * 14) + ow] + 1) / 2) + " 秒后再试。");
         return;
     }
     g_joinPending[s] = true;
@@ -4805,53 +4944,57 @@ void BOTC_RequestJoinSess (int p, int s) {
     for (i = 1; i <= 13; i += 1) {
         g_joinVote[(s * 14) + i] = false;
     }
+    g_reqJoinSess[ow] = s;
+    g_reqJoinWho[ow] = p;
+    BOTC_ShowReq(ow, BOTC_NameStr(BOTC_PosOf(p)) + " 请求加入你们的私聊，是否同意？");
+    BOTC_PlaySfxTo(g_sfxReqName, ow);
+    BOTC_Notice(p, "已向房主 " + BOTC_NameStr(BOTC_PosOf(ow)) + " 发出加入请求，等房主同意。");
     for (i = 1; i <= 13; i += 1) {
-        // 【说书人不参与"同意/拒绝"】（用户 2026-09-30）：说书人介入的私聊里，别人要进只由**玩家**表决
-        if (g_member[(s * 14) + i] && i != 1) {
-            g_reqJoinSess[i] = s;
-            g_reqJoinWho[i] = p;
-            BOTC_ShowReq(i, BOTC_NameStr(BOTC_PosOf(p)) + " 请求加入你们的私聊，是否同意？");
-            BOTC_PlaySfxTo(g_sfxReqName, i);       // UI 音效：有人向你发（加入）私聊请求
+        if (i == ow) {
+            continue;
+        }
+        if (g_member[(s * 14) + i]) {
+            BOTC_Notice(i, BOTC_NameStr(BOTC_PosOf(p)) + " 请求加入，等房主 " + BOTC_NameStr(BOTC_PosOf(ow)) + " 决定。");
         }
     }
-    BOTC_Notice(p, "已向私聊成员发出加入请求。");
 }
 
 void BOTC_VoteJoin (int p, bool yes) {
     int s;
     int i;
-    int need;
-    bool all;
+    int ow;
     s = g_reqJoinSess[p];
     g_reqJoinSess[p] = 0;
     BOTC_ClearReq(p);
-    if (s == 0 || !g_joinPending[s]) {
+    if (s == 0 || s < 1 || s > 13 || !g_joinPending[s]) {
+        return;
+    }
+    ow = g_sessOwner[s];
+    if (ow < 1 || ow > 13 || !g_member[(s * 14) + ow]) {
+        ow = 0;
+        for (i = 1; i <= 13; i += 1) {
+            if (g_member[(s * 14) + i]) {
+                ow = i;
+                break;
+            }
+        }
+        g_sessOwner[s] = ow;
+    }
+    // 【只有房主能拍板】（用户 2026-11-02）：其他人收到的旧请求框不再算票。
+    if (p != ow) {
+        BOTC_Notice(p, "这条私聊由房主决定是否放人。");
+        return;
+    }
+    if (p != g_teller && BOTC_PmStageBlocked()) {
+        BOTC_RejectJoin(s);
+        BOTC_Notice(p, "当前时段不能接受加入私聊的请求，已自动拒绝。");
         return;
     }
     if (!yes) {
         BOTC_RejectJoin(s);
         return;
     }
-    // 【说书人跟某名玩家单独私聊】：说书人一个人点【是】就算数（用户 2026-09-17）
-    if (p == g_teller && BOTC_SessStSolo(s)) {
-        BOTC_FinishJoin(s);
-        return;
-    }
-    g_joinVote[(s * 14) + p] = true;
-    need = 0;
-    all = true;
-    // 从 2 起数：说书人不参与表决（用户 2026-09-30）—— 他在私聊里也不用点同意/拒绝
-    for (i = 2; i <= 13; i += 1) {
-        if (g_member[(s * 14) + i]) {
-            need = need + 1;
-            if (!g_joinVote[(s * 14) + i]) {
-                all = false;
-            }
-        }
-    }
-    if (all && need >= 1) {
-        BOTC_FinishJoin(s);
-    }
+    BOTC_FinishJoin(s);
 }
 
 void BOTC_FinishJoin (int s) {
@@ -4868,9 +5011,16 @@ void BOTC_FinishJoin (int s) {
     }
     g_member[(s * 14) + who] = true;
     g_mySess[who] = s;
+    // 【说书人进私聊立刻成为房主】（用户 2026-11-02）：直到说书人主动退出才移交房主。
+    if (who == g_teller || g_sessOwner[s] < 1) {
+        g_sessOwner[s] = who;
+    }
     for (i = 1; i <= 13; i += 1) {
         if (g_member[(s * 14) + i]) {
             BOTC_AppendPm(i, BOTC_NameStr(BOTC_PosOf(who)) + " 加入了私聊。");
+        }
+        // 【只收掉这条私聊的审批框】（用户 2026-11-02）：别把成员身上别的私聊请求框一起清掉。
+        if (g_reqJoinSess[i] == s) {
             g_reqJoinSess[i] = 0;
             BOTC_ClearReq(i);
         }
@@ -4881,15 +5031,21 @@ void BOTC_FinishJoin (int s) {
 void BOTC_RejectJoin (int s) {
     int who;
     int i;
+    int ow;
     who = g_joinWho[s];
+    ow = g_sessOwner[s];
     g_joinPending[s] = false;
     for (i = 1; i <= 13; i += 1) {
-        if (g_member[(s * 14) + i]) {
+        // 【只收掉这条私聊的审批框】（用户 2026-11-02）：别把成员身上别的私聊请求框一起清掉。
+        if (g_reqJoinSess[i] == s) {
             g_reqJoinSess[i] = 0;
             BOTC_ClearReq(i);
         }
     }
     if (who >= 1 && who <= 13) {
+        if (ow >= 1 && ow <= 13) {
+            BOTC_PmCooldown(who, ow);      // 被拒绝后 15 秒内不能再申请同一间私聊
+        }
         BOTC_Notice(who, "加入私聊的请求被拒绝了。");
     }
 }
@@ -8116,6 +8272,10 @@ void BOTC_PullAllToPublic () {
     g_bulkLeave = false;
     BOTC_RefreshSessListAll();
     for (p = 1; p <= 13; p += 1) {
+        // 【说书人还在私聊里就保留他的私聊状态】（用户 2026-11-02）：阶段切换只收其他玩家的私聊。
+        if (p == g_teller && g_mySess[p] != 0) {
+            continue;
+        }
         g_chatSay[p] = 0;
         libNtve_gf_SetDialogItemText(g_sayBtnP[p], StringToText("聊天：公聊（Tab切换）"), PlayerGroupSingle(p));
     }
@@ -8123,16 +8283,22 @@ void BOTC_PullAllToPublic () {
 
 void BOTC_ChatModeSet (int m) {
     int i;
+    int old;
     // 夜里固定公聊：**不能切成私聊 / 自由**（用户 2026-09-17 要求）。
     //   夜里说书人的【聊天：...】按钮已经收起来了，这里再兜一层，防止聊天指令绕过去。
     if (g_isNight && m != 2) {
         BOTC_Notice(g_teller, "现在是夜晚：发言固定为公聊，等天亮再切时段。");
         return;
     }
+    old = g_chatMode;
     if (g_chatMode == m) {
         return;
     }
     g_chatMode = m;
+    // 【私聊阶段 → 公聊阶段：自动解散除说书人以外的私聊】（用户 2026-11-02）
+    if (old == 1 && m == 2) {
+        BOTC_DissolveAllSess(true);
+    }
     if (m == 1) {
         BOTC_PubAnnounce("【时段】私聊时间：现在只能私聊，公聊暂时关闭。");
         UIDisplayMessage(PlayerGroupAll(), c_messageAreaSubtitle, StringToText("私聊时间（只能私聊）"));
@@ -9866,6 +10032,8 @@ void BOTC_NightGo () {
         return;
     }
     if (g_isNight) {
+        // 【黑夜 → 白天：自动解散全部私聊】（用户 2026-11-02）
+        BOTC_DissolveAllSess(false);
         // 【书生（152）】进入白天时，已猜测 token 只服务当晚的额外行动。
         BOTC_PedantDawnClear();
         // 【月之子的那一刀先结算】（用户 2026-09-20）：它是**夜里**发生的，要在「天亮了」之前算掉 ----
@@ -9963,6 +10131,8 @@ void BOTC_NightGo () {
             BOTC_PeriodRecord("---- 准备阶段（进入夜晚）----");
         }
         // 点【进入夜晚】→ 自动切成公聊模式（夜里不再限制，统一按公聊走）
+        // 【白天 → 黑夜：自动解散全部私聊】（用户 2026-11-02，说书人的也一起收）
+        BOTC_DissolveAllSess(false);
         BOTC_ChatModeSet(2);
         BOTC_PullAllToPublic();
         // 【小怪宝】（用户 2026-10-22）：第 1 夜不自动打开恶人频道；从第 2 夜起才自动拉群。
@@ -10249,6 +10419,7 @@ void BOTC_KingAnnounce () {
     int seat;
     int i;
     int n;
+    int lu;
     seat = BOTC_SeatOfRole(104);
     if (seat < 2 || seat > 13) {
         return;
@@ -10262,6 +10433,11 @@ void BOTC_KingAnnounce () {
         n = n + 1;
     }
     BOTC_Notice(g_teller, "【国王】已告诉恶魔：国王是 " + BOTC_NameStr(seat) + "。");
+    // 【疯子 × 国王】（用户 2026-11-02）：和书生一致，弹窗由说书人决定是否也告诉疯子「国王在场」。
+    lu = BOTC_RealLunaticSeat();
+    if (lu >= 2) {
+        BOTC_ManInfoOpenSeats(lu, "【国王】要不要告诉疯子「国王在场」？【确认】= 告诉，【取消】= 不告诉", 18);
+    }
 }
 
 // 【唱诗男孩（108）】（用户 2026-10-10）：恶魔夜里杀死了国王 → 让他进入「可以唤醒」状态（信息由说书人手动发）
@@ -20007,19 +20183,30 @@ void BOTC_TimerAiInit () {
 // 【开局前提示·说书人那行】（用户 2026-11-01）：原来是一段固定的主持人说明，
 //   改成显示当前说书人是谁；换座位后要跟着刷新。
 void BOTC_PreNoticeRender () {
+    string ttl;
+    ttl = BOTC_TellerTitle();
     libNtve_gf_SetDialogItemText(g_preLbl, TextWithColor(StringToText("当前说书人："), Color(255, 0, 0)) + TextWithColor(PlayerName(g_teller), libNtve_gf_ConvertPlayerColorToColor(g_seatColor[1])), PlayerGroupSingle(g_teller));
+    // 【说书人称号】（用户 2026-11-02）：显示在「当前说书人」下面一行。
+    libNtve_gf_SetDialogItemText(g_preTitleLbl, TextWithColor(StringToText("称号："), Color(255, 0, 0)) + TextWithColor(StringToText(ttl), Color(255, 215, 0)), PlayerGroupSingle(g_teller));
+    DialogControlSetVisible(g_preTitleLbl, PlayerGroupAll(), false);
+    DialogControlSetVisible(g_preTitleLbl, PlayerGroupSingle(g_teller), true);
 }
 
 // 计时面板收起 / 展开（参考私聊面板那套）
 // 【开局前提示】：游戏正式开始之前挂在中上方，说书人 / 玩家看到的话不一样
 void BOTC_BuildPreNotice () {
-    DialogCreate(1500, 50, c_anchorTop, 0, 40, false);
+    DialogCreate(1500, 84, c_anchorTop, 0, 40, false);
     g_preDlg = DialogLastCreated();
     DialogSetImageVisible(g_preDlg, false);            // 不要底框，只留字
     DialogSetVisible(g_preDlg, PlayerGroupAll(), false);
     g_preLbl = BOTC_NewLabel(g_preDlg, 900, 50, 600, 0, StringToText(""));
     libNtve_gf_SetDialogItemStyle(g_preLbl, "ModLeftSize20Bold", PlayerGroupAll());
     libNtve_gf_SetDialogItemAcceptMouse(g_preLbl, false, PlayerGroupAll());
+    // 【说书人称号】（用户 2026-11-02）：第二行，只给说书人看
+    g_preTitleLbl = BOTC_NewLabel(g_preDlg, 900, 30, 600, 46, StringToText(""));
+    libNtve_gf_SetDialogItemStyle(g_preTitleLbl, "ModLeftSize20Bold", PlayerGroupAll());
+    libNtve_gf_SetDialogItemAcceptMouse(g_preTitleLbl, false, PlayerGroupAll());
+    DialogControlSetVisible(g_preTitleLbl, PlayerGroupAll(), false);
     // 先给所有人写玩家版，再单独把说书人那份改成主持版
     libNtve_gf_SetDialogItemText(g_preLbl, TextWithColor(StringToText("游戏尚未开始，请耐心等待说书人分配角色开始游戏，点击右侧游戏规则按钮翻看游戏规则。"), Color(255, 0, 0)), PlayerGroupAll());
     BOTC_PreNoticeRender();
@@ -26849,6 +27036,11 @@ void BOTC_WidowPoison (int q) {
     BOTC_SailorSync();                            // 中毒状态变了：水手那条免死跟着刷新
     BOTC_PmStore(g_teller, "【寡妇】" + BOTC_NameStr(p) + " 让 " + BOTC_NameStr(q) + " 中毒（一直挂到寡妇死亡/离场）。");
     BOTC_PmStore(g_teller, "【寡妇】记得按规则私聊告诉一名善良玩家「寡妇在场」");
+    // 【寡妇清醒下毒后 · 在场告知】（用户 2026-11-02）：由说书人弹窗选择一名善良玩家得知「寡妇在场」。
+    //   寡妇中毒 / 醉酒 / 提线木偶时上面已经提前返回，不会弹窗。
+    if (p >= 2 && p <= 13) {
+        BOTC_ManInfoOpenSeats(p, "【寡妇】选择一名善良玩家，让他得知「寡妇在场」；点【取消】= 不告知", 17);
+    }
 }
 
 // 解除寡妇的毒（她死了 / 离场 / 换局）
@@ -31466,6 +31658,35 @@ void BOTC_ManInfoOk () {
                 g_evilD = n + 1;
             }
         }
+        // 【寡妇清醒下毒 · 在场告知】（用户 2026-11-02）：说书人填的座位必须是一名善良玩家。
+        if (kind == 17) {
+            if (g_evilA < 2) {
+                return;
+            }
+            if (BOTC_SeatAlign(g_evilA) != 0) {
+                BOTC_Notice(g_teller, "请选择一名善良玩家。");
+                return;
+            }
+            DialogSetVisible(g_miDlg, PlayerGroupSingle(g_teller), false);
+            s2 = "【信息】你得知寡妇在场。";
+            BOTC_PmInfo(g_who[g_evilA], s2);
+            BOTC_PmStore(g_teller, "【寡妇】已告诉 " + BOTC_NameStr(g_evilA) + "：「你得知寡妇在场。」");
+            g_miSeat = 0;
+            g_miRole = -1;
+            g_miKind = 0;
+            return;
+        }
+        // 【疯子 × 国王】（用户 2026-11-02）：和书生一致，说书人点【确认】= 告诉疯子「国王在场」。
+        if (kind == 18) {
+            DialogSetVisible(g_miDlg, PlayerGroupSingle(g_teller), false);
+            s2 = "【信息】你得知国王在场。";
+            BOTC_PmInfo(g_who[seat], s2);
+            BOTC_PmStore(g_teller, "【国王】已告诉疯子 " + BOTC_NameStr(seat) + "：「你得知国王在场。」");
+            g_miSeat = 0;
+            g_miRole = -1;
+            g_miKind = 0;
+            return;
+        }
         // 【疯子 · 提线木偶】（用户 2026-11-01）：爪牙信息之后，说书人可选再告诉疯子一名提线木偶。
         if (kind == 15) {
             if (g_evilA < 2) {
@@ -34696,8 +34917,8 @@ void BOTC_ManInfoOpenSeats (int seat, string title, int kind) {
     libNtve_gf_SetDialogItemText(g_miEdit2, StringToText(""), PlayerGroupSingle(g_teller));
     libNtve_gf_SetDialogItemText(g_miEdit3, StringToText(""), PlayerGroupSingle(g_teller));
     libNtve_gf_SetDialogItemText(g_miEdit4, StringToText(""), PlayerGroupSingle(g_teller));
-    if (kind == 14 || kind == 15) {
-        // 事务官（14）/ 疯子提线木偶追问（15）：只需要填一名玩家的座位号。
+    if (kind == 14 || kind == 15 || kind == 17) {
+        // 事务官（14）/ 疯子提线木偶追问（15）/ 寡妇在场告知（17）：只需要填一名玩家的座位号。
         DialogControlSetSize(g_miEdit, PlayerGroupSingle(g_teller), 220, 41);
         DialogControlSetPosition(g_miEdit, PlayerGroupSingle(g_teller), c_anchorTopLeft, 232, 83);
         DialogControlSetVisible(g_miEdit, PlayerGroupSingle(g_teller), true);
@@ -34720,8 +34941,8 @@ void BOTC_ManInfoOpenSeats (int seat, string title, int kind) {
         DialogControlSetVisible(g_miEdit3, PlayerGroupSingle(g_teller), true);
         DialogControlSetVisible(g_miEdit4, PlayerGroupSingle(g_teller), true);
     }
-    else if (kind == 16) {
-        // 书生 × 疯子（16）：没有输入框，只让说书人按【确认】/【取消】。
+    else if (kind == 16 || kind == 18) {
+        // 书生 × 疯子（16）/ 疯子 × 国王（18）：没有输入框，只让说书人按【确认】/【取消】。
         DialogControlSetVisible(g_miEdit, PlayerGroupSingle(g_teller), false);
         DialogControlSetVisible(g_miEdit2, PlayerGroupSingle(g_teller), false);
         DialogControlSetVisible(g_miEdit3, PlayerGroupSingle(g_teller), false);
@@ -34741,9 +34962,9 @@ void BOTC_ManInfoOpenSeats (int seat, string title, int kind) {
     DialogControlSetVisible(g_miNo, PlayerGroupSingle(g_teller), false);
     DialogControlSetVisible(g_miOk, PlayerGroupSingle(g_teller), true);
     // 【取消键】疯子假爪牙：允许说书人选择完全不发送，例如罂粟种植者局。
-    //   疯子提线木偶（15）/ 书生 × 疯子（16）同样允许跳过。
+    //   疯子提线木偶（15）/ 书生 × 疯子（16）/ 寡妇在场告知（17）/ 疯子 × 国王（18）同样允许跳过。
     libNtve_gf_SetDialogItemText(g_miCancel, StringToText("取消"), PlayerGroupSingle(g_teller));
-    if (kind == 0 || kind == 15 || kind == 16) {
+    if (kind == 0 || kind == 15 || kind == 16 || kind == 17 || kind == 18) {
         libNtve_gf_SetDialogItemText(g_miCancel, StringToText("取消"), PlayerGroupSingle(g_teller));
         DialogControlSetVisible(g_miCancel, PlayerGroupSingle(g_teller), true);
     }
@@ -44316,6 +44537,7 @@ void BOTC_SeatAskSend (int p, int cell) {
         return;
     }
     g_askFrom[to] = p;
+    g_askSec[to] = 30;                             // 【15 秒应答窗口】（用户 2026-11-02）：超时自动拒绝
     libNtve_gf_SetDialogItemText(g_askLbl, BOTC_NameSubst(BOTC_NameStr(BOTC_PosOf(p)) + " 想与你交换座位"), PlayerGroupSingle(to));
     DialogControlSetVisible(g_askLbl, PlayerGroupSingle(to), true);
     DialogControlSetVisible(g_askYes, PlayerGroupSingle(to), true);
@@ -44338,6 +44560,7 @@ void BOTC_SeatAskAnswer (int p, bool yes) {
         return;
     }
     g_askFrom[p] = 0;
+    g_askSec[p] = 0;
     libNtve_gf_SetDialogItemText(g_askLbl, StringToText(""), PlayerGroupSingle(p));
     DialogControlSetVisible(g_askLbl, PlayerGroupSingle(p), false);
     DialogControlSetVisible(g_askYes, PlayerGroupSingle(p), false);
@@ -44358,6 +44581,69 @@ void BOTC_SeatAskAnswer (int p, bool yes) {
     }
     BOTC_SeatSwap(a, b);                           // 整体对调（含说书人格：换到格子 1 的人当说书人）
     BOTC_PubAnnounce("【换座位】" + BOTC_NameStr(a) + " ↔ " + BOTC_NameStr(b) + "（双方同意）");
+}
+
+// 【换座位请求 15 秒超时】（用户 2026-11-02）：无操作默认拒绝。
+void BOTC_SeatAskTimeout (int p) {
+    int from;
+    from = g_askFrom[p];
+    if (from == 0) {
+        return;
+    }
+    BOTC_SeatAskAnswer(p, false);
+    BOTC_Notice(p, "换座位请求超时，已自动拒绝。");
+}
+
+// 【私聊请求 15 秒超时】（用户 2026-11-02）：无操作默认拒绝，并进入 15 秒冷却。
+void BOTC_ReqTimeout (int p) {
+    int from;
+    if (g_reqJoinSess[p] != 0) {
+        BOTC_VoteJoin(p, false);
+        return;
+    }
+    from = g_reqFrom[p];
+    if (from == 0) {
+        return;
+    }
+    g_reqFrom[p] = 0;
+    BOTC_ClearReq(p);
+    BOTC_PmCooldown(from, p);
+    BOTC_Notice(p, "私聊请求已超时，自动拒绝。");
+    BOTC_AppendPm(from, BOTC_NameStr(BOTC_PosOf(p)) + " 没有在 15 秒内回应，私聊请求已自动取消。");
+}
+
+// 【请求计时】（用户 2026-11-02）：挂在 0.5 秒一拍的 BOTC_Tick_Func 上。
+//   30 拍 = 15 秒；同时递减私聊拒绝冷却。
+void BOTC_ReqTick () {
+    int p;
+    int q;
+    for (p = 1; p <= 13; p += 1) {
+        if (g_reqFrom[p] != 0 || g_reqJoinSess[p] != 0) {
+            if (g_reqSec[p] > 0) {
+                g_reqSec[p] = g_reqSec[p] - 1;
+                if (g_reqSec[p] <= 0) {
+                    BOTC_ReqTimeout(p);
+                }
+            }
+        }
+    }
+    for (p = 1; p <= 13; p += 1) {
+        for (q = 1; q <= 13; q += 1) {
+            if (g_pmCool[(p * 14) + q] > 0) {
+                g_pmCool[(p * 14) + q] = g_pmCool[(p * 14) + q] - 1;
+            }
+        }
+    }
+    for (p = 1; p <= 13; p += 1) {
+        if (g_askFrom[p] != 0) {
+            if (g_askSec[p] > 0) {
+                g_askSec[p] = g_askSec[p] - 1;
+                if (g_askSec[p] <= 0) {
+                    BOTC_SeatAskTimeout(p);
+                }
+            }
+        }
+    }
 }
 
 // 【换位时跟着角色/玩家走的逐格运行状态】
@@ -45992,6 +46278,43 @@ void BOTC_StatsOwnBump (bank bk, string pre) {
     int v;
     v = BOTC_StatsOwnGet(bk, pre);
     BankValueSetFromInt(bk, "stats", pre, v + 1);
+}
+
+// 【说书人称号】（用户 2026-11-02）：
+//   所有人默认「临时说书人」；账号的说书人场次 s 大于 5 场后升为「见习说书人」。
+//   后续星级称号可以直接写入账号 bank 的 stats/title（例如「一星说书人」），有值优先。
+string BOTC_TellerTitleDefault (int s) {
+    if (s > 5) {
+        return "见习说书人";
+    }
+    return "临时说书人";
+}
+
+string BOTC_TellerTitle () {
+    int pid;
+    string t;
+    BOTC_BankInit();
+    pid = g_who[1];
+    if (pid < 1 || pid > 13) {
+        return "临时说书人";
+    }
+    if (BankKeyExists(g_bank[pid], "stats", "title")) {
+        t = BankValueGetAsString(g_bank[pid], "stats", "title");
+        if (StringLength(t) > 0) {
+            return t;
+        }
+    }
+    return BOTC_TellerTitleDefault(BOTC_StatsOwnGet(g_bank[pid], "s"));
+}
+
+// 供后续星级称号写入；按账号保存，重新进图 / 换座位后仍读得到。
+void BOTC_TitleSet (int pid, string t) {
+    BOTC_BankInit();
+    if (pid < 1 || pid > 13) {
+        return;
+    }
+    BankValueSetFromString(g_bank[pid], "stats", "title", t);
+    BankSave(g_bank[pid]);
 }
 
 void BOTC_StatsRecord () {
@@ -48771,8 +49094,8 @@ bool BOTC_LegionPendBlock () {
 
 // 真人说书答题框点「取消」：只有军团那一步需要收尾（不屏蔽，疯子看到所有队友）
 void BOTC_MiCancelApply () {
-    // 【疯子 · 提线木偶（15）/ 书生 × 疯子（16）】（用户 2026-11-01）：点取消 = 这次不发送。
-    if (g_miRole == 41 && (g_miKind == 15 || g_miKind == 16)) {
+    // 【疯子 · 提线木偶（15）/ 书生 × 疯子（16）/ 寡妇在场告知（17）/ 疯子 × 国王（18）】（用户 2026-11-01）：点取消 = 这次不发送。
+    if (g_miRole == 41 && (g_miKind == 15 || g_miKind == 16 || g_miKind == 17 || g_miKind == 18)) {
         g_evilA = 0;
         g_evilB = 0;
         g_evilC = 0;
@@ -49515,6 +49838,8 @@ void BOTC_NomOpen () {
     g_nomStartOn = false;              // 【发起提名】先锁上：等「提名开始」4 个大字收掉、提示挂上那一刻再开（见 BOTC_NomBigTimer_Func）
     BOTC_PhaseSet(1);
     g_nomJustOpen = false;
+    // 【进入提名阶段：自动解散除说书人以外的私聊】（用户 2026-11-02）
+    BOTC_DissolveAllSess(true);
     BOTC_ChatModeSet(2);
     BOTC_PullAllToPublic();
     // 【提名提示改到动画之后出现】（用户 2026-09-22）：以前在这里就挂上「点【发起提名】选人」，
@@ -50538,6 +50863,7 @@ bool BOTC_Tick_Func (bool testConds, bool runActions) {
     BOTC_TimerTick();              // 时段倒计时走表
     BOTC_LaughTick();              // -laugh 公用冷却 + 复活动画（用户 2026-09-22）
     BOTC_GrimShareCdTick();        // 一键发送魔典：每个玩家独立的 15 秒冷却
+    BOTC_ReqTick();                // 【私聊 / 换座位请求 15 秒超时 + 拒绝冷却】（用户 2026-11-02）
     BOTC_DeadPickTimeout();        // 月之子 / 呆瓜 的 60 秒兜底（用户 2026-09-21）
     BOTC_LeftCheck();              // 【玩家离开游戏】检测 → 公聊播一句（用户 2026-10-02）
     BOTC_VizierSync();             // 维齐尔免死 token 跟随中毒 / 醉酒 / 死亡 / 离场状态
