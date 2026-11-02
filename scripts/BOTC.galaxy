@@ -431,7 +431,6 @@ bool[14]    g_logPick;         // 正在点头像选「要看谁」
 int[14]     g_logMenuSel;      // 【看某玩家 · 菜单】这一拍已经处理过的那一行（1 = 座位 2）
 int         g_logPickDlg;      // 【看某玩家】的下拉面板（一个滚轮列表）
 int         g_logPickList;     // 【看某玩家】下拉的列表框（自带滚轮；用户 2026-10-07 从"每行一个按钮"改回来）
-bool[14]    g_logPickFilled;   // 这个玩家的下拉列表已经填过了（**只填一次**：重填会让控件自己选中第一行）
 int[14]     g_logPickBtn;      // （已不用：又改回列表框了，见 g_logPickList）
 int[14]     g_logViewWho;      // 每个玩家各自在看谁（0 = 所有玩家 = 正常日志）
 bool[14]    g_logPickOn;       // 【看某玩家】下拉当前是不是开着（再点一次按钮 = 关掉）
@@ -2103,6 +2102,7 @@ bool   BOTC_IsDeathTok (int t);
 bool   BOTC_SettledDead (int q);               // 胜负要用的「确定死亡」：红叉 + 真的死了（僵怖假死不算）
 bool   BOTC_IsHiddenTok (int t);
 bool   BOTC_TokHidden (int t, int ob);     // 某个观察者看到的 token 要不要藏（说书人按在场角色过滤，其他人全显示）
+bool   BOTC_PendingRevive (int q);         // 当晚已复活但要等天亮公布
 bool   BOTC_SeatDead (int q);
 bool   BOTC_PublicDead (int q);
 int    BOTC_DeathTokIndex (int kind, int byDemon);
@@ -2239,6 +2239,9 @@ void   BOTC_WakeRender ();
 void   BOTC_SkillBtnRender ();
 void   BOTC_SkillOpen (int p);
 void   BOTC_SkillRender (int p);
+int    BOTC_SkillControlOwner (int c);
+int    BOTC_SkillPickerForPlayer (int p);
+bool   BOTC_SkillClickControl (int p, int c);
 void   BOTC_SkillPickSeat (int p, int q);
 void   BOTC_SkillConfirm (int p);
 string BOTC_SkillPickText (int n);
@@ -3571,11 +3574,8 @@ void BOTC_LogRender (int p) {
 //
 // 【为什么敢改回列表框】（用户 2026-10-07 问「滚轮式解决不了自动消失吗」）：老毛病不在列表框本身，
 //   在**"每 0.5 秒读一次选中项"**这个读法 —— 只要列表被（重）填一次，控件就会**自己选中第一行**，
-//   轮询把这也当成"你点了一行"→ 下拉自己关掉。现在三道保险：
-//     ① 列表**只在每个玩家第一次打开时填一次**（g_logPickFilled），之后永不重填 —— 新消息再多也不动它；
-//     ② 轮询先看 g_logPickOn[p]：没开着根本不对；
-//     ③ 打开后的**第一拍只记基线**（g_logMenuSel[p] = -1 → 下一拍把当时的选中项记下来），
-//        之后只有**选中项真的变了**才算你点了那一行。
+//   轮询把这也当成"你点了一行"→ 下拉自己关掉。现在每次打开都按当前座位重建列表，
+//   再显式选中第一行；第一拍只记基线，所以重建不会误触，掉线后的座位号也不会错位。
 void BOTC_LogPickStart (int p) {
     if (p < 1 || p > 13) {
         return;
@@ -3585,16 +3585,15 @@ void BOTC_LogPickStart (int p) {
         DialogSetVisible(g_logPickDlg, PlayerGroupSingle(p), false);
         return;
     }
-    if (!g_logPickFilled[p]) {
-        BOTC_LogPickRender(p);
-        g_logPickFilled[p] = true;
-    }
+    // 每次打开都按当前 g_seatOn 重建：玩家掉线后座位会压缩，缓存旧列表会把行号映射到相邻座位。
+    BOTC_LogPickRender(p);
+    DialogControlSelectItem(g_logPickList, PlayerGroupSingle(p), 0);
     g_logMenuSel[p] = -1;          // -1 = 这一拍只记基线、不动作
     g_logPickOn[p] = true;
     DialogSetVisible(g_logPickDlg, PlayerGroupSingle(p), true);
 }
 
-// 把下拉列表填满（**只填一次**）：第 1 行 = 所有玩家，第 2 行 = 说书人，之后按座位号列出在场的人
+// 把下拉列表填满：第 1 行 = 所有玩家，第 2 行 = 说书人，之后按当前在场座位列出玩家
 void BOTC_LogPickRender (int p) {
     int i;
     DialogControlRemoveAllItems(g_logPickList, PlayerGroupSingle(p));
@@ -5368,29 +5367,16 @@ bool BOTC_ClickDo (bool testConds, bool runActions) {
             }
         }
     }
-    // 玩家正在为技能选目标：点座位优先当成选目标
-    //   【物理座位 1 也会坐普通玩家】（用户 2026-11-01「占卜师两个目标点了没反应」）：
-    //   说书人换到别的座位后，原本的 1 号位玩家 p 就变成 1；旧写法要求 p >= 2，
-    //   点座位会被下面的分支吞掉 → 面板两个槽都在、点谁都不填。这里一律按
-    //   BOTC_PosOf(p) 解出逻辑格再判定，物理座位 1..13 全覆盖。
-    if (p >= 1 && p <= 13) {
-        q = BOTC_PosOf(p);
-        if (q >= 2 && q <= 13) {
-            if (g_skillPicking[q]) {
-                for (b = 2; b <= 13; b += 1) {
-                    if (c == g_grimSeat[b]) {
-                        BOTC_SkillPickSeat(q, b);
-                        return true;
-                    }
-                }
-            }
-        }
+    // 技能面板的按钮和槽位优先按控件所属的逻辑格处理。
+    if (BOTC_SkillClickControl(p, c)) {
+        return true;
     }
-    // 【测试】说书人自己拿了身份、正在选技能目标：点魔典上的座位 = 选目标（用户 2026-09-20）
-    if (p == g_teller && g_skillPicking[1]) {
-        for (q = 2; q <= 13; q += 1) {
-            if (c == g_grimSeat[q]) {
-                BOTC_SkillPickSeat(1, q);
+    // 玩家正在为技能选目标：直接找他当前所在的逻辑格，不依赖旧的物理号映射。
+    q = BOTC_SkillPickerForPlayer(p);
+    if (q >= 1) {
+        for (b = 2; b <= 13; b += 1) {
+            if (c == g_grimSeat[b]) {
+                BOTC_SkillPickSeat(q, b);
                 return true;
             }
         }
@@ -10719,6 +10705,9 @@ void BOTC_GameStartGo () {
     bool first;
     int i;
     g_startPending = false;
+    // 【10 秒倒计时完成后再清日志】（用户 2026-11-02）：先把准备阶段的聊天记录清空，
+    // 再写入“第 1 夜 / 游戏正式开始”等本局日志；倒计时中途取消不会走到这里。
+    BOTC_ClearAllLogs();
     first = false;
     if (g_nightNum <= 0 && g_dayNum <= 0) {
         first = true;
@@ -10775,8 +10764,8 @@ void BOTC_GameStartGo () {
     BOTC_NomUI();
 }
 
-// 取消正式开始：解开身份编辑 + **昼夜编号归零** + **清空所有日志**（重新开始就等于新的一局）
-// 清空所有日志（说书人点【取消正式开始】时用）
+// 取消正式开始：解开身份编辑 + 昼夜编号归零；不清空日志。
+// 清空所有日志（仅在实际开始后需要重置记录时由调用方使用）
 //   公屏记录 / 每个人的私聊记录 / 聊天窗 / 投票统计 ---- 全清，然后把界面刷一遍
 void BOTC_ClearAllLogs () {
     int p;
@@ -11194,8 +11183,7 @@ void BOTC_GameStartCancel () {
     // 回到「还没开始」：发言时段也回到默认的公聊（用户 2026-09-17）
     g_chatMode = 2;
     BOTC_ChatBtnRender();
-    // 日志也一起清掉：公屏记录 / 每个人的私聊记录 / 聊天窗 / 投票统计
-    BOTC_ClearAllLogs();
+    // 【取消正式开始不清日志】（用户 2026-11-02）：保留准备阶段和本局的全部聊天记录。
     // 把玩家各自的魔典恢复成「只看得到自己」的正常状态 ---- 不光是复盘之后要清，
     //   玩家自己手动打过 token 的那份也一起清掉（用户 2026-09-20：免得上一把的标记带到下一把，看一眼就能推身份）
     BOTC_GrimResetPerPlayer();
@@ -21612,6 +21600,16 @@ bool BOTC_IsHiddenTok (int t) {
     return false;
 }
 
+// 当晚已经复活、但红叉要等天亮才公开的玩家。教授 42 / 沙巴洛斯 43 / 哈迪寂亚 113。
+bool BOTC_PendingRevive (int q) {
+    if (q < 2 || q > 13 || !g_isNight) {
+        return false;
+    }
+    return (g_tokOn[(((g_teller * 14) + q) * 256) + 42] ||
+            g_tokOn[(((g_teller * 14) + q) * 256) + 43] ||
+            g_tokOn[(((g_teller * 14) + q) * 256) + 113]);
+}
+
 // 【胜负 / 人数统计要用的「确定死亡」】（用户 2026-09-20）：**红叉 + 真的死了**都成立才算 ----
 //   ① 只是夜里记了死亡 token、还没到天亮盖红叉 → 不算（等天亮统一结算）；
 //   ② 僵怖那种「盖了红叉、但其实还活着」（BOTC_SeatDead 返回 false）→ 也不算，他算活着。
@@ -21639,6 +21637,11 @@ bool BOTC_SeatDead (int q) {
     int t;
     if (q < 1 || q > 13) {
         return false;                     // 允许 1：说书人自己那一格
+    }
+    // 【复活当晚按内部存活处理】（用户 2026-11-02）：红叉保留给天亮公布，
+    // 但教授 / 沙巴洛斯 / 哈迪寂亚的复活对象在夜间可被唤醒、可选择，也按活着结算。
+    if (BOTC_PendingRevive(q)) {
+        return false;
     }
     // 僵怖（43）：第一次死亡不会真的死 ---- 全桌看到的是「死了」（公开红叉那一层照常画），
     //   内部一切按活着算（胜负 / 唤醒 / 技能检测读的都是这里）。用户 2026-09-20
@@ -22420,6 +22423,10 @@ void BOTC_MarkDeathRowTok (int q, int row, int tok, bool pierce) {
     g_tokOn[(((g_teller * 14) + q) * 256) + 112] = false;
     g_tokOn[(((g_teller * 14) + q) * 256) + 143] = false;
     g_tokOn[(((g_teller * 14) + q) * 256) + 157] = false;
+    // 复活待公布的玩家如果在天亮前再次死亡，新的死亡覆盖这次复活。
+    g_tokOn[(((g_teller * 14) + q) * 256) + 42] = false;
+    g_tokOn[(((g_teller * 14) + q) * 256) + 43] = false;
+    g_tokOn[(((g_teller * 14) + q) * 256) + 113] = false;
     g_deadKind[q] = g_deathKind[row];
     // 【教父 39 / 僵怖 43 要用】「今天有人死」按**死亡发生的时间**算（用户 2026-09-20）：
     //   白天死的（不管说书人打的是哪种死亡 token）= 今天有人死；夜里死的 = 不算今天。
@@ -27918,17 +27925,20 @@ void BOTC_HdResolve () {
         else {
             if (g_tokOn[(((g_teller * 14) + t) * 256) + 113]) {
                 if (BOTC_PublicDead(t)) {
-                    BOTC_DeathToggle(t, 0, 0);
+                    // 【复活等天亮】（用户 2026-11-02）：已经公开死亡的玩家保留
+                    // 「复活（哈迪寂亚）」标记，由天亮播报队列统一清红叉并宣布复活。
+                    BOTC_PmStore(g_teller, "【哈迪寂亚】" + BOTC_NameStr(t) + " 选择了活着：保留复活标记，天亮统一公布。");
                 }
                 else {
                     BOTC_ClearDeath(t);
                     BOTC_RestoreOneShot(t);
+                    g_tokOn[(((g_teller * 14) + t) * 256) + 113] = false;
                 }
             }
         }
     }
     BOTC_GrimRender(g_teller);
-    BOTC_PmStore(g_teller, "【哈迪寂亚】结算完成：带「死亡（哈迪寂亚）」的死亡，带「复活（哈迪寂亚）」的存活（原本已死的复活）。");
+    BOTC_PmStore(g_teller, "【哈迪寂亚】结算完成：本夜死亡已记录，复活标记保留到天亮统一公布。");
     BOTC_HdHide();
 }
 
@@ -31453,8 +31463,8 @@ void BOTC_ManInfoOk () {
                 BOTC_PmStore(g_teller, "【调试】第二个框读到：「" + s + "」");
             }
         }
-        // 疯子假爪牙可填第 3、4 个；其它两种格式仍只用前两个框。
-        if (kind == 0) {
+        // 疯子假爪牙 / 假军团可填第 3、4 个；其它格式仍只用前两个框。
+        if (kind == 0 || kind == 19) {
             s = libNtve_gf_DialogItemEditValue(g_miEdit3, g_teller);
             n = BOTC_TextNum(s);
             if (n >= 1 && n <= 12) {
@@ -31489,6 +31499,36 @@ void BOTC_ManInfoOk () {
             g_miSeat = 0;
             g_miRole = -1;
             g_miKind = 0;
+            return;
+        }
+        // 【疯子 × 军团】说书人手动填写这名疯子认为的善良玩家名单。
+        if (kind == 19) {
+            s2 = "";
+            if (g_evilA >= 2) { s2 = BOTC_NameStr(g_evilA); }
+            if (g_evilB >= 2) {
+                if (s2 != "") { s2 = s2 + ","; }
+                s2 = s2 + BOTC_NameStr(g_evilB);
+            }
+            if (g_evilC >= 2) {
+                if (s2 != "") { s2 = s2 + ","; }
+                s2 = s2 + BOTC_NameStr(g_evilC);
+            }
+            if (g_evilD >= 2) {
+                if (s2 != "") { s2 = s2 + ","; }
+                s2 = s2 + BOTC_NameStr(g_evilD);
+            }
+            if (StringLength(s2) <= 0) {
+                BOTC_Notice(g_teller, "至少填写一名善良玩家的座位号。");
+                return;
+            }
+            DialogSetVisible(g_miDlg, PlayerGroupSingle(g_teller), false);
+            s2 = "【信息】你得知所有善良玩家：" + s2 + "。";
+            BOTC_PmInfo(g_who[seat], s2);
+            BOTC_PmStore(g_teller, "【军团】已手动发给疯子 " + BOTC_NameStr(seat) + "：「" + s2 + "」");
+            g_miSeat = 0;
+            g_miRole = -1;
+            g_miKind = 0;
+            g_lgPend = false;
             return;
         }
         if (g_evilA < 2 && g_evilB < 2 && g_evilC < 2 && g_evilD < 2) {
@@ -34705,8 +34745,8 @@ void BOTC_ManInfoOpenSeats (int seat, string title, int kind) {
         DialogControlSetVisible(g_miEdit3, PlayerGroupSingle(g_teller), false);
         DialogControlSetVisible(g_miEdit4, PlayerGroupSingle(g_teller), false);
     }
-    else if (kind == 0) {
-        // 疯子假爪牙最多填 4 个。
+    else if (kind == 0 || kind == 19) {
+        // 疯子假爪牙 / 假军团最多填 4 个。
         DialogControlSetSize(g_miEdit, PlayerGroupSingle(g_teller), 140, 41);
         DialogControlSetSize(g_miEdit2, PlayerGroupSingle(g_teller), 140, 41);
         DialogControlSetSize(g_miEdit3, PlayerGroupSingle(g_teller), 140, 41);
@@ -34743,7 +34783,7 @@ void BOTC_ManInfoOpenSeats (int seat, string title, int kind) {
     // 【取消键】疯子假爪牙：允许说书人选择完全不发送，例如罂粟种植者局。
     //   疯子提线木偶（15）/ 书生 × 疯子（16）同样允许跳过。
     libNtve_gf_SetDialogItemText(g_miCancel, StringToText("取消"), PlayerGroupSingle(g_teller));
-    if (kind == 0 || kind == 15 || kind == 16) {
+    if (kind == 0 || kind == 15 || kind == 16 || kind == 19) {
         libNtve_gf_SetDialogItemText(g_miCancel, StringToText("取消"), PlayerGroupSingle(g_teller));
         DialogControlSetVisible(g_miCancel, PlayerGroupSingle(g_teller), true);
     }
@@ -35528,7 +35568,7 @@ bool BOTC_AutoWakeEvilStep () {
             BOTC_PmStore(g_teller, "【罂粟种植者】跳过他造成的爪牙互认。");
         }
         else if (BOTC_LegionOn()) {
-            BOTC_PmStore(g_teller, "【军团】普通爪牙信息由【发送互认】按钮处理。");
+            BOTC_LegionRecognize();
         }
         else if (g_lmOn && !BOTC_LmHasDemon()) {
             BOTC_PmStore(g_teller, "【小怪宝】场上没有恶魔：爪牙互认跳过。");
@@ -35558,7 +35598,7 @@ bool BOTC_AutoWakeEvilStep () {
             continue;
         }
         else if (BOTC_LegionLunatic()) {
-            BOTC_PmStore(g_teller, "【疯子】他以为自己是「军团」→ 不自动弹假爪牙框。");
+            BOTC_PmStore(g_teller, "【疯子】他以为自己是「军团」→ 已在军团阶段由说书人手动填写善良玩家。");
         }
         else {
             BOTC_LunaticInfo();
@@ -35573,7 +35613,7 @@ bool BOTC_AutoWakeEvilStep () {
         BOTC_PmStore(g_teller, "【罂粟种植者】跳过他造成的恶魔互认。");
     }
     else if (BOTC_LegionOn()) {
-        BOTC_PmStore(g_teller, "【军团】普通恶魔信息由【发送互认】按钮处理。");
+        BOTC_PmStore(g_teller, "【军团】已在爪牙信息阶段获得全部善良玩家座位。");
     }
     else if (g_lmOn && !BOTC_LmHasDemon()) {
         BOTC_PmStore(g_teller, "【小怪宝】场上没有恶魔：恶魔信息跳过。");
@@ -36583,6 +36623,97 @@ void BOTC_WakeToggle (int q) {
     BOTC_WakeApply(q, false);
 }
 
+// 技能面板控件按**逻辑格**创建。点击事件里的 p 是物理玩家号；
+// 换座后继续用玩家号反查控件，容易把旧面板和新座位错开。
+// 这里直接按被点击控件的唯一编号找出它所属的逻辑格。
+int BOTC_SkillControlOwner (int c) {
+    int q;
+    for (q = 1; q <= 13; q += 1) {
+        if (c == g_skillBtn[q] ||
+            c == g_skillSlotA[q] ||
+            c == g_skillSlotB[q] ||
+            c == g_skillSlotC[q] ||
+            c == g_skillNoPick[q] ||
+            c == g_skillOk[q] ||
+            c == g_skillCancel[q]) {
+            return q;
+        }
+    }
+    return 0;
+}
+
+// 找这个物理玩家当前坐在哪个逻辑格，并且该格的技能选人面板正在等待目标。
+int BOTC_SkillPickerForPlayer (int p) {
+    int q;
+    for (q = 1; q <= 13; q += 1) {
+        if (g_who[q] == p && g_skillPicking[q]) {
+            return q;
+        }
+    }
+    return 0;
+}
+
+// 统一处理技能面板上的“使用技能 / 清空目标 / 确认 / 取消”。
+// 返回 false 表示这次点击的不是技能面板控件。
+bool BOTC_SkillClickControl (int p, int c) {
+    int q;
+    int r;
+    q = BOTC_SkillControlOwner(c);
+    if (q < 1) {
+        return false;
+    }
+    // 控件只应对它当前所属的玩家或说书人生效。
+    if (p != g_who[q] && p != g_teller) {
+        return true;
+    }
+    if (c == g_skillBtn[q]) {
+        r = BOTC_ActRoleOf(q);
+        if (r == 18) {
+            BOTC_SpyPeek(q);
+        }
+        else if (r == 75) {
+            BOTC_WidowPeek(q);
+            BOTC_SkillOpen(q);
+        }
+        else {
+            BOTC_SkillOpen(q);
+        }
+        return true;
+    }
+    if (c == g_skillSlotA[q]) {
+        g_skillT1[q] = 0;
+        BOTC_SkillRender(q);
+        return true;
+    }
+    if (c == g_skillSlotB[q]) {
+        if (BOTC_ComboRole(BOTC_ActRoleOf(q))) {
+            BOTC_ComboRoleOpen(q);
+        }
+        else {
+            g_skillT2[q] = 0;
+            BOTC_SkillRender(q);
+        }
+        return true;
+    }
+    if (c == g_skillSlotC[q]) {
+        g_skillT3[q] = 0;
+        BOTC_SkillRender(q);
+        return true;
+    }
+    if (c == g_skillNoPick[q]) {
+        BOTC_SkillCancel(q);
+        return true;
+    }
+    if (c == g_skillOk[q]) {
+        BOTC_SkillConfirm(q);
+        return true;
+    }
+    if (c == g_skillCancel[q]) {
+        BOTC_SkillCancel(q);
+    }
+    return true;
+}
+
 void BOTC_SkillBtnRender () {
     int p;
     int r;
@@ -36612,7 +36743,7 @@ void BOTC_SkillBtnRender () {
         else {
             DialogSetVisible(g_skillBtnDlg[p], PlayerGroupSingle(g_who[p]), false);
             // 【理发师交换】面板开在恶魔身上，不能因为这一格没被再次唤醒就顺手关掉。
-            if (!g_awake[p] && p != g_barberFrom) {
+            if (!g_awake[p] && p != g_barberFrom && !g_skillPicking[p] && !g_limitedAsk[p] && !g_poAsk[p] && !g_pedantActing[p]) {
                 DialogSetVisible(g_skillDlg[p], PlayerGroupSingle(g_who[p]), false);
             }
         }
@@ -41050,7 +41181,9 @@ bool BOTC_TargetIsLiving (int q) {
     if (q < 2 || q > 13 || !g_seatOn[q]) {
         return false;
     }
-    if (g_zombFake[q] || BOTC_PublicDead(q) || BOTC_SeatDead(q)) {
+    // BOTC_SeatDead 已经包含公开红叉；复活待公布时它会在夜间返回 false，
+    // 因此这里不能再单独用 BOTC_PublicDead 拦掉。
+    if (g_zombFake[q] || BOTC_SeatDead(q)) {
         return false;
     }
     return true;
@@ -41280,21 +41413,23 @@ void BOTC_DawnResolve () {
     g_dawnQI = 0;
     // ① 挂着复活标记、但他本来就没死：只把标记悄悄撤掉（不播报）
     for (q = 2; q <= 13; q += 1) {
-        if (!g_tokOn[(((g_teller * 14) + q) * 256) + 42] && !g_tokOn[(((g_teller * 14) + q) * 256) + 43]) {
+        if (!g_tokOn[(((g_teller * 14) + q) * 256) + 42] && !g_tokOn[(((g_teller * 14) + q) * 256) + 43] && !g_tokOn[(((g_teller * 14) + q) * 256) + 113]) {
             continue;
         }
-        if (!BOTC_SeatDead(q)) {
+        // 待复活玩家在夜间按存活处理，因此这里必须看公开红叉，不能看 BOTC_SeatDead。
+        if (!BOTC_PublicDead(q)) {
             g_tokOn[(((g_teller * 14) + q) * 256) + 42] = false;
             g_tokOn[(((g_teller * 14) + q) * 256) + 43] = false;
+            g_tokOn[(((g_teller * 14) + q) * 256) + 113] = false;
             BOTC_PmStore(g_teller, "【天亮】" + BOTC_NameStr(q) + " 身上有「复活」标记但他没死，标记先撤掉。");
         }
     }
     // ② 排队：先复活（按座位号）
     for (q = 2; q <= 13; q += 1) {
-        if (!g_tokOn[(((g_teller * 14) + q) * 256) + 42] && !g_tokOn[(((g_teller * 14) + q) * 256) + 43]) {
+        if (!g_tokOn[(((g_teller * 14) + q) * 256) + 42] && !g_tokOn[(((g_teller * 14) + q) * 256) + 43] && !g_tokOn[(((g_teller * 14) + q) * 256) + 113]) {
             continue;
         }
-        if (!BOTC_SeatDead(q)) {
+        if (!BOTC_PublicDead(q)) {
             continue;
         }
         g_dawnQ[g_dawnQN] = q;
@@ -41372,7 +41507,7 @@ void BOTC_DawnReveal (int q, int kind) {
         return;
     }
     if (kind == 1) {
-        if (!BOTC_SeatDead(q)) {
+        if (!BOTC_PublicDead(q)) {
             return;
         }
         BOTC_ClearDeath(q);
@@ -41383,6 +41518,7 @@ void BOTC_DawnReveal (int q, int kind) {
         BOTC_RestoreOneShot(q);
         g_tokOn[(((g_teller * 14) + q) * 256) + 42] = false;
         g_tokOn[(((g_teller * 14) + q) * 256) + 43] = false;
+        g_tokOn[(((g_teller * 14) + q) * 256) + 113] = false;
         for (ob = 1; ob <= 13; ob += 1) {
             BOTC_GrimRender(ob);
         }
@@ -47026,7 +47162,12 @@ void BOTC_TokToggleAt (int ob, int seat, int t) {
     if (ob == g_teller && t == 113 && g_tokOn[(((g_teller * 14) + seat) * 256) + 113]) {
         g_tokOn[(((g_teller * 14) + seat) * 256) + 112] = false;
         if (BOTC_PublicDead(seat)) {
-            BOTC_DeathToggle(seat, 0, 0);
+            if (g_isNight) {
+                BOTC_PmStore(g_teller, "【哈迪寂亚】已为 " + BOTC_NameStr(seat) + " 标记复活：当晚按存活处理，天亮统一公布。");
+            }
+            else {
+                BOTC_DeathToggle(seat, 0, 0);
+            }
         }
         else {
             BOTC_ClearDeath(seat);
@@ -48602,11 +48743,9 @@ bool BOTC_LegionLunatic () {
     return (g_mark[(g_teller * 14) + q] - 1 == 94);
 }
 
-// 【军团 · 首夜互认】（用户 2026-09-30）：军团在场时不再整段跳过，改成**直接把队友位置写进各人自己那份魔典**。
-//   · 真身是军团的玩家：看见其他真身军团的座位（那个「以为是军团」的疯子不标给他；疯子是谁照旧走首夜那条私聊）
-//   · 疯子（他以为自己是军团）：照旧把军团标给他，但说书人能在弹窗里填两个座位号把这两人**屏蔽**掉；
-//     什么都不填就点确定 = 不屏蔽；点取消 = 不屏蔽（疯子看到所有队友）。
-//   只写每个玩家自己那一行 g_mark[p*14 + q]（= 他自己魔典上显示的），不动说书人那份、也不改任何技能判定。
+// 【军团 · 首夜互认】（用户 2026-11-02）：不再标队友，改为向每名真军团私聊
+//   本局所有善良玩家的座位号。若场上同时有魔术师，按相克规则从名单中排除魔术师。
+//   「以为自己是军团」的疯子不自动发送，改由说书人手动填写善良玩家。
 int BOTC_LegionMarkFor (int who, int hide1, int hide2) {
     int i;
     int mag;
@@ -48697,51 +48836,68 @@ void BOTC_LegionLunaticApply (int hide1, int hide2) {
     libNtve_gf_SetDialogItemText(g_miOk, StringToText("确定（发给他）"), PlayerGroupSingle(g_teller));
 }
 
-// 首夜互认主入口：真军团互相标出来；有假军团（疯子）就弹框问说书人要屏蔽哪两个
+// 首夜互认主入口：向所有军团发送善良玩家座位号。
 bool BOTC_LegionRecognize () {
     int i;
     int q;
     int n;
-    int nLu;
-    int lu;
+    int mag;
+    int goodN;
+    string s;
+    string msg;
+    bool fakeLegion;
     n = 0;
-    nLu = 0;
-    lu = 0;
+    goodN = 0;
+    s = "";
+    mag = BOTC_MagicianSeatNow();
     if (!BOTC_LegionOn()) {
         return false;
     }
     BOTC_BuildSeatList();
     for (i = 0; i < g_seatN; i += 1) {
         q = g_seatList[i];
-        if (BOTC_SeatTrueRole(q) == 94) {
-            BOTC_LegionMarkFor(g_who[q], 0, 0);
-            n = n + 1;
+        if (q < 2 || q > 13 || BOTC_SeatAlign(q) != 0) {
+            continue;
         }
+        if (mag >= 2 && q == mag) {
+            continue;                       // 军团 × 魔术师：军团得知的是非魔术师的善良玩家
+        }
+        if (goodN > 0) {
+            s = s + ",";
+        }
+        s = s + BOTC_NameStr(q);
+        goodN = goodN + 1;
     }
+    if (goodN > 0) {
+        msg = "【信息】你得知所有善良玩家：" + s + "。";
+    }
+    else {
+        msg = "【信息】你得知没有善良玩家。";
+    }
+    fakeLegion = BOTC_LegionLunatic();
     for (i = 0; i < g_seatN; i += 1) {
         q = g_seatList[i];
-        if (BOTC_SeatTrueRole(q) == 94) {
+        if (BOTC_SeatTrueRole(q) != 94) {
             continue;
         }
-        if (g_mark[(g_teller * 14) + q] - 1 != 94) {
-            continue;
-        }
-        lu = q;
-        nLu = nLu + 1;
+        BOTC_PmInfo(g_who[q], msg);
+        BOTC_PmStore(g_teller, "【军团】已发给 " + BOTC_NameStr(q) + "：" + msg);
+        n = n + 1;
     }
     if (n <= 0) {
         return false;
     }
-    if (nLu <= 0) {
-        BOTC_PmStore(g_teller, "【军团】首夜互认：队友位置已直接标在各自魔典上（真军团 " + IntToString(n) + " 名，场上没有假军团）。");
-        return false;
+    if (mag >= 2) {
+        BOTC_PmStore(g_teller, "【军团×魔术师】军团名单已排除 " + BOTC_NameStr(mag) + "。");
     }
-    BOTC_PmStore(g_teller, "【军团】首夜互认：真军团位置已经直接标进各自魔典；疯子是 " + BOTC_NameStr(lu) + "，接着填两个要屏蔽的座位号（空着或取消 = 全给他看）。");
-    g_lgPend = true;        // 这个框答完之前，【开始唤醒】不许往下走（否则会顺带唤醒别人 / 把框顶掉）
-    BOTC_ManInfoOpenSeats(lu, "【军团】填两个不给疯子看的座位号（空着或点取消 = 全给他看）", 9);
-    DialogControlSetVisible(g_miCancel, PlayerGroupSingle(g_teller), true);        // 这一步要能取消
-    libNtve_gf_SetDialogItemText(g_miOk, StringToText("确认"), PlayerGroupSingle(g_teller));
-    return true;
+    BOTC_PmStore(g_teller, "【军团】首夜互认完成：已向 " + IntToString(n) + " 名军团发送全部善良玩家座位。");
+    if (fakeLegion) {
+        g_lgPend = true;
+        BOTC_ManInfoOpenSeats(BOTC_RealLunaticSeat(), "【军团】疯子以为自己是军团：手动填 1~4 名善良玩家；点【取消】= 不发送", 19);
+        libNtve_gf_SetDialogItemText(g_miOk, StringToText("确定"), PlayerGroupSingle(g_teller));
+        return true;
+    }
+    return false;
 }
 
 // 【发送互认】入口：先让说书人点收件人，随后打开手动填写面板。
@@ -48754,25 +48910,24 @@ void BOTC_SendRecognize () {
     BOTC_Notice(g_teller, "【发送互认】点一名玩家的座位作为收件人。");
 }
 
-// 【军团】疯子屏蔽框还没答完 → true = 这次唤醒先别走（框已经不在了就当成「不屏蔽」自愈收尾）
+// 【军团】疯子填写善良玩家框还没答完 → true = 这次唤醒先别走
 bool BOTC_LegionPendBlock () {
     if (!g_lgPend) {
         return false;
     }
-    if (g_miRole == 41 && g_miKind == 9) {
-        BOTC_Notice(g_teller, "先把军团那个「疯子屏蔽」框处理掉：点【确认】或【取消】。");
+    if (g_miRole == 41 && (g_miKind == 9 || g_miKind == 19)) {
+        BOTC_Notice(g_teller, "先把军团那个「疯子善良玩家」框处理掉：点【确定】或【取消】。");
         return true;
     }
     g_lgPend = false;
-    BOTC_LegionLunaticApply(0, 0);
     BOTC_NotifyDemonsLunatic();
     return false;
 }
 
 // 真人说书答题框点「取消」：只有军团那一步需要收尾（不屏蔽，疯子看到所有队友）
 void BOTC_MiCancelApply () {
-    // 【疯子 · 提线木偶（15）/ 书生 × 疯子（16）】（用户 2026-11-01）：点取消 = 这次不发送。
-    if (g_miRole == 41 && (g_miKind == 15 || g_miKind == 16)) {
+    // 【疯子附加信息 / 假军团填写】（15 / 16 / 19）：点取消 = 这次不发送。
+    if (g_miRole == 41 && (g_miKind == 15 || g_miKind == 16 || g_miKind == 19)) {
         g_evilA = 0;
         g_evilB = 0;
         g_evilC = 0;
@@ -48780,6 +48935,7 @@ void BOTC_MiCancelApply () {
         g_miSeat = 0;
         g_miRole = -1;
         g_miKind = 0;
+        g_lgPend = false;
         BOTC_PmStore(g_teller, "【信息】已取消本次附加信息，不向该玩家发送。");
         return;
     }

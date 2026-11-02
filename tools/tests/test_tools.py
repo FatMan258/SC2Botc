@@ -339,5 +339,115 @@ class BoardPaginationTests(unittest.TestCase):
         self.assertEqual(len(raw), 256 * 256 * 4 + 128)
 
 
+class LogViewerTests(unittest.TestCase):
+    def test_player_picker_rebuilds_for_current_seats(self) -> None:
+        source = (PROJECT_ROOT / "scripts" / "BOTC.galaxy").read_text(
+            encoding="utf-8-sig"
+        )
+
+        start = source.index("void BOTC_LogPickStart (int p) {")
+        end = source.index("void BOTC_LogPickRender (int p) {", start)
+        picker_start = source[start:end]
+
+        self.assertIn("BOTC_LogPickRender(p);", picker_start)
+        self.assertIn(
+            "DialogControlSelectItem(g_logPickList, PlayerGroupSingle(p), 0);",
+            picker_start,
+        )
+        self.assertNotIn("g_logPickFilled", source)
+
+
+class SkillPanelRoutingTests(unittest.TestCase):
+    def test_skill_clicks_use_control_and_current_player_mapping(self) -> None:
+        source = (PROJECT_ROOT / "scripts" / "BOTC.galaxy").read_text(
+            encoding="utf-8-sig"
+        )
+
+        self.assertIn("int BOTC_SkillControlOwner (int c)", source)
+        self.assertIn("int BOTC_SkillPickerForPlayer (int p)", source)
+        self.assertIn("if (BOTC_SkillClickControl(p, c))", source)
+        self.assertIn("q = BOTC_SkillPickerForPlayer(p);", source)
+        self.assertIn("!g_skillPicking[p] && !g_limitedAsk[p]", source)
+
+
+class LegionRecognitionTests(unittest.TestCase):
+    def test_legion_receives_all_good_seats(self) -> None:
+        source = (PROJECT_ROOT / "scripts" / "BOTC.galaxy").read_text(
+            encoding="utf-8-sig"
+        )
+        start = source.index("bool BOTC_LegionRecognize () {")
+        end = source.index("\n}\n", start) + 3
+        function = source[start:end]
+
+        self.assertIn("BOTC_SeatAlign(q) != 0", function)
+        self.assertIn("BOTC_PmInfo(g_who[q], msg);", function)
+        self.assertIn("BOTC_SeatTrueRole(q) != 94", function)
+        self.assertIn(", 19);", function)
+        self.assertIn("g_lgPend = true;", function)
+        self.assertIn("BOTC_LegionRecognize();", source)
+        self.assertNotIn("BOTC_LegionMarkFor", function)
+
+
+class HadiRevivalTests(unittest.TestCase):
+    def test_hadi_revival_waits_for_dawn(self) -> None:
+        source = (PROJECT_ROOT / "scripts" / "BOTC.galaxy").read_text(
+            encoding="utf-8-sig"
+        )
+        start = source.index("void BOTC_HdResolve () {")
+        end = source.index("void BOTC_HdKill (int t) {", start)
+        resolve = source[start:end]
+
+        self.assertNotIn("BOTC_DeathToggle(t, 0, 0)", resolve)
+        self.assertIn("保留复活标记，天亮统一公布", resolve)
+        self.assertIn(
+            "+ 113]) {\n            continue;\n        }\n        if (!BOTC_PublicDead(q))",
+            source,
+        )
+        self.assertIn(
+            "g_tokOn[(((g_teller * 14) + q) * 256) + 113] = false;",
+            source,
+        )
+
+
+class PendingReviveTests(unittest.TestCase):
+    def test_pending_revive_is_alive_at_night_but_waits_for_dawn(self) -> None:
+        source = (PROJECT_ROOT / "scripts" / "BOTC.galaxy").read_text(
+            encoding="utf-8-sig"
+        )
+        start = source.index("bool BOTC_PendingRevive (int q) {")
+        end = source.index("bool BOTC_SeatDead (int q) {", start)
+        pending = source[start:end]
+
+        for token in ("+ 42]", "+ 43]", "+ 113]"):
+            self.assertIn(token, pending)
+        self.assertIn("if (BOTC_PendingRevive(q))", source)
+        self.assertIn("if (g_zombFake[q] || BOTC_SeatDead(q))", source)
+        self.assertIn("if (!BOTC_PublicDead(q))", source)
+        self.assertIn(
+            "新的死亡覆盖这次复活",
+            source,
+        )
+
+
+class GameStartLogTests(unittest.TestCase):
+    def test_logs_clear_after_countdown_but_not_on_cancel(self) -> None:
+        source = (PROJECT_ROOT / "scripts" / "BOTC.galaxy").read_text(
+            encoding="utf-8-sig"
+        )
+
+        start = source.index("void BOTC_GameStartGo () {")
+        end = source.index("void BOTC_ClearAllLogs () {", start)
+        game_start = source[start:end]
+        self.assertLess(
+            game_start.index("BOTC_ClearAllLogs();"),
+            game_start.index('BOTC_PeriodRecord("---- 第1夜（游戏正式开始）----");'),
+        )
+
+        cancel_start = source.index("void BOTC_GameStartCancel () {")
+        cancel_end = source.index("\n}\n", cancel_start)
+        cancel = source[cancel_start:cancel_end]
+        self.assertNotIn("BOTC_ClearAllLogs();", cancel)
+
+
 if __name__ == "__main__":
     unittest.main()
