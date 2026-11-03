@@ -44483,8 +44483,8 @@ void BOTC_ShowWin (int side, string why1, string why2) {
     g_gameOver = true;
     // 【场次统计】（用户 2026-10-20）：唯一胜负出口只记一次；此时阵营 / 说书人座位都已经确定。
     BOTC_StatsRecord();
-    // 【结算后再移除中途退出的座位】（用户 2026-11-01）：胜负已经算出，退出玩家的座位不再保留。
-    BOTC_ClearLeftSeats();
+    // 【中途退出的座位要留到重新开始】（用户 2026-11-03）：结算期间玩家还要复盘看全场身份和 token，
+    //   所以这里不再移除；等说书人点【重新开始】时才由 BOTC_WinRestart() 调用 BOTC_ClearLeftSeats()。
     // 【胜负那一刻也清投票状态】（用户 2026-10-10）：白天可能正停在提名 / 投票中间就分出了胜负 ——
     //   跟入夜用的是同一个 BOTC_NomReset()：已投 / 弃权 / 票数 / 待处决 / 提名记录全清，
     //   并退出提名阶段（免得胜负面板后面还挂着上一轮的投票标记）。
@@ -44603,11 +44603,16 @@ void BOTC_ShowWinNow () {
     libNtve_gf_SetDialogItemText(g_winSub, BOTC_NameSubst(g_winReason), PlayerGroupAll());   // 结算面板的正文：名字换成真名
     DialogSetVisible(g_winDlg, PlayerGroupAll(), true);
     BOTC_RateShowAll();             // 【说书人评分】结算面板下方的打分行发给除说书人以外的玩家
+    // 【结算即自动公开真魔典】（用户 2026-11-03）：胜负一出就把说书人那份魔典（身份 + 全部 token）
+    //   摊给全场，复盘时人人都能看到所有人的角色和标记；不再需要说书人手动点【复盘（公开魔典）】。
+    BOTC_ReplayReveal();
     // 【换座位后的说书人也要能点】（用户 2026-10-18）：继续 / 复盘按钮按「现在的」说书人露出来
     DialogControlSetVisible(g_winBtn, PlayerGroupAll(), false);
     DialogControlSetVisible(g_winBtn, PlayerGroupSingle(g_teller), true);
+    // 【只留【重新开始】】（用户 2026-11-03）：【复盘（公开魔典）】已由自动公开取代，
+    //   【取消正式开始】也不该在结算面板出现 ---- 说书人只能点【重新开始】开始下一轮。
     DialogControlSetVisible(g_replayBtn, PlayerGroupAll(), false);
-    DialogControlSetVisible(g_replayBtn, PlayerGroupSingle(g_teller), true);
+    DialogControlSetVisible(g_grimStart, PlayerGroupAll(), false);
     // 胜利面板上面那条「恭喜...获胜」（名字带各自的颜色）
     //   【2026-09-16 用户要求】要的是「去掉对话框（黑框）、信息留住」---- 所以这里照常显示，
     //   黑底在 BOTC_BuildWinCongrats() 里已经关掉了（那两行注释）。
@@ -44618,9 +44623,6 @@ void BOTC_ShowWinNow () {
         libNtve_gf_SetDialogItemText(g_congratsLbl, BOTC_CongratsText(), PlayerGroupAll());
     }
     DialogSetVisible(g_congratsDlg, PlayerGroupAll(), true);
-    // 【智能说书】游戏一结束就把真魔典摊给全场（= 用户说的「智能说书会自动发送魔典」）：
-    //   这样首夜信息位那些 token（洗衣妇 / 图管 / 调查员）在复盘里也看得到。
-    //   真人说书的模式不自动摊 ---- 那边由说书人自己点【复盘（公开魔典）】。
 }
 
 void BOTC_BuildWin () {
@@ -44879,6 +44881,9 @@ void BOTC_WinClose () {
 //   点一下就把这一局清干净（等同【取消正式开始】）并回到剧本选择页面。
 void BOTC_WinRestart () {
     BOTC_WinClose();
+    // 【这时候才移除中途退出的座位】（用户 2026-11-03）：结算期间它们要留着给全场复盘，
+    //   说书人点【重新开始】才统一从圆桌上拿掉；接着 BOTC_GameStartCancel() 的换局重置会再清一次表。
+    BOTC_ClearLeftSeats();
     BOTC_GameStartCancel();        // 清掉上一局：天数 / token / 魔典 / 日志 / 音乐都回到准备阶段
     g_dealConfirmed = false;       // 重新选剧本，旧的发牌作废
     BOTC_BoardOpen();              // 进入剧本选择页面
@@ -52296,7 +52301,7 @@ void BOTC_NomUI () {
     DialogControlSetVisible(g_grimStart, PlayerGroupAll(), false);
     DialogControlSetVisible(g_execBtn, PlayerGroupAll(), false);
     DialogControlSetVisible(g_deadBtn, PlayerGroupAll(), false);
-    if (g_phase == 0) {
+    if (g_phase == 0 && !g_gameOver) {
         // 发牌 / 确认发放：只要点了【游戏正式开始】（g_startPending）就**立刻**收掉（用户 2026-09-17）
         if (!g_started && !g_startPending) {
             DialogControlSetVisible(g_grimDeal, PlayerGroupSingle(g_teller), true);

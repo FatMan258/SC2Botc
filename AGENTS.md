@@ -403,9 +403,9 @@ rg -n -F -m 20 'BOTC_函数名' scripts\BOTC.galaxy
   拦截位于 `BOTC_PickOpen()` / `BOTC_TokOpen()` / `BOTC_TokToggleAt()` 顶部，
   点【确认】/【取消】后立即恢复。
 - 中途退出玩家的座位：游戏未正式开始 → 直接删座；已正式开始 → 不再显示「（已退出）」，
-  保留座位和名字到胜负结算；活着的补蓝叉，已经死亡的把红叉改成蓝叉
-  （`botc_exec_blue.dds`，按物理座位 `g_leftDeadP` 判定）。结算出口 `BOTC_ShowWin()`
-  在记完统计后调用 `BOTC_ClearLeftSeats()` 移除这些保留座位。`BOTC_BuildSeatList()`
+  保留座位和名字到说书人点【重新开始】；活着的补蓝叉，已经死亡的把红叉改成蓝叉
+  （`botc_exec_blue.dds`，按物理座位 `g_leftDeadP` 判定）。结算期间保留这些座位供全场复盘，
+  由 `BOTC_WinRestart()` 调用 `BOTC_ClearLeftSeats()` 移除。`BOTC_BuildSeatList()`
   的在场判定为 `PlayerGroupHasPlayer(...) || g_leftKeepP[物理座位]`。
 - 说书人退出与普通玩家一样在公聊播「离开了小镇」，并在 0.5 秒 tick 里由
   `BOTC_TellerLeftHandover()` 按 `stats.s`（说书人场次）自动交接：
@@ -466,6 +466,9 @@ rg -n -F -m 20 'BOTC_函数名' scripts\BOTC.galaxy
 - 天亮改动必须同时检查僵怖、报丧女妖、月之子、维齐尔、炸弹人的结算顺序。
 - 判定存活目标时必须统一排除红叉、死亡 token 和僵怖假死。
 - 胜利检查统一走 `BOTC_CheckWin()`。
+- 胜负结算时 `BOTC_ShowWinNow()` 自动调用 `BOTC_ReplayReveal()`，把说书人真魔典
+  （身份 + 全部 token）公开给全场；【复盘（公开魔典）】与【取消正式开始】在结算阶段隐藏，
+  说书人只能点【重新开始】进入下一轮。
 - 新局清空全部观察者的 token、死人票、提名票、处决名额和复活动画。
 - 新局同时清空 `g_leftShown`、`g_leftKeepP`、`g_leftDeadP`，不得把上一局的退出座位带进下一局。
 - 书生通过手动 token `171` 在夜序 70 插入一次额外行动；进入白天清除该 token。
@@ -606,8 +609,8 @@ rg -n -F -m 20 'BOTC_函数名' scripts\BOTC.galaxy
   无人死亡；否则按点击顺序逐一经过 `BOTC_DemonStrike()`，并使用专属 token 175
   「死亡（饕餮）」。选择时必须触发莽夫、悟道者等正常目标选择联动。
 - 第二局不得残留死亡、票、token、面板状态或上一夜技能状态。
-- 中途退出玩家的座位在正式开局后必须保留到胜负结算；`BOTC_ClearLeftSeats()` 之后
-  `BOTC_BuildSeatList()` 才允许把他从座位表里去掉。已死亡者退出必须把红叉改成蓝叉，
+- 中途退出玩家的座位在正式开局后必须保留到说书人点【重新开始】；`BOTC_WinRestart()`
+  调用 `BOTC_ClearLeftSeats()` 之后 `BOTC_BuildSeatList()` 才允许把他从座位表里去掉。已死亡者退出必须把红叉改成蓝叉，
   活着退出补蓝叉；两者都不再显示「（已退出）」后缀。
 - 说书人退出后的自动交接必须跳过已退出玩家与电脑；交接沿用 `BOTC_TellerHandover()`，
   不得另写一套只改 `g_teller` 的简化版本。进行中交接的死亡玩家优先条件（`s >= 5`）
