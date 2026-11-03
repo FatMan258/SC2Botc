@@ -785,7 +785,8 @@ int         g_winBtn;
 int         g_winSide;            // 0 = 善良胜 / 1 = 邪恶胜
 bool        g_gameOver;           // 本局已经分出胜负
 // 【说书人评分】（用户 2026-11-02）：结算阶段每个玩家（除说书人）给说书人打 1..5 分；
-//   分数累加进说书人自己账号 bank 的 stats/rs、stats/rc，统计页显示平均分。
+//   分数累加进说书人自己账号 bank 的 stats/rs、stats/rc，统计页显示平均分；
+//   同时按 1/2/3/4/5 分给 stats/rep 增减 -5/0/+5/+10/+15（最低 0），用于称号判定。
 int         g_rateDlg;
 int         g_rateLbl;
 int[5]      g_rateBtn;
@@ -1702,8 +1703,9 @@ trigger     g_tWheel;            // 【私聊列表横向滚动】（用户 2026
 string BOTC_NameStr (int p);
 text   BOTC_LineText (string line, int who);
 void   BOTC_PosOfDump (int p);       // 【-pos】把"座位 ↔ 位置"表打进自己私聊（用户 2026-10-07）
-string BOTC_TellerTitle ();          // 【说书人称号】按账号 bank 的 stats/title 或说书人场次推算
-void   BOTC_TitleSet (int pid, string t);   // 【说书人称号】写入某玩家账号（供后续星级称号使用）
+string BOTC_TellerTitle ();          // 【说书人称号】按声望值与说书人场次推算
+int    BOTC_TellerRepGet (bank bk);  // 【声望值】读取账号 bank 的 stats/rep
+int    BOTC_RepDelta (int v);        // 【声望值】1..5 分对应的声望增减
 int    BOTC_PosOf (int seat);        // 【物理座位 → 逻辑位置】（用户 2026-10-07）：换说书人后"人"≠"位置"
 string BOTC_SayToken (int seat);     // 【说话人占位符】（用户 2026-10-07）：按**人**记，换位后名字不跟格子跑
 color  BOTC_SayColor (int seat);     // 【说话人那一行的颜色】：按位置取色，说书人那一格 = 白
@@ -20931,7 +20933,7 @@ void BOTC_BuildPreNotice () {
     g_preLbl = BOTC_NewLabel(g_preDlg, 900, 50, 600, 0, StringToText(""));
     libNtve_gf_SetDialogItemStyle(g_preLbl, "ModLeftSize20Bold", PlayerGroupAll());
     libNtve_gf_SetDialogItemAcceptMouse(g_preLbl, false, PlayerGroupAll());
-    // 【说书人称号】（用户 2026-11-02）：第二行，只给说书人看
+    // 【说书人称号】（用户 2026-11-02）：第二行，对所有人可见
     g_preTitleLbl = BOTC_NewLabel(g_preDlg, 900, 30, 600, 46, StringToText(""));
     libNtve_gf_SetDialogItemStyle(g_preTitleLbl, "ModLeftSize20Bold", PlayerGroupAll());
     libNtve_gf_SetDialogItemAcceptMouse(g_preTitleLbl, false, PlayerGroupAll());
@@ -44381,6 +44383,7 @@ void BOTC_RateSubmit (int p, int v) {
     bank bk;
     int rs;
     int rc;
+    int rep;
     int i;
     if (!g_gameOver) {
         return;
@@ -44413,6 +44416,12 @@ void BOTC_RateSubmit (int p, int v) {
     }
     BankValueSetFromInt(bk, "stats", "rs", rs + v);
     BankValueSetFromInt(bk, "stats", "rc", rc + 1);
+    // 【声望值】（用户 2026-11-03）：按分数增减，最低 0。
+    rep = BOTC_TellerRepGet(bk) + BOTC_RepDelta(v);
+    if (rep < 0) {
+        rep = 0;
+    }
+    BankValueSetFromInt(bk, "stats", "rep", rep);
     BankSave(bk);
     libNtve_gf_SetDialogItemText(g_rateLbl, StringToText("已评分：" + IntToString(v) + " 分，感谢反馈。"), PlayerGroupSingle(p));
     for (i = 0; i < 5; i += 1) {
@@ -47942,41 +47951,53 @@ void BOTC_StatsOwnBump (bank bk, string pre) {
     BankValueSetFromInt(bk, "stats", pre, v + 1);
 }
 
-// 【说书人称号】（用户 2026-11-02）：
-//   所有人默认「临时说书人」；账号的说书人场次 s 大于 5 场后升为「见习说书人」。
-//   后续星级称号可以直接写入账号 bank 的 stats/title（例如「一星说书人」），有值优先。
-string BOTC_TellerTitleDefault (int s) {
-    if (s > 5) {
-        return "见习说书人";
+// 【声望值】（用户 2026-11-03）：结算时每名玩家给说书人打分，按分数累计进
+//   说书人账号 bank 的 stats/rep：1 分 -5、2 分 +0、3 分 +5、4 分 +10、5 分 +15，最低 0。
+int BOTC_TellerRepGet (bank bk) {
+    if (!BankKeyExists(bk, "stats", "rep")) {
+        return 0;
     }
-    return "临时说书人";
+    return BankValueGetAsInt(bk, "stats", "rep");
+}
+
+int BOTC_RepDelta (int v) {
+    if (v <= 1) {
+        return -5;
+    }
+    if (v == 2) {
+        return 0;
+    }
+    if (v == 3) {
+        return 5;
+    }
+    if (v == 4) {
+        return 10;
+    }
+    return 15;
+}
+
+// 【说书人称号】（用户 2026-11-03）：按声望值与说书人场次判定，从高到低优先取最高等级。
+string BOTC_TellerTitleBy (int s, int rep) {
+    if (rep >= 20000 && s >= 1000) { return "首席说书人"; }
+    if (rep >= 12000 && s >= 800) { return "宗师说书人"; }
+    if (rep >= 8000 && s >= 500) { return "大师说书人"; }
+    if (rep >= 5000 && s >= 300) { return "精英说书人"; }
+    if (rep >= 3000 && s >= 200) { return "卓越说书人"; }
+    if (rep >= 1000 && s >= 100) { return "资深说书人"; }
+    if (rep >= 300 && s >= 30) { return "熟练说书人"; }
+    if (rep >= 100 && s >= 10) { return "进阶说书人"; }
+    if (rep >= 0 && s >= 3) { return "新锐说书人"; }
+    return "见习说书人";
 }
 
 string BOTC_TellerTitle () {
     int pid;
-    string t;
     BOTC_BankInit();
     pid = g_who[1];
     if (pid < 1 || pid > 13) {
-        return "临时说书人";
+        return "见习说书人";
     }
-    if (BankKeyExists(g_bank[pid], "stats", "title")) {
-        t = BankValueGetAsString(g_bank[pid], "stats", "title");
-        if (StringLength(t) > 0) {
-            return t;
-        }
-    }
-    return BOTC_TellerTitleDefault(BOTC_StatsOwnGet(g_bank[pid], "s"));
-}
-
-// 供后续星级称号写入；按账号保存，重新进图 / 换座位后仍读得到。
-void BOTC_TitleSet (int pid, string t) {
-    BOTC_BankInit();
-    if (pid < 1 || pid > 13) {
-        return;
-    }
-    BankValueSetFromString(g_bank[pid], "stats", "title", t);
-    BankSave(g_bank[pid]);
+    return BOTC_TellerTitleBy(BOTC_StatsOwnGet(g_bank[pid], "s"), BOTC_TellerRepGet(g_bank[pid]));
 }
 
 void BOTC_StatsRecord () {
@@ -48050,6 +48071,7 @@ void BOTC_StatsRender (int p) {
     int s;
     int rs;
     int rc;
+    int rep;
     int avg10;
     bool hasBk;
     text line;
@@ -48073,6 +48095,7 @@ void BOTC_StatsRender (int p) {
         s = 0;
         rs = 0;
         rc = 0;
+        rep = 0;
         hasBk = false;
         if (pid == p) {
             bk = g_bank[p];
@@ -48100,6 +48123,8 @@ void BOTC_StatsRender (int p) {
             if (BankKeyExists(bk, "stats", "rc")) {
                 rc = BankValueGetAsInt(bk, "stats", "rc");
             }
+            // 【声望值】（用户 2026-11-03）：显示在说书人平均分后面。
+            rep = BOTC_TellerRepGet(bk);
         }
         // 【玩家 ID + 大厅自选色】（用户 2026-10-20）：不写「玩家N」，直接用实际玩家名。
         rowName = TextWithColor(PlayerName(pid), libNtve_gf_ConvertPlayerColorToColor(PlayerGetColorIndex(pid, false)));
@@ -48116,6 +48141,8 @@ void BOTC_StatsRender (int p) {
             avg10 = ((rs * 10) + (rc / 2)) / rc;
             line = line + StringToText("        ");
             line = line + TextWithColor(StringToText("平均分 " + IntToString(avg10 / 10) + "." + IntToString(avg10 - ((avg10 / 10) * 10)) + "（" + IntToString(rc) + " 次）"), Color(255, 150, 0));
+            line = line + StringToText("        ");
+            line = line + TextWithColor(StringToText("声望 " + IntToString(rep)), Color(200, 180, 255));
         }
         DialogControlAddItem(g_tipList, PlayerGroupSingle(p), line);
         // 每名玩家之间多留一行空白。
