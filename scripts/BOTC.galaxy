@@ -1799,7 +1799,7 @@ void   BOTC_GrimRender (int ob);
 int    BOTC_Lerp (int a, int b, int num, int den);
 int    BOTC_PickUnused (int r0, int r1);
 // 【随机发牌 · 认知偏差】（用户 2026-11-03）
-int    BOTC_RoleRecurringInfo (int r);
+bool   BOTC_RoleRecurringInfo (int r);
 void   BOTC_PickOpen (int ob, int who);
 void   BOTC_PickChoose (int ob, int idx);
 void   BOTC_PickAlignRender (int p);
@@ -1844,9 +1844,9 @@ void   BOTC_ChangeRoleMsg (int q, int role);   // 统一的「你的身份转变
 void   BOTC_HagOpen (int p);            // 麻脸巫婆（67）：选角色（整张板子）
 void   BOTC_HagApply (int who, int role);      // 真的把人变成那个角色
 void   BOTC_HagApplyReal (int who, int role);  // 跳过二次确认，直接落地（用户 2026-11-03）
-void   BOTC_HagConfirmOpen (int who, int role, int actor); // 跨阵营改造 → 说书人二次确认
+void   BOTC_HagConfirmOpen (int who, int role, int hagSeat); // 跨阵营改造 → 说书人二次确认
 void   BOTC_HagAskAnswer (int ans);            // 二次确认结果（1 = 确认 / 0 = 拒绝并重选）
-void   BOTC_DamselAskOpenHag (int who, int actor);     // 麻脸巫婆造落难少女 → 说书人指定玩家
+void   BOTC_DamselAskOpenHag (int who, int hagSeat);   // 麻脸巫婆造落难少女 → 说书人指定玩家
 void   BOTC_DamselAskOpenBarber (int p, int a, int b); // 理发师换到落难少女 → 说书人指定玩家
 void   BOTC_DamselAskConfirm (int t);          // 说书人选定的落难少女座位
 void   BOTC_DamselAskCancel ();                // 取消 = 这次不产生落难少女
@@ -10110,7 +10110,7 @@ void BOTC_AbNewRender (int p) {
     for (f = 0; f < 6; f += 1) {
         DialogControlSetVisible(g_glossTitleCtl[f], PlayerGroupSingle(p), false);
     }
-    for (f = 0; f < 24; f += 1) {
+    for (f = 0; f < 18; f += 1) {
         DialogControlSetVisible(g_glossBodyCtl[f], PlayerGroupSingle(p), false);
     }
     if (g_abPage[p] == 3) {
@@ -41732,24 +41732,24 @@ void BOTC_HagOpen (int p) {
 void BOTC_HagApply (int who, int role) {
     int oldR;
     int oldA;
-    int actor;
+    int hagSeat;
     if (who < 1 || who > 13 || role < 0 || role > 154) {
         return;
     }
-    actor = g_hagActor;
+    hagSeat = g_hagActor;
     oldR = BOTC_SeatTrueRole(who);
-    if (role == 82 && oldR != 82 && actor >= 1 && !g_hagDamselBypass) {
+    if (role == 82 && oldR != 82 && hagSeat >= 1 && !g_hagDamselBypass) {
         if (BOTC_RoleInPlay(82)) {
             g_hagActor = 0;
             BOTC_PmStore(g_teller, "【麻脸巫婆】落难少女已经在场 → 无事发生。");
             return;
         }
-        BOTC_DamselAskOpenHag(who, actor);
+        BOTC_DamselAskOpenHag(who, hagSeat);
         return;
     }
     oldA = BOTC_SeatAlign(who);
-    if (actor >= 1 && !g_hagConfirmOk && BOTC_RoleAlign(role) != oldA && !BOTC_RoleInPlay(role)) {
-        BOTC_HagConfirmOpen(who, role, actor);
+    if (hagSeat >= 1 && !g_hagConfirmOk && BOTC_RoleAlign(role) != oldA && !BOTC_RoleInPlay(role)) {
+        BOTC_HagConfirmOpen(who, role, hagSeat);
         return;
     }
     g_hagConfirmOk = false;
@@ -42024,16 +42024,16 @@ void BOTC_BuildHagAsk () {
 }
 
 // 弹给说书人：这次改造会跨阵营，确认还是让她重选？
-void BOTC_HagConfirmOpen (int who, int role, int actor) {
-    if (who < 2 || who > 13 || role < 0 || role > 154 || actor < 1 || actor > 13) {
+void BOTC_HagConfirmOpen (int who, int role, int hagSeat) {
+    if (who < 2 || who > 13 || role < 0 || role > 154 || hagSeat < 1 || hagSeat > 13) {
         return;
     }
     g_hagAsk = 1;
     g_hagAskWho = who;
     g_hagAskRole = role;
-    g_hagAskActor = actor;
-    g_hagActor = actor;
-    libNtve_gf_SetDialogItemText(g_hagAskTitle, StringToText("【麻脸巫婆】把 ") + BOTC_NameStr(who) + StringToText("（原") + StringToText(g_roleName[BOTC_SeatTrueRole(who)]) + StringToText("）变成「") + StringToText(g_roleName[role]) + StringToText("」？阵营会变，是否确认？"), PlayerGroupSingle(g_teller));
+    g_hagAskActor = hagSeat;
+    g_hagActor = hagSeat;
+    libNtve_gf_SetDialogItemText(g_hagAskTitle, StringToText("【麻脸巫婆】把 ") + StringToText(BOTC_NameStr(who)) + StringToText("（原") + StringToText(g_roleName[BOTC_SeatTrueRole(who)]) + StringToText("）变成「") + StringToText(g_roleName[role]) + StringToText("」？阵营会变，是否确认？"), PlayerGroupSingle(g_teller));
     DialogControlSetVisible(g_hagAskYes, PlayerGroupSingle(g_teller), true);
     DialogControlSetVisible(g_hagAskNo, PlayerGroupSingle(g_teller), true);
     DialogControlSetVisible(g_hagAskX, PlayerGroupSingle(g_teller), true);
@@ -42044,13 +42044,13 @@ void BOTC_HagConfirmOpen (int who, int role, int actor) {
 void BOTC_HagAskAnswer (int ans) {
     int who;
     int role;
-    int actor;
+    int hagSeat;
     if (g_hagAsk <= 0) {
         return;
     }
     who = g_hagAskWho;
     role = g_hagAskRole;
-    actor = g_hagAskActor;
+    hagSeat = g_hagAskActor;
     g_hagAsk = 0;
     g_hagAskWho = 0;
     g_hagAskRole = 0;
@@ -42058,18 +42058,18 @@ void BOTC_HagAskAnswer (int ans) {
     DialogSetVisible(g_hagAskDlg, PlayerGroupSingle(g_teller), false);
     if (ans != 0) {
         g_hagConfirmOk = true;
-        g_hagActor = actor;
+        g_hagActor = hagSeat;
         BOTC_HagApply(who, role);
         return;
     }
     g_hagDamselBypass = false;
     g_hagActor = 0;
-    if (actor >= 1 && actor <= 13) {
+    if (hagSeat >= 1 && hagSeat <= 13) {
         BOTC_PmStore(g_teller, "【麻脸巫婆】说书人拒绝这次跨阵营改造 → 她需要重新选择角色。");
         g_hagPick = false;
         g_hagConfirmOk = false;
-        g_hagActor = actor;
-        BOTC_SkillOpen(actor);
+        g_hagActor = hagSeat;
+        BOTC_SkillOpen(hagSeat);
     }
 }
 
@@ -42085,16 +42085,16 @@ void BOTC_DamselBarberClear () {
 }
 
 // 麻脸巫婆选到落难少女：由说书人点一名玩家变成落难少女
-void BOTC_DamselAskOpenHag (int who, int actor) {
-    if (actor < 1 || actor > 13) {
-        actor = g_hagActor;
+void BOTC_DamselAskOpenHag (int who, int hagSeat) {
+    if (hagSeat < 1 || hagSeat > 13) {
+        hagSeat = g_hagActor;
     }
-    if (actor < 1 || actor > 13) {
+    if (hagSeat < 1 || hagSeat > 13) {
         return;
     }
     g_damselAsk = 1;
     g_damselHagWho = who;
-    g_damselHagActor = actor;
+    g_damselHagActor = hagSeat;
     g_damselAskA = 0;
     g_damselAskB = 0;
     g_damselBarberP = 0;
@@ -50499,7 +50499,7 @@ void BOTC_Deal () {
     if (balloon == 1) {
         modOut = 1;
     }
-    if (modOut && demonPick != 94) {
+    if (modOut != 0 && demonPick != 94) {
         if (oc > 4) {
             tc = tc + (oc - 4);
             oc = 4;
@@ -54126,6 +54126,7 @@ void BOTC_Init () {
     BOTC_BuildAlsaahir();      // 戏法师（149）：多元爪牙 / 恶魔分类公开猜测
     BOTC_BuildTaotie();        // 饕餮（154）：12 座位任意数量多选
     BOTC_BuildBluff();
+    BOTC_BuildLBluff();        // 疯子那套「不在场身份」面板以前漏建，控件 id 一直是 0 → 换座位 / 发给疯子时报 triggerControl 错误
     BOTC_BuildBoard();
     BOTC_BuildCustom();            // 【自定义剧本】面板（用户 2026-10-03）
     BOTC_ChatBgApply();            // 黑底透明度（默认值在 GrimInitData 里设，这里应用一次）
