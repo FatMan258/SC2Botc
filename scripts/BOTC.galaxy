@@ -717,6 +717,20 @@ bool        g_slayAskVirgin;   // 这次拍板是贞洁者的（处决 / 不处�
 
 bool[14]    g_psyDone;         // 今天已经声称过【精神病患者】了（每天一次）
 bool[14]    g_psyDeclare;      // 他正在「声称精神病患者 → 点头像选人」的阶段
+// 【精神病患者（84）· 处决猜拳】（用户 2026-11-03）：被提名处决时先猜石头剪刀布；
+//   只有精神病患者输了才真正处决，赢或平局都「无事发生」。
+bool        g_rpsOn;           // 正在猜拳
+int         g_rpsQ;            // 精神病患者所在座位
+int         g_rpsOpp;          // 对手座位（0 = 说书人；自己提名自己时由说书人来猜）
+int         g_rpsStage;        // 0 = 等精神病患者，1 = 等对手
+int         g_rpsPsyPick;      // 1 石头 / 2 剪刀 / 3 布
+int         g_rpsOppPick;
+int         g_rpsSec;          // 超时兜底（0.5 秒一拍）
+int         g_rpsDlg;
+int         g_rpsTitle;
+int         g_rpsRock;
+int         g_rpsScissors;
+int         g_rpsPaper;
 
 bool[14]    g_cultDeclDone;    // 今天已经声称过【异教领袖】了（每天一次；用户 2026-10-11，照造谣者/精神病患者的写法）
 
@@ -2168,6 +2182,13 @@ void   BOTC_AmnesiaRevealSeat (int seat, int roleIdx);
 void   BOTC_SetSeatRole (int ob, int seat, int roleIdx);
 void   BOTC_ExecMode ();
 void   BOTC_ExecToggleAt (int q);
+void   BOTC_ExecAfterRps (int q);               // 猜拳通过（或不需要猜拳）之后的处决结算
+void   BOTC_PsyRpsSync ();                      // 精神病患者（84）：给真身是精神病患者的座位补上「需要猜拳」token
+void   BOTC_PsyRpsClear ();                     // 换局 / 取消开局：清掉猜拳面板与状态
+void   BOTC_PsyRpsStart (int q);                // 精神病患者被处决：开始猜拳
+void   BOTC_PsyRpsAdvance ();                   // 进入下一阶段 / 结算
+void   BOTC_PsyRpsChoose (int p, int pick);     // 猜拳参与人点石头 / 剪刀 / 布
+void   BOTC_BuildPsyRps ();                     // 石头剪刀布选择框
 void   BOTC_DeadMode ();
 void   BOTC_DeadToggleAt (int q);
 void   BOTC_DeathToggle (int q, int kind, int byDemon);
@@ -6695,6 +6716,19 @@ bool BOTC_ClickDo (bool testConds, bool runActions) {
             }
             return true;
         }
+        // 【精神病患者 · 处决猜拳】（用户 2026-11-03）：轮到谁，谁才点得动
+        if (c == g_rpsRock) {
+            BOTC_PsyRpsChoose(p, 1);
+            return true;
+        }
+        if (c == g_rpsScissors) {
+            BOTC_PsyRpsChoose(p, 2);
+            return true;
+        }
+        if (c == g_rpsPaper) {
+            BOTC_PsyRpsChoose(p, 3);
+            return true;
+        }
         // 【镇长请求】真人说书：是 / 否（说书人拍板）
         if (c == g_mayorYes) {
             if (p == g_teller) {
@@ -7352,6 +7386,19 @@ bool BOTC_ClickDo (bool testConds, bool runActions) {
         if (p == g_teller) {
             BOTC_HagAskAnswer(0);
         }
+        return true;
+    }
+    // 【精神病患者 · 处决猜拳】（用户 2026-11-03）
+    if (c == g_rpsRock) {
+        BOTC_PsyRpsChoose(p, 1);
+        return true;
+    }
+    if (c == g_rpsScissors) {
+        BOTC_PsyRpsChoose(p, 2);
+        return true;
+    }
+    if (c == g_rpsPaper) {
+        BOTC_PsyRpsChoose(p, 3);
         return true;
     }
     // 【镇长请求】真人说书：是 / 否（说书人拍板）
@@ -11721,6 +11768,7 @@ void BOTC_ResetGameVars () {
     for (i = 0; i <= 13; i += 1) {
         g_seatFirstNight[i] = 1;
     }
+    BOTC_PsyRpsClear();          // 新局 / 取消开局：猜拳状态和面板一起清掉
     BOTC_AutoWakeReset();
 }
 
@@ -17423,6 +17471,9 @@ g_tokName[119] = "即将被处决（军团）"; g_tokShort[119] = "即将被处�
     g_tokName[177] = "获得能力（失忆者）";      g_tokShort[177] = "获得能力"; g_tokIcon[177] = "botc_tk73.dds"; g_tokRole[177] = 73;
     // 【食人族（74）】处决邪恶角色后自动中毒，持续到下一次有人死于处决。
     g_tokName[178] = "中毒（食人族）";          g_tokShort[178] = "中毒";     g_tokIcon[178] = "botc_tk74.dds"; g_tokRole[178] = 74;
+    // 【精神病患者（84）】（用户 2026-11-03）：默认打在场上真身是精神病患者的座位上；
+    //   被提名处决时先猜石头剪刀布，没有输就处决无事发生。
+    g_tokName[179] = "需要猜拳（精神病患者）";   g_tokShort[179] = "需要猜拳"; g_tokIcon[179] = "botc_tk84.dds"; g_tokRole[179] = 84;
     g_tokName[148] = "活尸（赶尸人）";        g_tokShort[148] = "活尸";        g_tokIcon[148] = "botc_tk126.dds"; g_tokRole[148] = 126;
     g_tokName[149] = "第一天（利维坦）";      g_tokShort[149] = "第一天";      g_tokIcon[149] = "botc_tk127.dds"; g_tokRole[149] = 127;
     g_tokName[150] = "第二天（利维坦）";      g_tokShort[150] = "第二天";      g_tokIcon[150] = "botc_tk127.dds"; g_tokRole[150] = 127;
@@ -20434,8 +20485,15 @@ void BOTC_PickOpen (int ob, int who) {
                 return;
             }
             if (who == q) {
-                BOTC_Notice(ob, "不能修改自己的角色标记。");
-                return;
+                // 【老玩家 / 全员追忆不受限制】（用户 2026-11-03）：场数不足 10 场的玩家仍不能改自己的角色标记；
+                //   满 10 场的老玩家放行；全员追忆（板子 13）所有玩家都可以改自己的标记。
+                if (g_board != 13) {
+                    BOTC_BankInit();
+                    if (BOTC_StatsOwnGet(g_bank[ob], "t") < 10) {
+                        BOTC_Notice(ob, "不能修改自己的角色标记。");
+                        return;
+                    }
+                }
             }
         }
     }
@@ -22045,6 +22103,19 @@ void BOTC_SetSeatRole (int ob, int seat, int roleIdx) {
         BOTC_DamselDealInfo();
         BOTC_PmStore(g_teller, "【落难少女】" + BOTC_NameStr(seat) + " 成为落难少女 → 已通知所有爪牙「落难少女在场」。");
     }
+    // 【精神病患者（84）中途入场 / 离场】（用户 2026-11-03）：游戏途中变成精神病患者 → 补上「需要猜拳」token；
+    //   换走精神病患者的身份 → 那枚 token 一起收掉。
+    if (ob == g_teller && g_started && seat >= 2 && seat <= 13 && oldR != roleIdx) {
+        if (roleIdx == 84) {
+            g_tokOn[(((g_teller * 14) + seat) * 256) + 179] = true;
+        }
+        else {
+            if (oldR == 84) {
+                g_tokOn[(((g_teller * 14) + seat) * 256) + 179] = false;
+            }
+        }
+        BOTC_GrimRender(g_teller);
+    }
     // 【利维坦（127）】游戏中途成为利维坦：不在这里公开，只按当前天数打 token；进入下一个白天再播报。
     if (ob == g_teller && g_started && seat >= 2 && seat <= 13) {
         if (oldR == 127 && roleIdx != 127) {
@@ -22278,6 +22349,23 @@ void BOTC_ExecToggleAt (int q) {
     g_exec[q] = true;
     g_execUsedToday = true;
     g_execByCorpse = false;
+    // 【精神病患者（84）· 处决猜拳】（用户 2026-11-03）：被提名处决时先猜石头剪刀布；
+    //   中毒 / 醉酒、没有提名者或身上没有「需要猜拳」token 时直接处决。
+    if (BOTC_SeatTrueRole(q) == 84 && BOTC_AbilityWorks(q, 84) && !BOTC_SeatImpaired(q) &&
+        g_tokOn[(((g_teller * 14) + q) * 256) + 179] &&
+        g_nomFromOf[q] >= 2 && g_nomFromOf[q] <= 13) {
+        BOTC_PsyRpsStart(q);
+        return;
+    }
+    BOTC_ExecAfterRps(q);
+}
+
+// 猜拳通过（或不需要猜拳）之后的处决结算：原来直接接在处决按钮后的那一段。
+void BOTC_ExecAfterRps (int q) {
+    int ob;
+    int other;
+    int twA;
+    int twB;
     // 相克：维齐尔正在照看小怪宝时，处决不会被白天免死挡下。
     if (g_lmOn && g_lmSeat == q) {
         g_tokOn[(((g_teller * 14) + q) * 256) + 166] = false;
@@ -22430,6 +22518,235 @@ void BOTC_ExecToggleAt (int q) {
     if (g_phase != 0) {
         BOTC_NomCloseEx(false);
     }
+}
+
+//--------------------------------------------------------------------------------------------------
+// 【精神病患者（84）· 处决猜拳】（用户 2026-11-03）
+//   精神病患者被提名处决时先猜石头剪刀布：精神病患者先选，提名者（自己提名自己时改由说书人）再选。
+//   两次选择都单独私聊告诉说书人，公聊依次提示谁该猜、最后公布双方选择和结果。
+//   精神病患者没有输（赢或平局）→ 处决无事发生；输了 → 走正常处决死亡。
+//   中毒 / 醉酒、没有提名者、身上没有「需要猜拳」token 时没有猜拳环节。
+//--------------------------------------------------------------------------------------------------
+string BOTC_RpsPickStr (int k) {
+    if (k == 1) {
+        return "石头";
+    }
+    if (k == 2) {
+        return "剪刀";
+    }
+    return "布";
+}
+
+void BOTC_PsyRpsShowFor (int who, string hint) {
+    DialogControlSetVisible(g_rpsRock, PlayerGroupAll(), false);
+    DialogControlSetVisible(g_rpsScissors, PlayerGroupAll(), false);
+    DialogControlSetVisible(g_rpsPaper, PlayerGroupAll(), false);
+    DialogSetVisible(g_rpsDlg, PlayerGroupAll(), false);
+    if (who < 1 || who > 13) {
+        return;
+    }
+    libNtve_gf_SetDialogItemText(g_rpsTitle, BOTC_PlayerNameText(who) + StringToText(hint), PlayerGroupSingle(who));
+    DialogControlSetVisible(g_rpsRock, PlayerGroupSingle(who), true);
+    DialogControlSetVisible(g_rpsScissors, PlayerGroupSingle(who), true);
+    DialogControlSetVisible(g_rpsPaper, PlayerGroupSingle(who), true);
+    DialogSetVisible(g_rpsDlg, PlayerGroupSingle(who), true);
+}
+
+// 发牌 / 中途变成精神病患者时：把「需要猜拳」token 打到真身是精神病患者的座位上。
+void BOTC_PsyRpsSync () {
+    int i;
+    for (i = 2; i <= 13; i += 1) {
+        if (BOTC_SeatTrueRole(i) == 84) {
+            g_tokOn[(((g_teller * 14) + i) * 256) + 179] = true;
+        }
+    }
+    BOTC_GrimRender(g_teller);
+}
+
+void BOTC_PsyRpsClear () {
+    g_rpsOn = false;
+    g_rpsQ = 0;
+    g_rpsOpp = 0;
+    g_rpsStage = 0;
+    g_rpsPsyPick = 0;
+    g_rpsOppPick = 0;
+    g_rpsSec = 0;
+    if (g_rpsDlg > 0) {
+        DialogSetVisible(g_rpsDlg, PlayerGroupAll(), false);
+    }
+}
+
+void BOTC_PsyRpsStart (int q) {
+    int nom;
+    if (q < 2 || q > 13) {
+        BOTC_ExecAfterRps(q);
+        return;
+    }
+    nom = g_nomFromOf[q];
+    if (nom < 2 || nom > 13) {
+        BOTC_ExecAfterRps(q);
+        return;
+    }
+    g_rpsOn = true;
+    g_rpsQ = q;
+    g_rpsStage = 0;
+    g_rpsPsyPick = 0;
+    g_rpsOppPick = 0;
+    g_rpsSec = 60;
+    if (nom == q) {
+        g_rpsOpp = 0;              // 自己提名自己 → 对手是说书人
+    }
+    else {
+        g_rpsOpp = nom;
+    }
+    // 提名阶段先收掉，避免猜拳期间别人继续提名。
+    if (g_phase != 0) {
+        BOTC_NomCloseEx(false);
+    }
+    BOTC_PubAnnounce("【精神病患者】" + BOTC_NameStr(q) + " 被处决，需要进行猜拳。请" + BOTC_NameStr(q) + "选择石头、剪刀或布。");
+    BOTC_PmStore(g_teller, "【精神病患者猜拳】" + BOTC_NameStr(q) + " 被处决，开始猜拳；等他的选择。");
+    BOTC_PsyRpsShowFor(g_who[q], "：请选择石头、剪刀或布");
+}
+
+void BOTC_PsyRpsAdvance () {
+    int oppPhys;
+    int res;
+    int q;
+    string oppName;
+    string psyStr;
+    string oppStr;
+    string resStr;
+    if (!g_rpsOn) {
+        return;
+    }
+    if (g_rpsStage == 0) {
+        if (g_rpsPsyPick <= 0) {
+            return;
+        }
+        psyStr = BOTC_RpsPickStr(g_rpsPsyPick);
+        BOTC_PmStore(g_teller, "【精神病患者猜拳】" + BOTC_NameStr(g_rpsQ) + " 选择了" + psyStr + "。");
+        oppPhys = g_teller;
+        oppName = "说书人";
+        if (g_rpsOpp >= 2 && g_rpsOpp <= 13) {
+            oppName = BOTC_NameStr(g_rpsOpp);
+            oppPhys = g_who[g_rpsOpp];
+            if (oppPhys < 1) {
+                oppPhys = g_teller;
+            }
+        }
+        BOTC_PubAnnounce("【精神病患者】" + BOTC_NameStr(g_rpsQ) + " 已做出选择。请" + oppName + "选择石头、剪刀或布。");
+        g_rpsStage = 1;
+        g_rpsSec = 60;
+        BOTC_PsyRpsShowFor(oppPhys, "：请选择石头、剪刀或布");
+        return;
+    }
+    if (g_rpsOppPick <= 0) {
+        return;
+    }
+    q = g_rpsQ;
+    psyStr = BOTC_RpsPickStr(g_rpsPsyPick);
+    oppStr = BOTC_RpsPickStr(g_rpsOppPick);
+    oppName = "说书人";
+    if (g_rpsOpp >= 2 && g_rpsOpp <= 13) {
+        oppName = BOTC_NameStr(g_rpsOpp);
+    }
+    // 1 石头 / 2 剪刀 / 3 布：0 = 精神病患者输，1 = 平局，2 = 精神病患者赢
+    res = 0;
+    if (g_rpsPsyPick == g_rpsOppPick) {
+        res = 1;
+    }
+    else {
+        if (g_rpsPsyPick == 1 && g_rpsOppPick == 2) {
+            res = 2;
+        }
+        else {
+            if (g_rpsPsyPick == 2 && g_rpsOppPick == 3) {
+                res = 2;
+            }
+            else {
+                if (g_rpsPsyPick == 3 && g_rpsOppPick == 1) {
+                    res = 2;
+                }
+            }
+        }
+    }
+    resStr = "【精神病患者】落败";
+    if (res == 2) {
+        resStr = "【精神病患者】胜出";
+    }
+    else {
+        if (res == 1) {
+            resStr = "平局";
+        }
+    }
+    BOTC_PmStore(g_teller, "【精神病患者猜拳】" + oppName + " 选择了" + oppStr + "。");
+    BOTC_PubAnnounce("【猜拳】" + BOTC_NameStr(q) + " 选择了" + psyStr + "，" + oppName + " 选择了" + oppStr + " → " + resStr + "。");
+    BOTC_PsyRpsClear();
+    if (res == 0) {
+        BOTC_PmStore(g_teller, "【精神病患者猜拳】" + BOTC_NameStr(q) + " 落败 → 进入正常处决。");
+        BOTC_ExecAfterRps(q);
+        return;
+    }
+    // 赢或平局：处决无事发生。
+    BOTC_PubAnnounce("【处决】" + BOTC_NameStr(q) + " 被处决了，但并没有死亡（猜拳未输）。");
+    BOTC_PeriodRecord("---- " + BOTC_PeriodStr() + "：" + BOTC_NameStr(q) + " 被处决（猜拳未输，未死亡）----");
+    BOTC_PmStore(g_teller, "【精神病患者猜拳】" + BOTC_NameStr(q) + " 没有输（" + resStr + "），处决无事发生。");
+    BOTC_GrimRender(g_teller);
+    if (g_phase != 0) {
+        BOTC_NomCloseEx(false);
+    }
+}
+
+void BOTC_PsyRpsChoose (int p, int pick) {
+    int want;
+    if (!g_rpsOn) {
+        return;
+    }
+    if (pick < 1 || pick > 3) {
+        return;
+    }
+    if (g_rpsStage == 0) {
+        if (g_rpsPsyPick != 0) {
+            return;
+        }
+        want = g_who[g_rpsQ];
+        if (p != want) {
+            return;
+        }
+        g_rpsPsyPick = pick;
+        BOTC_PsyRpsAdvance();
+        return;
+    }
+    want = g_teller;
+    if (g_rpsOpp >= 2 && g_rpsOpp <= 13) {
+        want = g_who[g_rpsOpp];
+        if (want < 1) {
+            want = g_teller;
+        }
+    }
+    if (p != want) {
+        return;
+    }
+    if (g_rpsOppPick != 0) {
+        return;
+    }
+    g_rpsOppPick = pick;
+    BOTC_PsyRpsAdvance();
+}
+
+void BOTC_BuildPsyRps () {
+    DialogCreate(684, 153, c_anchorRight, 185, -70, false);
+    g_rpsDlg = DialogLastCreated();
+    DialogSetVisible(g_rpsDlg, PlayerGroupAll(), false);
+    g_rpsTitle = BOTC_NewLabel(g_rpsDlg, 666, 44, 18, 13, StringToText("猜拳：选择石头、剪刀或布"));
+    libNtve_gf_SetDialogItemStyle(g_rpsTitle, g_nomBigStyle, PlayerGroupAll());
+    libNtve_gf_SetDialogItemAcceptMouse(g_rpsTitle, false, PlayerGroupAll());
+    g_rpsRock = BOTC_NewButton(g_rpsDlg, 200, 50, 27, 81, "石头");
+    g_rpsScissors = BOTC_NewButton(g_rpsDlg, 200, 50, 235, 81, "剪刀");
+    g_rpsPaper = BOTC_NewButton(g_rpsDlg, 200, 50, 443, 81, "布");
+    DialogControlSetVisible(g_rpsRock, PlayerGroupAll(), false);
+    DialogControlSetVisible(g_rpsScissors, PlayerGroupAll(), false);
+    DialogControlSetVisible(g_rpsPaper, PlayerGroupAll(), false);
 }
 
 // 说书人按【死亡标记】：进入 / 退出「点座位标死亡」模式
@@ -49625,6 +49942,29 @@ bool BOTC_RoleRecurringInfo (int r) {
     return false;
 }
 
+// 【解谜大师（109）· 醉酒目标的优先级】（用户 2026-11-03）：
+//   0 = 首夜信息位（g_roleAct == 5）
+//   1 = 夜间或白天能发动技能的角色（g_roleAct 1 / 2 / 3，另外 6 = 条件性也算）
+//   2 = 持续信息位（BOTC_RoleRecurringInfo，即使它同时是每夜行动位）
+//   3 = 其余（兜底）
+int BOTC_DrunkTargetTier (int q) {
+    int r;
+    r = BOTC_SeatTrueRole(q);
+    if (r < 0 || r > 154) {
+        return 3;
+    }
+    if (g_roleAct[r] == 5) {
+        return 0;                                      // 首夜信息位优先
+    }
+    if (BOTC_RoleRecurringInfo(r)) {
+        return 2;                                      // 持续信息位排在主动技能之后
+    }
+    if (g_roleAct[r] == 1 || g_roleAct[r] == 2 || g_roleAct[r] == 3 || g_roleAct[r] == 6) {
+        return 1;                                      // 夜间 / 白天能发动技能
+    }
+    return 3;
+}
+
 // 【随机发牌的座位优先序】（用户 2026-11-03）：
 //   恶魔位优先给总场数 > 20 的玩家，爪牙位优先给 > 10 的玩家；上一场已经扮演邪恶的玩家尽量换边。
 //   军团（94）没有单独的恶魔位，卡扎力（135）的爪牙位会被换成善良角色，这两种情况跳过对应偏好；
@@ -49783,6 +50123,7 @@ void BOTC_Deal () {
     int modOut;                    // 【外来者极端数量】有配置阶段改数量的角色
     int infCount;                  // 【持续信息角色】本局已选到的个数
     int infTarget;                 // 【持续信息角色】目标个数
+    int tier;                      // 【解谜大师醉酒】目标优先级档位（用户 2026-11-03）
     int slot;
     int goodN;
     int goodSeatN;
@@ -49834,9 +50175,19 @@ void BOTC_Deal () {
         g_gfPlus = (RandomInt(1, 2) == 1);
         g_gfPlusSeeded = true;
     }
-    // 【村夫（105）】（用户 2026-10-10）：剧本卡 [+0~2 村夫] —— 每局摇一次骰子
+    // 【村夫（105）】（用户 2026-10-10 / 2026-11-03）：剧本卡 [+0~2 村夫] —— 每局摇一次骰子。
+    //   用户 2026-11-03：尽量不要同时出现 3 名村夫 → 1 名 40% / 2 名 40% / 3 名 20%。
     if (g_villRollSeeded == false) {
-        g_villRoll = RandomInt(0, 2);
+        k = RandomInt(1, 100);
+        if (k <= 40) {
+            g_villRoll = 0;                    // 本局 1 名村夫
+        }
+        else if (k <= 80) {
+            g_villRoll = 1;                    // 本局 2 名村夫
+        }
+        else {
+            g_villRoll = 2;                    // 本局 3 名村夫（小概率）
+        }
         g_villRollSeeded = true;
     }
     // 先按在场人数把圆桌摆好，顺便算出参与座位表（空位不会被算进来）
@@ -50662,20 +51013,29 @@ void BOTC_Deal () {
         }
     }
     if (BOTC_RoleInPlay(109)) {
-        n = 0;
-        for (i = 2; i <= 13; i += 1) {
-            if (!g_seatOn[i]) { continue; }
-            if (BOTC_SeatTeam(i) != 0) { continue; }
-            n = n + 1;
-        }
+        // 【醉酒目标按优先级挑】（用户 2026-11-03）：首夜信息位 → 夜间 / 白天能发动技能 →
+        //   持续信息位 → 其余善良玩家兜底；每一档内部仍然随机。
         pick = 0;
-        if (n > 0) {
-            k = RandomInt(1, n);
+        for (tier = 0; tier <= 3; tier += 1) {
+            n = 0;
             for (i = 2; i <= 13; i += 1) {
                 if (!g_seatOn[i]) { continue; }
                 if (BOTC_SeatTeam(i) != 0) { continue; }
-                k = k - 1;
-                if (k <= 0) { pick = i; break; }
+                if (BOTC_DrunkTargetTier(i) != tier) { continue; }
+                n = n + 1;
+            }
+            if (n > 0) {
+                k = RandomInt(1, n);
+                for (i = 2; i <= 13; i += 1) {
+                    if (!g_seatOn[i]) { continue; }
+                    if (BOTC_SeatTeam(i) != 0) { continue; }
+                    if (BOTC_DrunkTargetTier(i) != tier) { continue; }
+                    k = k - 1;
+                    if (k <= 0) { pick = i; break; }
+                }
+            }
+            if (pick >= 2) {
+                break;                         // 这一档已经选到，不再往下一档降级
             }
         }
         if (pick >= 2) {
@@ -50744,6 +51104,9 @@ void BOTC_ConfirmDeal () {
         }
         BOTC_GrimRender(ob);
     }
+    // 【精神病患者（84）的猜拳标记】（用户 2026-11-03）：发牌后默认打在场上精神病患者身上。
+    //   必须在上面按玩家清 token 之后调用，避免被那一轮清空覆盖。
+    BOTC_PsyRpsSync();
     // 身份发下去之后，邪恶角色那边才会出现【伪装身份】按钮
     BOTC_ClaimBtnRender();
     BOTC_FoolSync();               // 弄臣（34）：发完牌就先把「首次未死」标记打上（用户 2026-09-20）
@@ -53200,6 +53563,25 @@ bool BOTC_Tick_Func (bool testConds, bool runActions) {
             BOTC_SlayAnswer(0);
         }
     }
+    // 【精神病患者 · 猜拳 30 秒兜底】（用户 2026-11-03）：轮到的人一直不选就按【石头】自动继续，
+    //   避免整局卡在猜拳里。
+    if (g_rpsOn && g_rpsSec > 0) {
+        g_rpsSec = g_rpsSec - 1;
+        if (g_rpsSec <= 0) {
+            if (g_rpsStage == 0) {
+                if (g_rpsPsyPick == 0) {
+                    g_rpsPsyPick = 1;
+                    BOTC_PsyRpsAdvance();
+                }
+            }
+            else {
+                if (g_rpsOppPick == 0) {
+                    g_rpsOppPick = 1;
+                    BOTC_PsyRpsAdvance();
+                }
+            }
+        }
+    }
     // 【发起提名 · 10 秒不选人自动取消 / 5 秒冷却】（用户 2026-11-02）
     if (g_phase == 2 && g_nomPickBy >= 1 && g_nomPickBy <= 13) {
         if (g_nomPickSec[g_nomPickBy] > 0) {
@@ -53757,6 +54139,7 @@ void BOTC_Init () {
     BOTC_BuildSlayAsk();
     BOTC_BuildLevRecluse();     // 【利维坦×陌客】说书人判定框（用户 2026-11-02）
     BOTC_BuildHagAsk();         // 【麻脸巫婆】跨阵营改造二次确认框（用户 2026-11-03）
+    BOTC_BuildPsyRps();         // 【精神病患者】处决猜拳：石头 / 剪刀 / 布（用户 2026-11-03）
     BOTC_BuildShugenja();       // 【修行者（114）】说书人两选一面板（用户 2026-10-16）
     BOTC_BuildGambleDecide();   // 【赌徒】说书人「死亡 / 存活」面板（用户 2026-11-01）
     BOTC_BuildMayorAsk();
