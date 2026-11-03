@@ -16617,6 +16617,9 @@ g_boardRole[(12 * 256) + 22] = 111;
         if (i == 113 || i == 115 || i == 116 || i == 117 || i == 118 || i == 119 || i == 121 || i == 123 || i == 124 || i == 126) {
             continue;
         }
+        if (g_roleTeam[i] == 4 || g_roleTeam[i] == 5) {
+            continue;                 // 传奇 / 奇遇不是玩家游玩角色，只走 g_boardLegacy（用户 2026-11-03）
+        }
         g_boardRole[(13 * 256) + g_boardRoleN[13]] = i;
         g_boardRoleN[13] = g_boardRoleN[13] + 1;
     }
@@ -49172,8 +49175,8 @@ int BOTC_BiasRoleTier (int r) {
 }
 
 // mode 0 = 只从本局还没用过的角色里选（酒鬼的额外身份牌）
-// mode 1 = 只从本局不在场的角色里选（提线木偶的假身份第一轮）
-// mode 2 = 镇民里任选（提线木偶的假身份兜底）
+// mode 1 = 只从本局不在场的角色里选（提线木偶的假身份）
+//   认知偏差身份不得与在场角色重复（用户 2026-11-03），因此不再提供「允许重复」模式。
 int BOTC_BiasRolePick (int mode, int self) {
     int i;
     int r;
@@ -49263,12 +49266,41 @@ int BOTC_BiasRolePick (int mode, int self) {
 }
 
 int BOTC_MarionetteFakeRole (int self) {
+    int i;
+    int r;
+    int n;
+    int team;
     int pick;
     pick = BOTC_BiasRolePick(1, self);                 // 先找本局不在场的镇民
     if (pick >= 0) {
         return pick;
     }
-    return BOTC_BiasRolePick(2, self);                 // 兜底：允许重复在场身份
+    // 【认知偏差不与在场角色重复】（用户 2026-11-03）：镇民都已在场时放宽到外来者，
+    //   但依然只从「本局不在场」的角色里选；实在找不到就返回 -1，由说书人手选。
+    for (team = 0; team <= 1; team += 1) {
+        n = 0;
+        pick = -1;
+        for (i = 0; i < g_boardRoleN[g_board]; i += 1) {
+            r = g_boardRole[(g_board * 256) + i];
+            if (r < 0 || r > 154 || r == self) {
+                continue;
+            }
+            if (BOTC_RoleTeam(r) != team) {
+                continue;
+            }
+            if (BOTC_RoleInPlay(r)) {
+                continue;
+            }
+            n = n + 1;
+            if (RandomInt(1, n) == 1) {
+                pick = r;
+            }
+        }
+        if (pick >= 0) {
+            return pick;
+        }
+    }
+    return -1;
 }
 
 bool BOTC_MarionetteCanSwap (int q) {
@@ -50159,7 +50191,33 @@ void BOTC_Deal () {
             g_scrUsed[pick] = true;
         }
         else {
-            g_scrRole[tc] = BOTC_PickUnused(0, 12);
+            // 【认知偏差不与在场角色重复】（用户 2026-11-03）：从板子里挑一张本局还没用过的镇民，
+            //   不能再退回「随机 0..12」而抽到已经在场的身份。
+            candN = 0;
+            pick = -1;
+            for (i = 0; i < g_boardRoleN[g_board]; i += 1) {
+                r = g_boardRole[(g_board * 256) + i];
+                if (r < 0 || r > 154) {
+                    continue;
+                }
+                if (BOTC_RoleTeam(r) != 0) {
+                    continue;
+                }
+                if (g_scrUsed[r]) {
+                    continue;
+                }
+                candN = candN + 1;
+                if (RandomInt(1, candN) == 1) {
+                    pick = r;
+                }
+            }
+            if (pick >= 0) {
+                g_scrRole[tc] = pick;
+                g_scrUsed[pick] = true;
+            }
+            else {
+                g_scrRole[tc] = 0;
+            }
         }
         if (g_scrRole[tc] == 118 || g_scrRole[tc] < 0) {
             g_scrRole[tc] = 0;                         // 认知覆盖互斥：兜底洗衣妇
