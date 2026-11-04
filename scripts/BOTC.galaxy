@@ -1716,10 +1716,22 @@ bool[14]    g_bluffGot;        // 【不在场身份面板「谁收到过」】�
 int[14]     g_pickMode;
 int[14]     g_pickBluffSlot;
 int         g_bluffSendAllBtn;
+// 【首夜不在场身份弹窗】（用户 2026-11-04）：恶魔 / 疯子 / 告密者在场时的爪牙依次收 3 个不在场善良角色
+int         g_bluffAskDlg;
+int         g_bluffAskTitle;
+int         g_bluffAskHint;
+int[4]      g_bluffAskBtn;
+int         g_bluffAskRollBtn;
+int         g_bluffAskSendBtn;
+int         g_bluffAskCancelBtn;
+bool        g_bluffAskOn;
+int[14]     g_bluffAskQ;          // 收件人队列：0 = 全场所有恶魔，2..13 = 单个座位
+int         g_bluffAskQi;
+int         g_bluffAskQn;
 int[155]     g_avail;
 int         g_availN;
-// 给恶魔抽 3 个伪装身份时用的两个候选池：
-//   A = 受限（首夜信息位 + 外来者，最多只出 1 个）、B = 其余镇民
+// 给恶魔 / 疯子 / 告密者抽 3 个不在场身份时的候选池：
+//   A = 候选角色（1 基索引，0 = 已取走）；B = 对应优先级（0 持续信息位、1 主动能力、2 首夜信息 / 不唤醒、3 外来者兜底）
 int[155]     g_bfA;
 int[155]     g_bfB;
 
@@ -2006,6 +2018,14 @@ void   BOTC_SpecBluffSeatAsk ();              // 发送不在场身份：3 个�
 void   BOTC_SpecBluffSeatShow ();             // 发送不在场身份：收件人已选好，显示【发送】
 void   BOTC_SpecBluffSeatPick (int q);        // 发送不在场身份：点座位 = 收件人
 void   BOTC_SpecBluffSend ();                 // 发送不在场身份：真正发送
+void   BOTC_SpecBluffRoll ();                 // 发送不在场身份：随机填充 3 个不在场身份
+void   BOTC_BuildBluffAsk ();                 // 首夜不在场身份弹窗
+void   BOTC_BluffAskStart ();                 // 首夜恶魔信息之后：构造收件人队列并弹窗
+void   BOTC_BluffAskRender ();                // 刷新首夜不在场身份弹窗
+void   BOTC_BluffAskRoll ();                  // 随机填充 3 个不在场身份
+void   BOTC_BluffAskSend ();                  // 发给当前收件人
+void   BOTC_BluffAskCancel ();                // 取消整个弹窗
+void   BOTC_BluffAskPick (int slot);          // 手动选第 slot 个角色
 void   BOTC_RecogOpen (int q);                // 打开手动互认输入面板
 void   BOTC_RecogClose ();                    // 关闭手动互认输入面板
 void   BOTC_RecogSend ();                     // 发送手动填写的互认信息
@@ -6943,7 +6963,13 @@ bool BOTC_ClickDo (bool testConds, bool runActions) {
         }
         if (c == g_specInfoClear) {
             if (p == g_teller) {
-                BOTC_SpecSeatClear();
+                // 【发送不在场身份】（用户 2026-11-04）：模式 6 / 8 的这颗键改成【随机 3 个】
+                if (g_specMode == 6 || g_specMode == 8) {
+                    BOTC_SpecBluffRoll();
+                }
+                else {
+                    BOTC_SpecSeatClear();
+                }
             }
             return true;
         }
@@ -6958,6 +6984,33 @@ bool BOTC_ClickDo (bool testConds, bool runActions) {
                 BOTC_SpecClose();
             }
             return true;
+        }
+        // 【首夜不在场身份弹窗】（用户 2026-11-04）：随机 / 发送 / 取消 / 手动选角色
+        if (c == g_bluffAskRollBtn) {
+            if (p == g_teller) {
+                BOTC_BluffAskRoll();
+            }
+            return true;
+        }
+        if (c == g_bluffAskSendBtn) {
+            if (p == g_teller) {
+                BOTC_BluffAskSend();
+            }
+            return true;
+        }
+        if (c == g_bluffAskCancelBtn) {
+            if (p == g_teller) {
+                BOTC_BluffAskCancel();
+            }
+            return true;
+        }
+        for (q = 0; q < 3; q += 1) {
+            if (c == g_bluffAskBtn[q]) {
+                if (p == g_teller) {
+                    BOTC_BluffAskPick(q);
+                }
+                return true;
+            }
         }
         // 【异教领袖（106）· 教派投票】（用户 2026-10-10）：全员 20 秒投票 / 弃权
         if (c == g_cultYes) {
@@ -19930,6 +19983,7 @@ void BOTC_SpecSeatShow (int q) {
     }
     DialogControlSetVisible(g_specInfoClear, PlayerGroupAll(), true);
     DialogControlSetVisible(g_specInfoOk, PlayerGroupAll(), true);
+    libNtve_gf_SetDialogItemText(g_specInfoClear, StringToText("清空全部"), PlayerGroupAll());
     libNtve_gf_SetDialogItemText(g_specInfoOk, StringToText("发送给他"), PlayerGroupAll());
     libNtve_gf_SetDialogItemText(g_specTitle, BOTC_NameSubstText(StringToText("玩家号 + 身份：发给 " + BOTC_NameStr(q))), PlayerGroupAll());
     libNtve_gf_SetDialogItemText(g_specHint, StringToText("玩家号最多 6 个（1~12）；身份按钮可选 0~6 个。只填玩家号 → 发玩家号；1 个玩家号 + 1 个身份 → A是B；有多个结果 → 自动拼成列表。"), PlayerGroupAll());
@@ -19991,6 +20045,17 @@ void BOTC_SpecSeatSend () {
     // 【发送不在场身份】（用户 2026-11-04）：模式 8 的【发送】走自己的流程
     if (g_specMode == 8) {
         BOTC_SpecBluffSend();
+        return;
+    }
+    // 模式 6：3 个角色选满后点【发送】→ 进入选择收件人
+    if (g_specMode == 6) {
+        for (i = 0; i < 3; i += 1) {
+            if (g_specRoleSel[i] < 1 || g_specRoleSel[i] > 154) {
+                BOTC_Notice(g_teller, "请先选满 3 个不在场身份（可以点【随机 3 个】）。");
+                return;
+            }
+        }
+        BOTC_SpecBluffSeatAsk();
         return;
     }
     if (g_specTo < 2 || g_specTo > 13) {
@@ -20192,10 +20257,12 @@ void BOTC_SpecBluffRoleShow () {
     for (i = 3; i < 6; i += 1) {
         DialogControlSetVisible(g_specRoleBtn[i], PlayerGroupAll(), false);
     }
-    DialogControlSetVisible(g_specInfoClear, PlayerGroupAll(), false);
-    DialogControlSetVisible(g_specInfoOk, PlayerGroupAll(), false);
+    DialogControlSetVisible(g_specInfoClear, PlayerGroupAll(), true);
+    DialogControlSetVisible(g_specInfoOk, PlayerGroupAll(), true);
+    libNtve_gf_SetDialogItemText(g_specInfoClear, StringToText("随机 3 个"), PlayerGroupAll());
+    libNtve_gf_SetDialogItemText(g_specInfoOk, StringToText("发送"), PlayerGroupAll());
     libNtve_gf_SetDialogItemText(g_specTitle, StringToText("发送不在场身份（1 / 2：选择 3 个角色）"), PlayerGroupAll());
-    libNtve_gf_SetDialogItemText(g_specHint, StringToText("点下面 3 个身份按钮各选一个角色；选满 3 个后自动进入选择收件人。"), PlayerGroupAll());
+    libNtve_gf_SetDialogItemText(g_specHint, StringToText("点【随机 3 个】自动填充，或点下面 3 个身份按钮手动选择；点【发送】后进入选择收件人。"), PlayerGroupAll());
     libNtve_gf_SetDialogItemText(g_specClose, StringToText("取消"), PlayerGroupAll());
     BOTC_SpecSeatRender();
     DialogSetVisible(g_specDlg, PlayerGroupSingle(g_teller), true);
@@ -20237,11 +20304,12 @@ void BOTC_SpecBluffSeatShow () {
     for (i = 3; i < 6; i += 1) {
         DialogControlSetVisible(g_specRoleBtn[i], PlayerGroupAll(), false);
     }
-    DialogControlSetVisible(g_specInfoClear, PlayerGroupAll(), false);
+    DialogControlSetVisible(g_specInfoClear, PlayerGroupAll(), true);
     DialogControlSetVisible(g_specInfoOk, PlayerGroupAll(), true);
+    libNtve_gf_SetDialogItemText(g_specInfoClear, StringToText("随机 3 个"), PlayerGroupAll());
     libNtve_gf_SetDialogItemText(g_specInfoOk, StringToText("发送"), PlayerGroupAll());
     libNtve_gf_SetDialogItemText(g_specTitle, BOTC_NameSubstText(StringToText("发送不在场身份（2 / 2：发给 " + BOTC_NameStr(g_specTo) + "）")), PlayerGroupAll());
-    libNtve_gf_SetDialogItemText(g_specHint, StringToText("点【发送】把这 3 个不在场身份发给他；点【取消】不发送。"), PlayerGroupAll());
+    libNtve_gf_SetDialogItemText(g_specHint, StringToText("点【发送】把这 3 个不在场身份发给他；也可以点【随机 3 个】重抽；点【取消】不发送。"), PlayerGroupAll());
     libNtve_gf_SetDialogItemText(g_specClose, StringToText("取消"), PlayerGroupAll());
     BOTC_SpecSeatRender();
     DialogSetVisible(g_specDlg, PlayerGroupSingle(g_teller), true);
@@ -20253,6 +20321,16 @@ void BOTC_SpecBluffSeatPick (int q) {
     }
     g_specTo = q;
     BOTC_SpecBluffSeatShow();
+}
+
+// 【随机 3 个】（用户 2026-11-04）：规则与发给恶魔的随机不在场一致
+void BOTC_SpecBluffRoll () {
+    int i;
+    BOTC_BluffRoll();
+    for (i = 0; i < 3; i += 1) {
+        g_specRoleSel[i] = g_bluffPick[i];
+    }
+    BOTC_SpecSeatRender();
 }
 
 void BOTC_SpecBluffSend () {
@@ -22140,6 +22218,24 @@ void BOTC_PickChoose (int ob, int idx) {
         g_specMode = 3;
         BOTC_SpecSeatRender();
         DialogSetVisible(g_specDlg, PlayerGroupSingle(g_teller), true);
+        return;
+    }
+    // 【首夜不在场身份弹窗】（用户 2026-11-04）：模式 50 = 首夜弹窗的 3 个角色槽
+    if (g_pickMode[ob] == 50) {
+        DialogSetVisible(g_pickDlg, PlayerGroupSingle(ob), false);
+        libNtve_gf_SetDialogItemText(g_pickClear, StringToText("清除身份"), PlayerGroupSingle(ob));
+        g_pickMode[ob] = 0;
+        g_pickTeam = -1;
+        g_pickAlign = -1;
+        if (g_pickBluffSlot[ob] >= 0 && g_pickBluffSlot[ob] <= 2) {
+            if (idx >= 0) {
+                g_bluffPick[g_pickBluffSlot[ob]] = idx + 1;
+            }
+            else {
+                g_bluffPick[g_pickBluffSlot[ob]] = 0;
+            }
+        }
+        BOTC_BluffAskRender();
         return;
     }
     // 玩家 + 角色组合面板：身份网格只回填角色，不直接发动技能。
@@ -28142,6 +28238,10 @@ bool BOTC_PickModeRoleAllowed (int p, int r) {
     }
     if (mode == 35) {
         return (BOTC_RoleAlign(r) == 0 && r != 56 && r != 95);
+    }
+    // 【首夜不在场身份弹窗】（用户 2026-11-04）：只列不在场的镇民 / 外来者
+    if (mode == 50) {
+        return (BOTC_RoleTeam(r) <= 1 && !BOTC_RoleInPlay(r));
     }
     return true;
 }
@@ -37740,6 +37840,13 @@ void BOTC_AutoWakeReset () {
     g_nightCursorOrd = 0;
     g_evilStep = 0;
     g_lgPend = false;
+    // 【首夜不在场身份弹窗】（用户 2026-11-04）：换夜 / 重新开始时一并收掉
+    g_bluffAskOn = false;
+    g_bluffAskQi = 0;
+    g_bluffAskQn = 0;
+    if (g_bluffAskDlg > 0) {
+        DialogSetVisible(g_bluffAskDlg, PlayerGroupAll(), false);
+    }
 }
 
 // 【首夜固定信息是否应该让位给更早的角色行动】
@@ -38528,6 +38635,9 @@ bool BOTC_AutoWakeEvilStep () {
     else {
         BOTC_SendFirstNightDemonInfo();
     }
+    // 罂粟 / 军团 / 无恶魔时由 BOTC_BluffAskStart 内部自行判断；
+    // 告密者即使在罂粟场也要给爪牙补发不在场身份。
+    BOTC_BluffAskStart();
     if (!BOTC_LegionOn()) {
         BOTC_NotifyDemonsLunatic();
     }
@@ -52924,19 +53034,19 @@ void BOTC_BluffRoll () {
     int b;
     int r;
     int i;
+    int n;
+    int k;
+    int t;
     int idx;
-    int k;          // 这次要放几个「受限」身份（正常只有 0 或 1）
-    int nA;
-    int nB;
+    int best;
+    int bestTier;
     for (i = 0; i < 3; i += 1) {
         g_bluffPick[i] = 0;
     }
-    // 候选池：不在场的镇民 / 外来者（BOTC_RoleInPlay 里已经处理了酒鬼：魔典上是他
-    // 「以为自己是」的身份，酒鬼本身也不会被当成不在场身份），分成两堆
-    nA = 0;
-    nB = 0;
-    // 【按当前板子取】（用户 2026-09-20）：以前写死 0..16，黯月初升会抽到暗流涌动的身份 ----
-    //   现在从当前板子的角色清单里挑「不在场的镇民 / 外来者」，分成两堆。
+    // 【随机不在场身份的分层规则】（用户 2026-11-04）：
+    //   0 = 不在场的持续信息位（最优先）；1 = 夜间 / 白天有主动能力；
+    //   2 = 首夜信息位 / 夜间不唤醒 / 其余镇民；3 = 外来者（最后兜底，尽量少选）。
+    n = 0;
     b = g_board;
     if (b < 1 || b > 14) {
         b = 1;
@@ -52952,60 +53062,53 @@ void BOTC_BluffRoll () {
         if (BOTC_RoleInPlay(r)) {
             continue;
         }
-        if (BOTC_BluffRestricted(r)) {
-            g_bfA[nA] = r + 1;
-            nA = nA + 1;
+        if (BOTC_RoleTeam(r) == 1) {
+            t = 3;
         }
         else {
-            g_bfB[nB] = r + 1;
-            nB = nB + 1;
-        }
-    }
-    // 受限的那一个：两个池都够抽的时候像掷硬币（一半有、一半没有）；
-    //   普通池凑不满 3 个就补上（补到 3 个为止），实在不够才会出现两个以上受限的
-    k = 0;
-    if (nA > 0) {
-        if (nB >= 3) {
-            if (RandomInt(1, 2) == 1) {
-                k = 1;
-            }
-        }
-        else {
-            k = 3 - nB;
-            if (k > nA) {
-                k = nA;
-            }
-        }
-    }
-    for (i = 0; i < 3; i += 1) {
-        if (k > 0 && nA > 0) {
-            // 先抽那 1 个受限身份；抽完 k 归 0，后面的位子全走普通池
-            idx = RandomInt(0, nA - 1);
-            g_bluffPick[i] = g_bfA[idx];
-            nA = nA - 1;
-            g_bfA[idx] = g_bfA[nA];
-            k = k - 1;
-        }
-        else {
-            if (nB > 0) {
-                idx = RandomInt(0, nB - 1);
-                g_bluffPick[i] = g_bfB[idx];
-                nB = nB - 1;
-                g_bfB[idx] = g_bfB[nB];
+            if (BOTC_RoleRecurringInfo(r)) {
+                t = 0;
             }
             else {
-                if (nA > 0) {
-                    // 普通池抽干了（小局里镇民大多在场）：只能用受限身份补位
-                    idx = RandomInt(0, nA - 1);
-                    g_bluffPick[i] = g_bfA[idx];
-                    nA = nA - 1;
-                    g_bfA[idx] = g_bfA[nA];
+                if (g_roleAct[r] == 1 || g_roleAct[r] == 2 || g_roleAct[r] == 3 || g_roleAct[r] == 6) {
+                    t = 1;
                 }
                 else {
-                    g_bluffPick[i] = 0;
+                    t = 2;
                 }
             }
         }
+        g_bfA[n] = r + 1;
+        g_bfB[n] = t;
+        n = n + 1;
+    }
+    // 同一优先级内部随机：先整体洗牌，再按优先级从低到高取满 3 个
+    for (k = n - 1; k > 0; k -= 1) {
+        idx = RandomInt(0, k);
+        t = g_bfA[k];
+        g_bfA[k] = g_bfA[idx];
+        g_bfA[idx] = t;
+        t = g_bfB[k];
+        g_bfB[k] = g_bfB[idx];
+        g_bfB[idx] = t;
+    }
+    for (i = 0; i < 3; i += 1) {
+        best = -1;
+        bestTier = 9;
+        for (k = 0; k < n; k += 1) {
+            if (g_bfA[k] <= 0) {
+                continue;
+            }
+            if (g_bfB[k] < bestTier) {
+                bestTier = g_bfB[k];
+                best = k;
+            }
+        }
+        if (best < 0) {
+            break;
+        }
+        g_bluffPick[i] = g_bfA[best];
+        g_bfA[best] = 0;               // 取走，不再重复
     }
     BOTC_BluffRender();
 }
@@ -53757,6 +53860,191 @@ void BOTC_BuildBluff () {
         g_bluffOut[i] = 0;
     }
     BOTC_BluffRender();
+}
+
+//--------------------------------------------------------------------------------------------------
+// 【首夜不在场身份弹窗】（用户 2026-11-04）：爪牙互认（恶魔信息）时依次给说书人弹窗。
+//   队列顺序：全场恶魔 → 疯子（若有）→ 告密者在场时逐个真爪牙。
+//   每个收件人一份 3 个不在场身份，可【随机 3 个】/ 手动选 /【发送】/【取消】。
+//--------------------------------------------------------------------------------------------------
+void BOTC_BuildBluffAsk () {
+    int i;
+    int x;
+    DialogCreate(760, 300, c_anchorCenter, 0, -40, false);
+    g_bluffAskDlg = DialogLastCreated();
+    DialogSetVisible(g_bluffAskDlg, PlayerGroupAll(), false);
+    BOTC_FrameSilver(g_bluffAskDlg, 760, 300);
+    g_bluffAskTitle = BOTC_NewLabel(g_bluffAskDlg, 720, 30, 20, 10, StringToText("首夜不在场身份"));
+    libNtve_gf_SetDialogItemStyle(g_bluffAskTitle, "ModLeftSize20Bold", PlayerGroupAll());
+    libNtve_gf_SetDialogItemAcceptMouse(g_bluffAskTitle, false, PlayerGroupAll());
+    g_bluffAskHint = BOTC_NewLabel(g_bluffAskDlg, 720, 66, 20, 42, StringToText(""));
+    libNtve_gf_SetDialogItemStyle(g_bluffAskHint, "ModLeftSize16Bold", PlayerGroupAll());
+    libNtve_gf_SetDialogItemAcceptMouse(g_bluffAskHint, false, PlayerGroupAll());
+    for (i = 0; i < 3; i += 1) {
+        x = 20 + (i * 240);
+        g_bluffAskBtn[i] = BOTC_NewButton(g_bluffAskDlg, 230, 54, x, 112, "");
+        libNtve_gf_SetDialogItemStyle(g_bluffAskBtn[i], "ModLeftSize16Bold", PlayerGroupAll());
+    }
+    g_bluffAskRollBtn = BOTC_NewButton(g_bluffAskDlg, 200, 44, 40, 200, "随机 3 个");
+    g_bluffAskSendBtn = BOTC_NewButton(g_bluffAskDlg, 200, 44, 280, 200, "发送");
+    g_bluffAskCancelBtn = BOTC_NewButton(g_bluffAskDlg, 200, 44, 520, 200, "取消");
+    BOTC_BluffAskRender();
+}
+
+void BOTC_BluffAskStart () {
+    bool poppy;
+    int i;
+    int q;
+    g_bluffAskQn = 0;
+    g_bluffAskQi = 0;
+    if (g_nightNum != 1) {
+        return;
+    }
+    if (BOTC_LegionOn()) {
+        return;
+    }
+    poppy = BOTC_PoppyActive();
+    // 罂粟种植者会阻止恶魔与爪牙互认；告密者仍会让爪牙单独得知不在场身份
+    if (!poppy) {
+        // 1) 全场所有恶魔（0 = 收件人为恶魔整体）
+        if (BOTC_EvilSeatAt(1) >= 2) {
+            g_bluffAskQ[g_bluffAskQn] = 0;
+            g_bluffAskQn = g_bluffAskQn + 1;
+        }
+        // 2) 疯子（真疯子，哲学家假装的那个不算）
+        q = BOTC_RealLunaticSeat();
+        if (q >= 2 && q <= 13) {
+            g_bluffAskQ[g_bluffAskQn] = q;
+            g_bluffAskQn = g_bluffAskQn + 1;
+        }
+    }
+    // 3) 告密者在场：每个真爪牙各收一次（提线木偶不算；罂粟在场也生效）
+    if (BOTC_AbilityInPlay(92)) {
+        i = 2;
+        while (i <= 14) {
+            q = BOTC_EvilSeatAt(i);
+            if (q < 2 || q > 13) {
+                break;
+            }
+            if (g_bluffAskQn >= 14) {
+                break;
+            }
+            g_bluffAskQ[g_bluffAskQn] = q;
+            g_bluffAskQn = g_bluffAskQn + 1;
+            i = i + 1;
+        }
+    }
+    if (g_bluffAskQn <= 0) {
+        return;
+    }
+    for (i = 0; i < 3; i += 1) {
+        g_bluffPick[i] = 0;
+    }
+    g_bluffAskOn = true;
+    BOTC_BluffAskRender();
+}
+
+void BOTC_BluffAskRender () {
+    int i;
+    int q;
+    string s;
+    if (!g_bluffAskOn) {
+        DialogSetVisible(g_bluffAskDlg, PlayerGroupAll(), false);
+        return;
+    }
+    if (g_bluffAskQi < 0 || g_bluffAskQi >= g_bluffAskQn) {
+        g_bluffAskOn = false;
+        DialogSetVisible(g_bluffAskDlg, PlayerGroupAll(), false);
+        return;
+    }
+    q = g_bluffAskQ[g_bluffAskQi];
+    if (q == 0) {
+        s = "首夜不在场身份（发给全场所有恶魔）";
+    }
+    else {
+        s = "首夜不在场身份（发给 " + BOTC_NameStr(q) + "）";
+    }
+    libNtve_gf_SetDialogItemText(g_bluffAskTitle, StringToText(s), PlayerGroupSingle(g_teller));
+    libNtve_gf_SetDialogItemText(g_bluffAskHint, StringToText("点【随机 3 个】自动填充，或点身份格手动选；【发送】给当前收件人，【取消】改从发送特定信息手动发送。"), PlayerGroupSingle(g_teller));
+    for (i = 0; i < 3; i += 1) {
+        if (g_bluffPick[i] > 0 && g_bluffPick[i] <= 154) {
+            s = IntToString(i + 1) + "：" + g_roleName[g_bluffPick[i] - 1];
+        }
+        else {
+            s = IntToString(i + 1) + "：选身份";
+        }
+        libNtve_gf_SetDialogItemText(g_bluffAskBtn[i], StringToText(s), PlayerGroupSingle(g_teller));
+    }
+    DialogSetVisible(g_bluffAskDlg, PlayerGroupSingle(g_teller), true);
+}
+
+void BOTC_BluffAskRoll () {
+    if (!g_bluffAskOn) {
+        return;
+    }
+    BOTC_BluffRoll();
+    BOTC_BluffAskRender();
+}
+
+void BOTC_BluffAskPick (int slot) {
+    if (!g_bluffAskOn) {
+        return;
+    }
+    if (slot < 0 || slot > 2) {
+        return;
+    }
+    g_pickMode[g_teller] = 50;
+    g_pickBluffSlot[g_teller] = slot;
+    g_pickWho[g_teller] = 0;
+    g_pickTeam = -1;
+    g_pickAlign = -1;
+    libNtve_gf_SetDialogItemText(g_pickTitle, StringToText("选择第 " + IntToString(slot + 1) + " 个不在场善良角色"), PlayerGroupSingle(g_teller));
+    libNtve_gf_SetDialogItemText(g_pickClear, StringToText("清除这个身份"), PlayerGroupSingle(g_teller));
+    BOTC_PickFilter(g_teller, true);
+    DialogSetVisible(g_bluffAskDlg, PlayerGroupSingle(g_teller), false);
+    DialogSetVisible(g_pickDlg, PlayerGroupSingle(g_teller), true);
+}
+
+void BOTC_BluffAskSend () {
+    int i;
+    int q;
+    if (!g_bluffAskOn) {
+        return;
+    }
+    for (i = 0; i < 3; i += 1) {
+        if (g_bluffPick[i] <= 0 || g_bluffPick[i] > 154) {
+            BOTC_Notice(g_teller, "请先选满 3 个不在场身份（可以点【随机 3 个】）。");
+            return;
+        }
+    }
+    q = g_bluffAskQ[g_bluffAskQi];
+    if (q == 0) {
+        BOTC_BluffSendToDemons();
+    }
+    else {
+        BOTC_BluffSendAt(q);
+    }
+    g_bluffAskQi = g_bluffAskQi + 1;
+    if (g_bluffAskQi >= g_bluffAskQn) {
+        g_bluffAskOn = false;
+        DialogSetVisible(g_bluffAskDlg, PlayerGroupAll(), false);
+        BOTC_PmStore(g_teller, "【首夜不在场身份】已全部发送完毕。");
+    }
+    else {
+        BOTC_BluffAskRender();
+    }
+}
+
+void BOTC_BluffAskCancel () {
+    int i;
+    g_bluffAskOn = false;
+    g_bluffAskQi = 0;
+    g_bluffAskQn = 0;
+    for (i = 0; i < 3; i += 1) {
+        g_bluffPick[i] = 0;
+    }
+    DialogSetVisible(g_bluffAskDlg, PlayerGroupAll(), false);
+    BOTC_PmStore(g_teller, "【首夜不在场身份】已取消；可从【发送特定信息 → 发送不在场身份】手动发送。");
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -55888,6 +56176,7 @@ void BOTC_Init () {
     BOTC_BuildAlsaahir();      // 戏法师（149）：多元爪牙 / 恶魔分类公开猜测
     BOTC_BuildTaotie();        // 饕餮（154）：12 座位任意数量多选
     BOTC_BuildBluff();
+    BOTC_BuildBluffAsk();      // 【首夜不在场身份弹窗】（用户 2026-11-04）
     BOTC_BuildLBluff();        // 疯子那套「不在场身份」面板以前漏建，控件 id 一直是 0 → 换座位 / 发给疯子时报 triggerControl 错误
     BOTC_BuildBoard();
     BOTC_BuildCustom();            // 【自定义剧本】面板（用户 2026-10-03）
