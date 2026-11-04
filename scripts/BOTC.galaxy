@@ -2820,6 +2820,7 @@ void   BOTC_OnYes (int p);
 void   BOTC_OnNo (int p);
 void   BOTC_CreateSess (int a, int b);
 void   BOTC_JoinSess (int who, int s);
+void   BOTC_InviteClear (int p);      // 【邀请加入·单条清理】（用户 2026-11-05）：强制拉人前清掉对方弹窗
 void   BOTC_InviteClearSess (int s);   // 【邀请加入·会话结束清理】（用户 2026-11-04）：JoinSess 之前会调用
 void   BOTC_PmCooldown (int from, int to);   // 【私聊拒绝冷却】（用户 2026-11-04）：邀请拒绝也要用
 void   BOTC_Leave (int p);
@@ -5320,6 +5321,30 @@ void BOTC_JoinSess (int who, int s) {
 // 【邀请加入私聊】（用户 2026-11-04）：房主点【邀请加入】→ 再点一名玩家 = 向他发出邀请；
 //   对方收到和【发起私聊】一样的 15 秒同意框，同意后才真正加入。
 //   只能邀请不在其他私聊、也不在处理别的私聊请求 / 邀请的玩家；邀请说书人也走同一套规则。
+// 【说书人邀请】（用户 2026-11-05）：说书人在私聊阶段以外（公聊 / 提名 / 夜晚 / 开局前）
+//   邀请 = 强制加入，不需要对方同意；只有在私聊阶段才需要对方不在别的私聊并同意。
+//   说书人即使只是当前私聊的普通成员，也能邀请。
+bool BOTC_InviteCan (int p, int s) {
+    if (s < 1 || s > 13 || !g_sessAlive[s]) {
+        return false;
+    }
+    if (g_sessOwner[s] == p) {
+        return true;
+    }
+    return p == g_teller && g_member[(s * 14) + p];
+}
+
+// 【说书人强制邀请】（用户 2026-11-05）：不在私聊阶段时，说书人的邀请直接生效。
+bool BOTC_InviteForce (int p) {
+    if (p != g_teller) {
+        return false;
+    }
+    if (g_isNight || g_chatMode != 1 || g_phase != 0) {
+        return true;
+    }
+    return false;
+}
+
 void BOTC_InviteRender (int p) {
     bool on;
     int s;
@@ -5331,7 +5356,7 @@ void BOTC_InviteRender (int p) {
     }
     on = false;
     s = g_mySess[p];
-    if (s >= 1 && s <= 13 && g_sessAlive[s] && g_sessOwner[s] == p) {
+    if (BOTC_InviteCan(p, s)) {
         on = true;
     }
     if (on == g_inviteOn[p]) {
@@ -5343,11 +5368,12 @@ void BOTC_InviteRender (int p) {
 
 void BOTC_InviteStart (int p) {
     int s;
+    bool force;
     if (p < 1 || p > 13) {
         return;
     }
     s = g_mySess[p];
-    if (s < 1 || s > 13 || !g_sessAlive[s] || g_sessOwner[s] != p) {
+    if (!BOTC_InviteCan(p, s)) {
         BOTC_Notice(p, "你现在不是私聊房主：不能邀请加入。");
         return;
     }
@@ -5360,6 +5386,12 @@ void BOTC_InviteStart (int p) {
     }
     g_invitePick = true;
     g_inviteBy = p;
+    force = BOTC_InviteForce(p);
+    if (force) {
+        BOTC_Notice(p, "【邀请加入】：点一个玩家的座位，直接把他加入当前私聊。");
+        BOTC_BigHintShow(p, "点一个玩家的座位 → 强制把他加入私聊（对方无需同意）。");
+        return;
+    }
     BOTC_Notice(p, "【邀请加入】：点一个玩家的座位，向他发出加入邀请。");
     BOTC_BigHintShow(p, "点一个玩家的座位 → 邀请他加入私聊（需要对方同意）。");
 }
@@ -5368,6 +5400,8 @@ void BOTC_InviteAt (int q) {
     int p;
     int s;
     int who;
+    bool force;
+    int s2;
     p = g_inviteBy;
     g_invitePick = false;
     g_inviteBy = 0;
@@ -5376,7 +5410,7 @@ void BOTC_InviteAt (int q) {
     }
     BOTC_BigHintHide(p);
     s = g_mySess[p];
-    if (s < 1 || s > 13 || !g_sessAlive[s] || g_sessOwner[s] != p) {
+    if (!BOTC_InviteCan(p, s)) {
         BOTC_Notice(p, "这条私聊已经结束了。");
         return;
     }
@@ -5391,7 +5425,26 @@ void BOTC_InviteAt (int q) {
         BOTC_Notice(p, BOTC_NameStr(BOTC_PosOf(who)) + " 已经在你们的私聊里。");
         return;
     }
-    // 只能邀请不在其他私聊里的玩家；失败时不暴露对方正在和谁私聊
+    force = BOTC_InviteForce(p);
+    // 【说书人强制邀请】（用户 2026-11-05）：公聊 / 提名 / 夜晚 / 开局前直接拉进来，不等对方同意；
+    //   先把对方身上还没处理的请求框 / 邀请框清掉，免得强制加入后留下失效弹窗。
+    if (force) {
+        if (g_reqJoinSess[who] != 0) {
+            s2 = g_reqJoinSess[who];
+            g_reqJoinSess[who] = 0;
+            if (s2 >= 1 && s2 <= 13) {
+                g_joinPending[s2] = false;
+                g_joinWho[s2] = 0;
+            }
+        }
+        g_reqFrom[who] = 0;
+        BOTC_InviteClear(who);
+        BOTC_JoinSess(who, s);
+        BOTC_Notice(p, "已把 " + BOTC_NameStr(BOTC_PosOf(who)) + " 加入私聊。");
+        BOTC_Notice(who, "说书人把你加入了私聊。");
+        return;
+    }
+    // 私聊阶段：只能邀请不在其他私聊里的玩家；失败时不暴露对方正在和谁私聊
     if (g_mySess[who] != 0) {
         BOTC_Notice(p, "邀请失败：" + BOTC_NameStr(BOTC_PosOf(who)) + " 现在无法加入私聊。");
         BOTC_Notice(who, BOTC_NameStr(BOTC_PosOf(p)) + " 邀请你加入私聊，但你已在其他私聊中，无法加入。");
