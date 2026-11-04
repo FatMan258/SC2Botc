@@ -564,6 +564,15 @@ int         g_levRecTitle;
 int         g_levRecYes;
 int         g_levRecNo;
 int         g_levRecX;
+// 【教父×陌客】（用户 2026-11-05）：白天陌客死亡时弹窗让说书人判定是否算作外来者死亡
+int         g_gfRecSeat;      // 待判定的陌客座位（0 = 没有待判定）
+bool[14]    g_gfRecAnsSet;    // 说书人已经判定过
+bool[14]    g_gfRecAns;       // 判定结果：true = 算作外来者死亡
+int         g_gfRecDlg;
+int         g_gfRecTitle;
+int         g_gfRecYes;
+int         g_gfRecNo;
+int         g_gfRecX;
 bool[14]    g_levJinxWake;     // 【利维坦×守鸦人】今晚能力已触发，可像夜里死亡一样醒来
 bool[14]    g_levJinxLost;     // 【利维坦×守鸦人/贤者/农夫】触发后本局失去能力
 int         g_innA;            // 【旅店老板×利维坦相克】上个夜晚保护的第一名玩家
@@ -2001,6 +2010,12 @@ void   BOTC_BuildLevRecluse ();                                // 【利维坦×
 void   BOTC_LevRecluseAsk (int q);                             // 【利维坦×陌客】弹窗让说书人定阵营
 void   BOTC_LevRecluseAnswer (int ans);                        // 【利维坦×陌客】1 = 按善良计入 / 0 = 不计入
 void   BOTC_LevCountGood (int q);                              // 【利维坦】善良处决计数
+void   BOTC_BuildGfRecluse ();                                // 【教父×陌客】说书人判定框
+void   BOTC_GfRecluseAsk (int q);                             // 【教父×陌客】弹窗让说书人定外来者
+void   BOTC_GfRecluseAnswer (int ans);                        // 【教父×陌客】1 = 算作外来者 / 0 = 不算
+bool   BOTC_GfRecluseDayAsk (int q);                          // 【教父×陌客】白天陌客死亡时先弹窗
+bool   BOTC_GfAliveInPlay ();                                 // 【教父×陌客】教父是否真身在场且未死亡
+void   BOTC_GfRecluseSettle ();                               // 【教父×陌客】进入夜晚前未作答按不算
 void   BOTC_WudOutsiderPick (int role);                        // 【悟道者（118）】点完那张外来者卡
 void   BOTC_WudChangeOpen (int seat, int by);                  // 【悟道者（118）】被邪恶能力碰到 → 开门让他挑「不在场的镇民」
 void   BOTC_WudChangePick (int role);
@@ -7511,6 +7526,25 @@ bool BOTC_ClickDo (bool testConds, bool runActions) {
             }
             return true;
         }
+        // 【教父×陌客】（用户 2026-11-05）：是 = 算作外来者 / 否、X = 不算
+        if (c == g_gfRecYes) {
+            if (p == g_teller) {
+                BOTC_GfRecluseAnswer(1);
+            }
+            return true;
+        }
+        if (c == g_gfRecNo) {
+            if (p == g_teller) {
+                BOTC_GfRecluseAnswer(0);
+            }
+            return true;
+        }
+        if (c == g_gfRecX) {
+            if (p == g_teller) {
+                BOTC_GfRecluseAnswer(0);
+            }
+            return true;
+        }
         // 【麻脸巫婆二次确认】（用户 2026-11-03）：是 = 确认改造 / 否、X = 让她重选
         if (c == g_hagAskYes) {
             if (p == g_teller) {
@@ -8213,6 +8247,19 @@ bool BOTC_ClickDo (bool testConds, bool runActions) {
     if (c == g_levRecNo || c == g_levRecX) {
         if (p == g_teller) {
             BOTC_LevRecluseAnswer(0);
+        }
+        return true;
+    }
+    // 【教父×陌客】（用户 2026-11-05）：是 = 算作外来者 / 否、X = 不算
+    if (c == g_gfRecYes) {
+        if (p == g_teller) {
+            BOTC_GfRecluseAnswer(1);
+        }
+        return true;
+    }
+    if (c == g_gfRecNo || c == g_gfRecX) {
+        if (p == g_teller) {
+            BOTC_GfRecluseAnswer(0);
         }
         return true;
     }
@@ -12466,6 +12513,15 @@ void BOTC_ResetGameVars () {
     g_levRecSeat = 0;              // 【利维坦×陌客】新一局清掉待判定
     if (g_levRecDlg != 0) {
         DialogSetVisible(g_levRecDlg, PlayerGroupAll(), false);
+    }
+    // 【教父×陌客】（用户 2026-11-05）：新一局清掉待判定与全部判定结果
+    g_gfRecSeat = 0;
+    for (i = 2; i <= 13; i += 1) {
+        g_gfRecAnsSet[i] = false;
+        g_gfRecAns[i] = false;
+    }
+    if (g_gfRecDlg != 0) {
+        DialogSetVisible(g_gfRecDlg, PlayerGroupAll(), false);
     }
     // 【麻脸巫婆 / 落难少女】（用户 2026-11-03）：新局清掉二次确认与说书人指定状态
     g_hagActor = 0;
@@ -23467,7 +23523,7 @@ void BOTC_PickChoose (int ob, int idx) {
         return;
     }
     if (ob == g_teller && g_started && g_pickWho[ob] >= 2 && idx >= 0) {
-        BOTC_GrimRender(g_pickWho[ob]);
+        BOTC_GrimRender(g_who[g_pickWho[ob]]);
         BOTC_ChangeRoleMsg(g_pickWho[ob], idx);
         BOTC_PmStore(g_teller, "【说书人】把 " + BOTC_NameStr(g_pickWho[ob]) + " 改成了 " + g_roleName[idx] + "。");
     }
@@ -24793,8 +24849,11 @@ void BOTC_SyncDeathFromTok (int q, int t) {
                 }
                 // 【教父（39）的「死于今日」】（用户 2026-09-20）：白天死的是**外来者**才打（按互动干扰算，
                 //   跟 BOTC_GodfatherCanKill 的判定一致）；他今晚能不能动就看这一格。
-                if (BOTC_RoleInPlay(39) && BOTC_SeatRegTeam(q) == 1) {
-                    g_tokOn[(((g_teller * 14) + q) * 256) + 56] = true;
+                // 【教父×陌客】（用户 2026-11-05）：陌客白天死亡改由说书人弹窗裁定。
+                if (!BOTC_GfRecluseDayAsk(q)) {
+                    if (BOTC_RoleInPlay(39) && BOTC_SeatRegTeam(q) == 1) {
+                        g_tokOn[(((g_teller * 14) + q) * 256) + 56] = true;
+                    }
                 }
             }
             // 【保护 / 免死提示】（用户 2026-09-19）：说书人手动打死亡 token 时**只提示、不硬拦** ----
@@ -25198,8 +25257,11 @@ void BOTC_MarkDeadPlain (int q) {
             g_tokOn[(((g_teller * 14) + q) * 256) + 57] = true;
         }
         // 【教父（39）的「死于今日」】（用户 2026-09-20）：白天死的是外来者才打
-        if (BOTC_RoleInPlay(39) && BOTC_SeatRegTeam(q) == 1) {
-            g_tokOn[(((g_teller * 14) + q) * 256) + 56] = true;
+        // 【教父×陌客】（用户 2026-11-05）：陌客白天死亡改由说书人弹窗裁定。
+        if (!BOTC_GfRecluseDayAsk(q)) {
+            if (BOTC_RoleInPlay(39) && BOTC_SeatRegTeam(q) == 1) {
+                g_tokOn[(((g_teller * 14) + q) * 256) + 56] = true;
+            }
         }
     }
     if (deferNightZombuul) {
@@ -25425,8 +25487,11 @@ void BOTC_MarkDeathRowTok (int q, int row, int tok, bool pierce) {
         g_tokOn[(((g_teller * 14) + q) * 256) + 57] = true;
     }
     // 教父（39）的「死于今日」：白天死的是**外来者**才打（按互动干扰算，跟 GodfatherCanKill 一致）
-    if (!g_isNight && BOTC_RoleInPlay(39) && BOTC_SeatRegTeam(q) == 1) {
-        g_tokOn[(((g_teller * 14) + q) * 256) + 56] = true;
+    // 【教父×陌客】（用户 2026-11-05）：陌客白天死亡改由说书人弹窗裁定。
+    if (!g_isNight && !BOTC_GfRecluseDayAsk(q)) {
+        if (BOTC_RoleInPlay(39) && BOTC_SeatRegTeam(q) == 1) {
+            g_tokOn[(((g_teller * 14) + q) * 256) + 56] = true;
+        }
     }
     // 【心上人（61）/ 理发师（62）】（用户 2026-09-21）：死了就触发（不管白天夜里、哪种死因）
     BOTC_SweetDeath(q);
@@ -30640,6 +30705,29 @@ void BOTC_BuildLevRecluse () {
     DialogControlSetVisible(g_levRecYes, PlayerGroupSingle(g_teller), true);
     DialogControlSetVisible(g_levRecNo, PlayerGroupSingle(g_teller), true);
     DialogControlSetVisible(g_levRecX, PlayerGroupSingle(g_teller), true);
+}
+
+//--------------------------------------------------------------------------------------------------
+// 【教父×陌客 · 说书人判定框】（用户 2026-11-05）：白天陌客死亡时弹窗，
+//   【是】= 这次死亡算作外来者死亡（教父今晚可以杀人）；【否】/ 右上角 X = 不算。
+//   故意放在利维坦判定框下面一点，两个弹窗同时出现时不会互相盖住。
+//--------------------------------------------------------------------------------------------------
+void BOTC_BuildGfRecluse () {
+    DialogCreate(684, 153, c_anchorRight, 185, 30, false);
+    g_gfRecDlg = DialogLastCreated();
+    DialogSetVisible(g_gfRecDlg, PlayerGroupAll(), false);
+    g_gfRecTitle = BOTC_NewLabel(g_gfRecDlg, 666, 44, 18, 13, StringToText("【教父】陌客白天死亡：是否算作外来者？"));
+    libNtve_gf_SetDialogItemStyle(g_gfRecTitle, g_nomBigStyle, PlayerGroupAll());
+    libNtve_gf_SetDialogItemAcceptMouse(g_gfRecTitle, false, PlayerGroupAll());
+    g_gfRecYes = BOTC_NewButton(g_gfRecDlg, 306, 50, 27, 81, "是：算作外来者");
+    g_gfRecNo = BOTC_NewButton(g_gfRecDlg, 306, 50, 351, 81, "否：不算");
+    g_gfRecX = BOTC_NewButton(g_gfRecDlg, 30, 26, 640, 6, "X");
+    DialogControlSetVisible(g_gfRecYes, PlayerGroupAll(), false);
+    DialogControlSetVisible(g_gfRecNo, PlayerGroupAll(), false);
+    DialogControlSetVisible(g_gfRecX, PlayerGroupAll(), false);
+    DialogControlSetVisible(g_gfRecYes, PlayerGroupSingle(g_teller), true);
+    DialogControlSetVisible(g_gfRecNo, PlayerGroupSingle(g_teller), true);
+    DialogControlSetVisible(g_gfRecX, PlayerGroupSingle(g_teller), true);
 }
 
 // 把这个请求弹给说书人（真人说书专用；智能说书根本不会调到这里）
@@ -38022,6 +38110,16 @@ bool BOTC_GodfatherCanKill () {
         if (g_deadDay[q] != g_dayNum) {
             continue;
         }
+        // 【教父×陌客】（用户 2026-11-05）：陌客白天死亡时由说书人弹窗裁定，
+        //   判定结果优先于登记层；未判定（已进夜晚）按不算处理。
+        if (BOTC_SeatTrueRole(q) == 15) {
+            if (g_gfRecAnsSet[q]) {
+                if (g_gfRecAns[q]) {
+                    return true;
+                }
+                continue;
+            }
+        }
         if (BOTC_SeatRegTeam(q) == 1) {
             return true;                         // 今天死的这个人（按互动干扰）算外来者
         }
@@ -41874,6 +41972,89 @@ void BOTC_LevRecluseAnswer (int ans) {
     BOTC_PmStore(g_teller, "【利维坦】" + BOTC_NameStr(q) + " 按邪恶登记 → 不计入处决数。");
 }
 
+// 【教父×陌客】（用户 2026-11-05）：陌客白天死亡时不再按登记自动判定，
+//   改为弹窗问说书人这次死亡算不算外来者死亡；结果直接决定教父当晚能不能杀人。
+void BOTC_GfRecluseAsk (int q) {
+    if (q < 2 || q > 13 || g_gameOver) {
+        return;
+    }
+    if (g_gfRecSeat >= 2) {
+        BOTC_GfRecluseAnswer(0);          // 上一次没答完 → 先按不算收掉
+    }
+    g_gfRecSeat = q;
+    libNtve_gf_SetDialogItemText(g_gfRecTitle, StringToText("【教父】" + BOTC_NameStr(q) + " 是陌客：这次白天死亡是否算作外来者？"), PlayerGroupSingle(g_teller));
+    DialogSetVisible(g_gfRecDlg, PlayerGroupSingle(g_teller), true);
+    BOTC_PmStore(g_teller, "【教父】" + BOTC_NameStr(q) + " 是陌客 → 请选择【是：算作外来者】或【否：不算】。");
+}
+
+void BOTC_GfRecluseAnswer (int ans) {
+    int q;
+    q = g_gfRecSeat;
+    g_gfRecSeat = 0;
+    if (g_gfRecDlg != 0) {
+        DialogSetVisible(g_gfRecDlg, PlayerGroupAll(), false);
+    }
+    if (q < 2 || q > 13) {
+        return;
+    }
+    g_gfRecAnsSet[q] = true;
+    if (ans != 0) {
+        g_gfRecAns[q] = true;
+        g_tokOn[(((g_teller * 14) + q) * 256) + 56] = true;
+        BOTC_PmStore(g_teller, "【教父】" + BOTC_NameStr(q) + "（陌客）算作外来者死亡 → 今晚教父可以杀人。");
+    }
+    else {
+        g_gfRecAns[q] = false;
+        g_tokOn[(((g_teller * 14) + q) * 256) + 56] = false;
+        BOTC_PmStore(g_teller, "【教父】" + BOTC_NameStr(q) + "（陌客）不算外来者死亡 → 今晚教父不能杀人。");
+    }
+    BOTC_GrimRender(g_teller);
+}
+
+// 【教父×陌客】（用户 2026-11-05）：只有教父真身在场且还活着时才需要判定。
+bool BOTC_GfAliveInPlay () {
+    int q;
+    for (q = 2; q <= 13; q += 1) {
+        if (!g_seatOn[q]) {
+            continue;
+        }
+        if (BOTC_SeatTrueRole(q) != 39) {
+            continue;
+        }
+        if (BOTC_SeatDead(q)) {
+            continue;
+        }
+        return true;
+    }
+    return false;
+}
+
+// 白天陌客死亡时先问说书人；返回 true = 已弹窗、调用方不要按登记自动打 token。
+// 电脑说书人 / 夜间死亡 / 教父不在场 → 返回 false，沿用原来的自动判定。
+bool BOTC_GfRecluseDayAsk (int q) {
+    if (g_isNight || q < 2 || q > 13) {
+        return false;
+    }
+    if (!BOTC_GfAliveInPlay() || BOTC_SeatTrueRole(q) != 15) {
+        return false;
+    }
+    if (PlayerType(g_teller) != 1) {
+        return false;
+    }
+    g_gfRecAnsSet[q] = false;
+    g_gfRecAns[q] = false;
+    g_tokOn[(((g_teller * 14) + q) * 256) + 56] = false;
+    BOTC_GfRecluseAsk(q);
+    return true;
+}
+
+// 进入夜晚前还没作答 → 按不算外来者处理（跟利维坦×陌客判定同一口径）。
+void BOTC_GfRecluseSettle () {
+    if (g_gfRecSeat >= 2) {
+        BOTC_GfRecluseAnswer(0);
+    }
+}
+
 // 第五天 token 的统一胜利入口：天亮、进入夜晚、解毒 / 恢复能力时都会调用。
 void BOTC_LeviathanTokenWin () {
     int c;
@@ -44216,8 +44397,10 @@ void BOTC_ChangeRoleMsg (int q, int role) {
     // 【全员追忆】首次发牌才用「失忆的X」；真实转变后本人魔典与帮助页也切到新身份。
     if (g_board == 13) {
         BOTC_AmnesiaRevealSeat(q, role);
-        BOTC_GrimRender(g_who[q]);
     }
+    // 【本人魔典自动刷新】（用户 2026-11-05）：方古 / 理发师 / 麻脸巫婆等身份转变后，
+    //   以前只有全员追忆才会刷本人那份魔典，普通板子会一直显示旧身份。
+    BOTC_GrimRender(g_who[q]);
     BOTC_PmInfo(g_who[q], "【身份转变】你的身份转变：" + s + "。");
     BOTC_PmStore(g_teller, "【身份转变】" + BOTC_NameStr(q) + " → " + s + "。");
 }
@@ -46209,6 +46392,8 @@ void BOTC_DuskResolve () {
     BOTC_VortoxDuskCheck();
     // 【利维坦（127）】放在所有黄昏标记清理 / 重算之后：第五天中毒 / 醉酒解除的那一刻才能正确判定。
     BOTC_LeviathanDuskCheck();
+    // 【教父×陌客】（用户 2026-11-05）：进入夜晚前还没回答 → 按不算外来者处理。
+    BOTC_GfRecluseSettle();
 }
 
 // 传位：把某个座位改成「死掉的那只恶魔」（说书人那份和他自己那份魔典一起改），并告诉他
@@ -47278,6 +47463,7 @@ void BOTC_RateShowAll () {
             continue;
         }
         libNtve_gf_SetDialogItemText(g_rateLbl, StringToText("为说书人打分："), PlayerGroupSingle(p));
+        DialogControlSetSize(g_rateLbl, PlayerGroupSingle(p), 170, 30);
         for (i = 0; i < 5; i += 1) {
             DialogControlSetVisible(g_rateBtn[i], PlayerGroupSingle(p), true);
         }
@@ -47330,6 +47516,8 @@ void BOTC_RateSubmit (int p, int v) {
     BankValueSetFromInt(bk, "stats", "rep", rep);
     BankSave(bk);
     libNtve_gf_SetDialogItemText(g_rateLbl, StringToText("已评分：" + IntToString(v) + " 分，感谢反馈。"), PlayerGroupSingle(p));
+    // 【评分文字被省略号截断】（用户 2026-11-05）：打分按钮收起后把标签放宽，保证整句显示完整
+    DialogControlSetSize(g_rateLbl, PlayerGroupSingle(p), 460, 30);
     for (i = 0; i < 5; i += 1) {
         DialogControlSetVisible(g_rateBtn[i], PlayerGroupSingle(p), false);
     }
@@ -52291,6 +52479,12 @@ void BOTC_MarionetteSwap (int a, int b) {
     }
     BOTC_PickRedHerring();
     BOTC_GrimRender(g_teller);
+    // 【本人魔典同步】（用户 2026-11-05）：提线木偶换身份发生在游戏中途时，
+    //   两个被交换的玩家也要刷新自己那份魔典，不能只刷说书人那一份。
+    if (g_started) {
+        BOTC_GrimRender(g_who[a]);
+        BOTC_GrimRender(g_who[b]);
+    }
 }
 
 void BOTC_MarionetteSync () {
@@ -57211,6 +57405,7 @@ void BOTC_Init () {
     BOTC_BuildEndNotice();
     BOTC_BuildSlayAsk();
     BOTC_BuildLevRecluse();     // 【利维坦×陌客】说书人判定框（用户 2026-11-02）
+    BOTC_BuildGfRecluse();      // 【教父×陌客】说书人判定框（用户 2026-11-05）
     BOTC_BuildHagAsk();         // 【麻脸巫婆】跨阵营改造二次确认框（用户 2026-11-03）
     BOTC_BuildPsyRps();         // 【精神病患者】处决猜拳：石头 / 剪刀 / 布（用户 2026-11-03）
     BOTC_BuildShugenja();       // 【修行者（114）】说书人两选一面板（用户 2026-10-16）
