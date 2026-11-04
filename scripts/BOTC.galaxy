@@ -4191,14 +4191,18 @@ void BOTC_RefreshSessList (int p) {
                 continue;
             }
             // 【私聊可见性】关闭后，非说书人只隐藏其他会话；自己当前所在的会话始终保留。
-            //   【说书人的房间匿名可见】（用户 2026-11-04）：含说书人的会话对其他玩家照样列出来，
-            //   但只显示房主（说书人）一个人，成员一概不显示 ---- 让全场知道说书人正在与人私聊。
+            //   【说书人的房间匿名可见】（用户 2026-11-05）：只要这条私聊里有说书人，对其他玩家
+            //   一律只显示「说书人」，房主和其他成员都不可见 ---- 让全场知道说书人正在与人私聊。
             blindEntry = false;
-            if (!g_pmVisOn && p != g_teller && !g_member[(s * 14) + p]) {
+            if (p != g_teller && !g_member[(s * 14) + p]) {
                 if (!g_member[(s * 14) + g_teller]) {
-                    continue;
+                    if (!g_pmVisOn) {
+                        continue;
+                    }
                 }
-                blindEntry = true;
+                else {
+                    blindEntry = true;
+                }
             }
             // 【夜里别暴露说书人】夜里说书人是在私聊里给被唤醒的人发信息的 ----
             //   有说书人参与的私聊一旦出现在这份列表里，等于告诉大家「刚才谁被叫去说话了」。
@@ -5083,6 +5087,32 @@ void BOTC_GrimShareCdTick () {
         }
     }
 }
+// 【点说书人所在房间 = 只想和说书人单独私聊】（用户 2026-11-05）：
+//   玩家从私聊列表点「请求加入」、或直接点说书人的座位时，只要说书人正在别人的私聊里，
+//   都不再走房主审批，也不会把玩家塞进那间房；只提醒说书人「谁想和你私聊」，
+//   由说书人自己决定要不要离开当前私聊去找他。
+//   要真正加入那间房，请点【发起私聊】后再点房间里的房主或其他成员。
+void BOTC_PmTellWant (int p) {
+    int q;
+    q = g_teller;
+    if (p < 1 || p > 13 || p == q) {
+        return;
+    }
+    if (g_mySess[p] != 0) {
+        BOTC_Notice(p, "你正在私聊中，请先退出。");
+        return;
+    }
+    if (g_pmCool[(p * 14) + q] > 0) {
+        BOTC_Notice(p, "你已经提醒过说书人了，请稍后再试。");
+        return;
+    }
+    g_pmCool[(p * 14) + q] = 30;      // 30 拍 = 15 秒，避免连续点击刷屏
+    BOTC_NoticeKeep(q, BOTC_NameStr(BOTC_PosOf(p)) + " 想与你私聊，是否去找他由你决定。");
+    BOTC_PlaySfxTo(g_sfxReqName, q);
+    BOTC_Notice(p, "已提醒说书人：你想与他私聊；要加入现有房间，请发起私聊后点房主或其他成员。");
+}
+
+
 void BOTC_RequestChat (int p, int q) {
     BOTC_SessRepair();
     // 【夜晚】（用户 2026-09-20）：玩家不能主动找人私聊 ---- 会打断说书人正在进行的私聊；
@@ -5133,9 +5163,9 @@ void BOTC_RequestChat (int p, int q) {
     }
     if (q == g_teller) {
         if (g_mySess[g_teller] != 0) {
-            // 说书人正在私聊：走统一加入请求，不再让发起者停在无按钮的提示上。
-            BOTC_Notice(g_teller, BOTC_NameStr(BOTC_PosOf(p)) + " 想与你私聊。");
-            BOTC_RequestJoinSess(p, g_mySess[g_teller]);
+            // 【点说书人 = 只想和说书人私聊】（用户 2026-11-05）：说书人正在别人的私聊里时，
+            //   不把发起者塞进那间房，也不惊动房主，只提醒说书人「有人想找你」。
+            BOTC_PmTellWant(p);
             return;
         }
         BOTC_CreateSess(p, g_teller);
@@ -5230,10 +5260,11 @@ void BOTC_JoinSess (int who, int s) {
     BOTC_ForceLeave(who);
     g_member[(s * 14) + who] = true;
     g_mySess[who] = s;
-    // 【说书人进私聊立刻成为房主】（用户 2026-11-02）：直到说书人主动退出才移交房主。
-    if (who == g_teller || g_sessOwner[s] < 1) {
+    // 【说书人加入别人的私聊只当成员】（用户 2026-11-05）：不再自动接管房主；
+    //   只有原本就没有房主时才补一个。
+    if (g_sessOwner[s] < 1) {
         g_sessOwner[s] = who;
-        BOTC_InviteClearSess(s);   // 房主换了，旧房主还没完成的邀请一起作废
+        BOTC_InviteClearSess(s);   // 房主变了，旧房主还没完成的邀请一起作废
     }
     // 加入私聊：自动进入私聊模式（说书人也一样，用户 2026-09-30）
     g_chatSay[who] = 1;
@@ -5548,7 +5579,10 @@ void BOTC_DissolveAllSess (bool keepTeller) {
         }
         if (keepTeller && g_member[(s * 14) + g_teller]) {
             // 说书人所在的私聊整间保留（成员不变），只解散其余私聊。
-            g_sessOwner[s] = g_teller;
+            //   说书人只是成员时不要借阶段切换抢房主（用户 2026-11-05）。
+            if (g_sessOwner[s] < 1 || !g_member[(s * 14) + g_sessOwner[s]]) {
+                g_sessOwner[s] = g_teller;
+            }
             g_joinPending[s] = false;
             g_joinWho[s] = 0;
             continue;
@@ -5844,10 +5878,17 @@ void BOTC_RequestJoin (int p) {
         BOTC_RefreshSessList(p);
         return;
     }
+    // 【点说书人所在的房间 ≠ 加入房间】（用户 2026-11-05）：只视为想和说书人单独私聊，
+    //   只提醒说书人，不给房主弹加入审批；要加入房间请发起私聊后点房主或其他成员。
+    if (p != g_teller && !g_member[(s * 14) + p] && g_member[(s * 14) + g_teller]) {
+        BOTC_PmTellWant(p);
+        return;
+    }
     BOTC_RequestJoinSess(p, s);
 }
 
-// 发起者 p 请求加入会话 s。列表按钮和「点一个正在私聊的人发起私聊」共用这一条路径。
+// 发起者 p 请求加入会话 s。「点一个正在私聊的人发起私聊」走这条路径；
+//   列表按钮点到含说书人的房间已在 BOTC_RequestJoin 改走「只提醒说书人」。
 //   【房主审批】（用户 2026-11-02）：只有房主收到请求框，房主点【是】就放行。
 void BOTC_RequestJoinSess (int p, int s) {
     int i;
@@ -5981,8 +6022,8 @@ void BOTC_FinishJoin (int s) {
     }
     g_member[(s * 14) + who] = true;
     g_mySess[who] = s;
-    // 【说书人进私聊立刻成为房主】（用户 2026-11-02）：直到说书人主动退出才移交房主。
-    if (who == g_teller || g_sessOwner[s] < 1) {
+    // 【说书人加入别人的私聊只当成员】（用户 2026-11-05）：不再自动接管房主。
+    if (g_sessOwner[s] < 1) {
         g_sessOwner[s] = who;
         BOTC_InviteClearSess(s);
     }
@@ -10073,12 +10114,19 @@ void BOTC_TipRender (int p) {
         r = g_tipForce[p];                  // 调试指令 /tip / 能力表详情强制指定的身份（每人一份）
     }
     else {
-        // 【我的角色始终显示真实身份】（用户 2026-11-04）：不读玩家自己那份可被说书人改写的镜像行，
-        //   改读真值行；酒鬼 / 疯子 / 悟道者 / 提线木偶这类认知偏差角色仍显示他们以为的身份。
         pos = BOTC_PosOf(p);
-        r = BOTC_SeatTrueRole(pos);
-        if (r == 14 || r == 38 || r == 118 || r == 93) {
-            r = g_mark[(g_teller * 14) + pos] - 1;
+        if (g_board == 13 && p != g_teller) {
+            // 【全员追忆 · 我的角色看自己魔典】（用户 2026-11-05）：板子 13 的真身只在真值行，
+            //   【我的角色】改读玩家自己那份魔典上给本人标记的身份，不再泄露真实角色。
+            r = g_mark[(p * 14) + pos] - 1;
+        }
+        else {
+            // 【我的角色始终显示真实身份】（用户 2026-11-04）：不读玩家自己那份可被说书人改写的镜像行，
+            //   改读真值行；酒鬼 / 疯子 / 悟道者 / 提线木偶这类认知偏差角色仍显示他们以为的身份。
+            r = BOTC_SeatTrueRole(pos);
+            if (r == 14 || r == 38 || r == 118 || r == 93) {
+                r = g_mark[(g_teller * 14) + pos] - 1;
+            }
         }
     }
     // 帮助面板的两种子页面：2 = 只看游戏规则（跳过角色那段）
