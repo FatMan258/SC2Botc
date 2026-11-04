@@ -78,10 +78,12 @@ tools\botc.cmd build --private-mode test
    - 自定义脚本首尾标记和初始化函数存在。
    - 只保留预期的依赖。
    - 内嵌 UI 文件和资源存在。
-8. 能登录 Battle.net 时运行 `botc.cmd test`，并人工确认实际画面。
-9. 检查最新 `ScriptError.txt`、`Alerts.txt`、`UI.txt` 和 `Text.txt`。
-10. 确认没有自动创建备份，也没有更新项目记忆。
-11. 确认构建输出 `DocumentInfo` 挂载的是预期私有依赖：
+8. 不自动启动游戏：改完代码后只做到 `check` / `build` / `inspect`，
+   不得自行运行 `botc.cmd test` 或拉起星际 II 客户端；只有在用户明确要求时才启动。
+9. 用户要求验证时运行 `botc.cmd test`，并人工确认实际画面。
+10. 检查最新 `ScriptError.txt`、`Alerts.txt`、`UI.txt` 和 `Text.txt`。
+11. 确认没有自动创建备份，也没有更新项目记忆。
+12. 确认构建输出 `DocumentInfo` 挂载的是预期私有依赖：
     - `BOTC.galaxy` 挂载 `bnet:BOTC1/1.0/188805`
 
 `test` 报告 `ALIVE` 只表示进程存活且没有新 `ScriptError`，不等于地图已成功显示。
