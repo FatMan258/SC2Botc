@@ -1974,8 +1974,7 @@ void   BOTC_HunDunClear ();                                    // 【混沌（12
 void   BOTC_TurncoatApply (int who);                           // 【逆臣（119）】把这个人变成邪恶阵营
 void   BOTC_HatCollect ();                                     // 【帽匠（120）】收集「说书人 + 恶魔 + 爪牙（不含提线木偶）」
 void   BOTC_HatGroupChat ();                                   // 【帽匠（120）】把这些人拉进同一条私聊（用户 2026-10-16）
-void   BOTC_HatDeath (int q);                                  // 帽匠死亡：白天 → 入夜优先开茶会；夜间 → 本次行动后立即插入
-bool   BOTC_HatPartyStep ();                                   // 白天死亡：入夜唤醒阶段第一件事自动开茶会
+void   BOTC_HatDeath (int q);                                  // 帽匠死亡：白天 → 到他的夜序位自动开茶会；夜间 → 本次行动后立即插入
 void   BOTC_WudSetupCheck ();                                  // 【悟道者（118）】首夜：让说书人点他「以为」的那张外来者卡
 void   BOTC_WudOutsiderOpen (int seat);
 // ---- 旧《赎罪小镇》保留角色逻辑（不含已删除的书童）----
@@ -12121,7 +12120,7 @@ void BOTC_LmGroupChat () {
 // 【帽匠（120）· 恶人频道】（用户 2026-10-16 / 2026-11-04）：他**死了之后**，把
 //   「说书人 + 恶魔 + 爪牙」拉进同一条私聊 ---- 跟小怪宝那条一样（复用同一套会话变量 g_lmSess），
 //   提线木偶不进来。
-//   白天死亡：入夜唤醒阶段的第一件事就自动开（BOTC_HatPartyStep）；
+//   白天死亡：入夜后走到他夜序位（第 3 位）时自动开（不再在入夜第一拍提前开）；
 //   夜间死亡：等击杀阶段走完、插到击杀阶段的下一个阶段（g_hatWaitOrd）。
 //   茶会换角色本身由说书人在魔典上自己改，脚本只负责把人拉进群。
 //--------------------------------------------------------------------------------------------------
@@ -12186,33 +12185,6 @@ void BOTC_HatGroupChat () {
     BOTC_PmStore(g_teller, "【帽匠】已把恶魔和爪牙拉进同一条私聊（提线木偶不进）。");
 }
 
-// 【帽匠（120）· 白天死亡】入夜唤醒阶段的第一件事：自动把恶魔和爪牙（提线木偶除外）拉进群聊
-bool BOTC_HatPartyStep () {
-    int i;
-    int q;
-    bool done;
-    done = false;
-    BOTC_BuildSeatList();
-    for (i = 0; i < g_seatN; i += 1) {
-        q = g_seatList[i];
-        if (!g_hatParty[q]) { continue; }
-        if (g_hatPartyNight[q] != g_nightNum) {
-            g_hatParty[q] = false;
-            g_hatWaitOrd[q] = 0;
-            continue;
-        }
-        if (g_hatWaitOrd[q] > 0) { continue; }        // 夜间死亡：交给自动唤醒主循环，在死亡时那次行动之后插入
-        g_hatParty[q] = false;
-        g_hatWaitOrd[q] = 0;
-        if (g_hatDone[q] || !BOTC_HasAbility(q, 120) || !BOTC_SeatDead(q)) { continue; }
-        g_hatDone[q] = true;
-        g_autoWoke[q] = true;
-        BOTC_HatGroupChat();
-        done = true;
-    }
-    return done;
-}
-
 void BOTC_HatDeath (int q) {
     int ord;
     if (q < 2 || q > 13 || !g_started || g_hatDone[q] || g_hatParty[q]) {
@@ -12241,7 +12213,7 @@ void BOTC_HatDeath (int q) {
         g_hatParty[q] = true;
         g_hatPartyNight[q] = g_dayNum + 1;
         g_hatWaitOrd[q] = 0;
-        BOTC_PmStore(g_teller, "【帽匠】" + BOTC_NameStr(q) + " 白天死亡 → 入夜唤醒时优先自动开茶会。");
+        BOTC_PmStore(g_teller, "【帽匠】" + BOTC_NameStr(q) + " 白天死亡 → 入夜后走到他夜序位时自动开茶会。");
     }
 }
 
@@ -18499,6 +18471,9 @@ g_tokName[119] = "即将被处决（军团）"; g_tokShort[119] = "即将被处�
     // 【书生被猜】（用户 2026-11-04）：恶魔在「声称/猜测」里猜书生时，不管猜没猜中，
     //   都给真书生打上「已被猜测」；猜中的恶魔另外拿 171（已猜测）在书生夜序额外杀一次。
     g_tokName[180] = "已被猜测（书生）";         g_tokShort[180] = "被猜";     g_tokIcon[180] = "botc_tk152.dds"; g_tokRole[180] = 152;
+    // 【已投票】（用户 2026-11-05）：死亡玩家把唯一一张「死人票」真的投进票数后，只在说书人的魔典上
+    //   自动打这枚 token；其他观察者的魔典不自动同步，需要各自手动标记。通用 token，不绑角色。
+    g_tokName[181] = "已投票";                   g_tokShort[181] = "已投票";   g_tokIcon[181] = "";              g_tokRole[181] = -1;
     g_tokName[148] = "活尸（赶尸人）";        g_tokShort[148] = "活尸";        g_tokIcon[148] = "botc_tk126.dds"; g_tokRole[148] = 126;
     g_tokName[149] = "第一天（利维坦）";      g_tokShort[149] = "第一天";      g_tokIcon[149] = "botc_tk127.dds"; g_tokRole[149] = 127;
     g_tokName[150] = "第二天（利维坦）";      g_tokShort[150] = "第二天";      g_tokIcon[150] = "botc_tk127.dds"; g_tokRole[150] = 127;
@@ -25542,6 +25517,9 @@ void BOTC_ClearDeath (int q) {
     g_tokOn[(((g_teller * 14) + q) * 256) + 112] = false;
     g_tokOn[(((g_teller * 14) + q) * 256) + 143] = false;
     g_tokOn[(((g_teller * 14) + q) * 256) + 157] = false;
+    // 【已投票】（用户 2026-11-05）：用过死人票的人复活后是活人，可以正常无限投票 → 说书人魔典上的
+    //   「已投票」自动去掉。（g_deadVoteUsed 不清：死人票一局只能用一次，之后再死也不会再给第二张。）
+    g_tokOn[(((g_teller * 14) + q) * 256) + 181] = false;
     // 【复活刷新「限次 / 死亡触发」的技能】（用户 2026-09-21）：这些本质上都是「死一次才能用一次」的限次技能，
     //   复活之后一律恢复：月之子 / 呆瓜 的公开选择、守鸦人 / 贤者 的死亡触发（那两位本来就是按「这一次死亡」算的），
     //   以及可声称的限次角色 ---- 猎手（10）/ 造谣者（28）/ 月之子（36）/ 杂耍艺人（58）/ 呆瓜（63）。
@@ -39697,12 +39675,6 @@ void BOTC_AutoWakeNext () {
         }
         g_autoLast = 0;
     }
-    // 【帽匠（120）· 白天死亡】（用户 2026-11-04）：入夜唤醒阶段的第一件事 ----
-    //   说书人不用再逐个私聊，直接自动把恶魔和所有爪牙（提线木偶除外）拉进同一条私聊。
-    if (BOTC_HatPartyStep()) {
-        BOTC_WakeRender();
-        return;
-    }
     // 【罂粟种植者 · 白天死亡】（用户 2026-11-03）：入夜第一次【开始唤醒】时先走这一步，
     //   不唤醒任何人、不开私聊，只提醒说书人让爪牙和恶魔互认。
     if (BOTC_PoppyEvilStep()) {
@@ -39830,8 +39802,9 @@ void BOTC_AutoWakeNext () {
             }
         }
     }
-    // 【帽匠（120）· 夜间死亡】（用户 2026-11-04）：以「死亡时正在行动的夜序」为界，
-    //   下一个唤醒位就插茶会，不再等全部击杀角色行动完。
+    // 【帽匠（120）· 白天死亡 / 夜间死亡】（用户 2026-11-04）：
+    //   夜间死亡：以「死亡时正在行动的夜序」为界，下一个唤醒位就插茶会，不再等全部击杀角色行动完；
+    //   白天死亡：不再在入夜第一拍提前开，排到帽匠自己的夜序位（第 3 位）再自动开。
     for (i = 0; i < g_seatN; i += 1) {
         q = g_seatList[i];
         if (!g_hatParty[q]) {
@@ -39842,15 +39815,24 @@ void BOTC_AutoWakeNext () {
             g_hatWaitOrd[q] = 0;
             continue;
         }
-        if (g_hatWaitOrd[q] <= 0) {
-            continue;                   // 白天死亡：已经由 BOTC_HatPartyStep 在入夜第一拍处理
-        }
         if (g_hatDone[q] || !BOTC_HasAbility(q, 120) || !BOTC_SeatDead(q)) {
             g_hatParty[q] = false;
             g_hatWaitOrd[q] = 0;
             continue;
         }
-        hatOrd2 = (g_hatWaitOrd[q] * 10) + 8;
+        if (g_hatWaitOrd[q] > 0) {
+            hatOrd2 = (g_hatWaitOrd[q] * 10) + 8;
+        }
+        else {
+            hatOrd2 = BOTC_NightOrderOf(q) * 10;
+            if (hatOrd2 <= 0) {
+                hatOrd2 = BOTC_NightOrder(120) * 10;    // 夜序拿不到时按帽匠自己的第 3 位兜底
+            }
+            if (hatOrd2 <= 0) {
+                hatOrd2 = 30;
+            }
+            hatOrd2 = hatOrd2 + 8;
+        }
         if (best < 2 || hatOrd2 < bestOrd) {
             best = q;
             bestOrd = hatOrd2;
@@ -40322,7 +40304,7 @@ void BOTC_WakeApply (int q, bool manual) {
     }
     // 【帽匠（120）】（用户 2026-10-16 / 2026-11-04）：他**死后**的那一个夜晚，轮到他这一步就把
     //   「恶魔 + 爪牙」拉进群聊（跟小怪宝一样的恶人频道，提线木偶不进）。
-    //   白天死亡也走同一条路径：入夜优先由 BOTC_HatPartyStep 开；这里只是兜底（手动唤醒等）。
+    //   白天死亡也走同一条路径：由自动唤醒排到他的夜序位开；这里只是兜底（手动唤醒等）。
     if (!manual && !g_boffinActing[q] && g_mark[(g_teller * 14) + q] - 1 == 120) {
         if (BOTC_HasAbility(q, 120) && BOTC_SeatDead(q) && !g_hatDone[q]) {
             g_hatDone[q] = true;
@@ -55081,10 +55063,12 @@ void BOTC_NomTally () {
     int alive;
     int need;
     int w;
+    bool dvTok;
     string s;
     yes = 0;
     no = 0;
     none = 0;
+    dvTok = false;
     // 只统计在场的座位：空位不算「未投」
     BOTC_BuildSeatList();
     for (t = 0; t < g_seatN; t += 1) {
@@ -55095,6 +55079,12 @@ void BOTC_NomTally () {
                 yes = yes + w;
                 if (g_voteWasDead[q] && w < 2) {
                     g_deadVoteUsed[q] = true;      // 这一票是「死后投的」而且真的记进票数了 → 他的死人票就此用掉
+                    // 【已投票 token】（用户 2026-11-05）：只在**说书人**的魔典上自动打上，
+                    //   其他观察者的魔典不自动同步，需要各自手动标记。
+                    if (!g_tokOn[(((g_teller * 14) + q) * 256) + 181]) {
+                        g_tokOn[(((g_teller * 14) + q) * 256) + 181] = true;
+                        dvTok = true;
+                    }
                 }
             }
             else {
@@ -55107,6 +55097,9 @@ void BOTC_NomTally () {
         if (g_vote[q] == 0) {
             none = none + 1;
         }
+    }
+    if (dvTok) {
+        BOTC_GrimRender(g_teller);     // 说书人魔典上补画「已投票」
     }
     alive = BOTC_AliveCount();
     need = (alive + 1) / 2;
