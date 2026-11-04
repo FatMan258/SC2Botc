@@ -26822,6 +26822,42 @@ string BOTC_InfoText (string s) {
     return "【信息】" + s;
 }
 
+// 【信息】正文统一加「」（用户 2026-11-04）：只处理以「【信息】你得知」开头的结果。
+//   是 / 否 单独成句时分别上蓝 / 红；正文里已经自带「」的消息（如「谁是恶魔」）不再重复包。
+string BOTC_InfoWrap (string s) {
+    int n;
+    int p;
+    string body;
+    string tail;
+    if (StringFind(s, "【信息】你得知", false) != 0) {
+        return s;
+    }
+    p = StringLength("【信息】你得知");
+    n = StringLength(s);
+    if (n <= p) {
+        return s;
+    }
+    body = StringSub(s, p + 1, n);
+    tail = "";
+    if (StringSub(s, n - 2, n) == "。") {
+        body = StringSub(s, p + 1, n - 3);
+        tail = "。";
+    }
+    if (StringLength(body) <= 0) {
+        return s;
+    }
+    if (StringFind(body, "「", false) >= 0) {
+        return s;
+    }
+    if (body == "是") {
+        return "【信息】你得知「<c val=\"00BFFF\">是</c>」" + tail;
+    }
+    if (body == "否") {
+        return "【信息】你得知「<c val=\"FF0000\">否</c>」" + tail;
+    }
+    return "【信息】你得知「" + body + "」" + tail;
+}
+
 // 【测试·私聊镜像】（用户 2026-10-21）：只镜像 BOTC_PmInfo 的角色结果，不镜像普通玩家聊天。
 //   镜像只写入说书人的私聊窗 / 日志，不弹全桌字幕，也不会把原信息误发给其他玩家。
 void BOTC_PmMirrorInfo (int p, string s) {
@@ -26851,6 +26887,8 @@ void BOTC_PmInfo (int p, string s) {
     if (StringFind(s, "你得知", false) == 0) {
         s = BOTC_InfoText(s);
     }
+    // 【信息】你得知… 正文统一包进「」，是 / 否 单独成句时分别上蓝 / 红。
+    s = BOTC_InfoWrap(s);
     // 信息是系统行：保存时把说话人清 0，聊天窗才会走绿色关键词渲染。
     whoBak = g_chatWhoNow;
     g_chatWhoNow = 0;
