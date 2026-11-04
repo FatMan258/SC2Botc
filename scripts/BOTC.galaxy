@@ -746,6 +746,7 @@ bool        g_slayAskGolem;   // 这次拍板是魔像的（不是猎手）
 int         g_slayAskP;       // 发起声称的人（座位）
 int         g_slayAskQ;       // 被猎杀的目标（座位）
 bool        g_slayCanYes;     // 这一枪到底能不能杀（只有「清醒的真猎手」才给【是】按钮）
+bool        g_slayAuto;       // 【自动判定】（用户 2026-11-04）：不弹窗，1..15 秒后按真实能力自动结算
 int         g_slayAskSec;     // 【15 秒兜底】（用户 2026-11-01）：猎手 / 精神病请求的剩余拍数，归零 = 自动按【否】
 int         g_slayX;          // 弹窗右上角的 X（点了等于【否】）
 bool[14]    g_deadVoteUsed;   // 「死人票」：死者这一局只能再投一次；**这一票真的记进票数**才算用掉（在那之前改弃权可以拿回来）
@@ -19527,7 +19528,7 @@ void BOTC_CultEnd (bool timeout) {
         BOTC_ShowWin(side, "所有善良玩家都加入了异教领袖的教派，", "小镇从此只有一种声音。");
     }
     else {
-        BOTC_PubAnnounce("无事发生。");
+        BOTC_PubAnnounce("【说书人】：无事发生。");
         BOTC_PmStore(g_teller, "【异教领袖】" + BOTC_NameStr(g_cultWho) + " 的教派提议没有全员同意 → 提议失败。");
     }
 }
@@ -22663,10 +22664,8 @@ void BOTC_PickChoose (int ob, int idx) {
             BOTC_PubAnnounce(BOTC_NameStr(gobSeat) + " 公开声明自己是【哥布林】。");
             // 【只有真哥布林能力才生效】（用户 2026-11-04）：任何人都能声称，但假声称 / 借不到能力的人
             //   不能给说书人「被处决就获胜」的错误提示；结算层在 BOTC_CheckWin 里另有 BOTC_AbilityWorks 兜底。
-            if (!BOTC_HasAbility(gobSeat, 99)) {
-                BOTC_PmStore(g_teller, "【哥布林】" + BOTC_NameStr(gobSeat) + " 只是声称（没有哥布林能力）→ 今天被处决也不会触发胜利。");
-            }
-            else {
+            //   假声称不再给说书人私聊提醒（用户 2026-11-04）。
+            if (BOTC_HasAbility(gobSeat, 99)) {
                 if (BOTC_SeatImpaired(gobSeat)) {
                     BOTC_PmStore(g_teller, "【哥布林】" + BOTC_NameStr(gobSeat) + " 中毒/酒鬼 → 这次声明不生效（当天被处决也不算赢）。");
                 }
@@ -26542,24 +26541,26 @@ void BOTC_VizierClaim (int p) {
     g_vizierClaimed[p] = true;
     seat = BOTC_PosOf(p);
     BOTC_PubAnnounce(BOTC_NameStr(seat) + " 宣布使用维齐尔能力");
-    if (g_vizierSeat >= 2 && g_vizierSeat <= 13) {
-        if (g_vizierGood > 0) {
-            BOTC_PmStore(g_teller, "【维齐尔·声称】" + BOTC_NameStr(seat) + "：有善良玩家投票");
+    // 【只有真有能力的人才提醒】（用户 2026-11-04）：任何人都能公开声称维齐尔，假声称不写私聊；
+    //   真身 / 借到该能力的人按是否中毒醉酒区分提醒。
+    if (BOTC_HasAbility(seat, 141)) {
+        if (g_vizierSeat >= 2 && g_vizierSeat <= 13) {
+            if (g_vizierGood > 0) {
+                BOTC_PmStore(g_teller, "【维齐尔·声称】" + BOTC_NameStr(seat) + "：有善良玩家投票");
+            }
+            else {
+                BOTC_PmStore(g_teller, "【维齐尔·声称】" + BOTC_NameStr(seat) + "：无善良玩家投票");
+            }
         }
         else {
-            BOTC_PmStore(g_teller, "【维齐尔·声称】" + BOTC_NameStr(seat) + "：无善良玩家投票");
+            BOTC_PmStore(g_teller, "【维齐尔·声称】" + BOTC_NameStr(seat));
         }
-    }
-    else {
-        BOTC_PmStore(g_teller, "【维齐尔·声称】" + BOTC_NameStr(seat));
-    }
-    // 【只有真有能力才算使用能力】（用户 2026-11-04）：任何人都能公开声称维齐尔，
-    //   但只有真身 / 借到该能力的人真的在使用能力；假声称只作参考，由你决定是否公开票数。
-    if (BOTC_AbilityWorks(seat, 141)) {
-        BOTC_PmStore(g_teller, "【维齐尔】" + BOTC_NameStr(seat) + " 拥有可用的维齐尔能力：按他的声称公开票数。");
-    }
-    else {
-        BOTC_PmStore(g_teller, "【维齐尔】" + BOTC_NameStr(seat) + " 只是声称（没有可用的维齐尔能力）→ 是否公开票数由你裁定。");
+        if (BOTC_AbilityWorks(seat, 141)) {
+            BOTC_PmStore(g_teller, "【维齐尔】" + BOTC_NameStr(seat) + " 拥有可用的维齐尔能力：按他的声称公开票数。");
+        }
+        else {
+            BOTC_PmStore(g_teller, "【维齐尔】" + BOTC_NameStr(seat) + " 中毒/醉酒 → 能力失效，是否公开票数由你裁定。");
+        }
     }
     BOTC_Notice(p, "你已公开声称维齐尔。技能为白板，由说书人手工结算。");
 }
@@ -29680,6 +29681,9 @@ void BOTC_DeclareClick (int p) {
 // 【猎手 / 精神病请求排队】（用户 2026-11-01）：说书人手里那个 15 秒判定弹窗还没拍板时，
 //   其他人不能再发起同类声称，防止新请求把旧弹窗顶掉。魔像 / 贞洁者不是玩家声称，不挡。
 bool BOTC_SlayAskBusy () {
+    if (g_snipeStage != 0) {
+        return true;                   // 猎手击杀过场还没结算完，也不许再声称
+    }
     if (!g_slayAskOn) {
         return false;
     }
@@ -29687,6 +29691,12 @@ bool BOTC_SlayAskBusy () {
         return false;
     }
     return true;
+}
+
+// 【牙噶巴卜（133）/ 无神论者（83）在场】（用户 2026-11-04）：猎手 / 精神病的声称一律弹给说书人，
+//   而且不管发起人是不是真角色，两个按钮都能点（这两张牌本来就需要说书人多裁定）。
+bool BOTC_SlayAskManual () {
+    return (BOTC_RoleTrueInPlay(133) || BOTC_RoleTrueInPlay(83));
 }
 
 // 声称之后点头像：判决这次声称
@@ -29705,8 +29715,12 @@ void BOTC_GuessPedant (int p, int q) {
     BOTC_DeclareRender();
     g_pedantGuessUsed[ob] = true;
     // 有效性：真恶魔 + 能力没有失效（中毒 / 醉酒时按失效处理）
-    if (BOTC_RoleTeam(BOTC_SeatTrueRole(p)) != 3 || BOTC_SeatImpaired(p)) {
-        BOTC_PmStore(g_teller, "【书生猜测】" + BOTC_NameStr(p) + " 猜 " + BOTC_NameStr(q) + " → 无效猜测（他并非恶魔，或能力失效）。");
+    if (BOTC_RoleTeam(BOTC_SeatTrueRole(p)) != 3) {
+        BOTC_GrimRender(g_teller);     // 假声称：不给说书人私聊提醒（用户 2026-11-04）
+        return;
+    }
+    if (BOTC_SeatImpaired(p)) {
+        BOTC_PmStore(g_teller, "【书生猜测】" + BOTC_NameStr(p) + " 猜 " + BOTC_NameStr(q) + " → 他是恶魔，但中毒/醉酒 → 无效猜测。");
         BOTC_GrimRender(g_teller);
         return;
     }
@@ -29748,9 +29762,11 @@ void BOTC_GuessPuzzle (int p, int q) {
     BOTC_DeclareRender();
     g_puzzleGuessUsed[ob] = true;
     if (!BOTC_HasAbility(p, 109)) {
-        BOTC_PmStore(g_teller, "【解谜大师猜测】" + BOTC_NameStr(p) + " 猜 " + BOTC_NameStr(q) + " → 无效猜测（他并非解谜大师，也没有该能力）。");
-        BOTC_GrimRender(g_teller);
+        BOTC_GrimRender(g_teller);     // 假声称：不给说书人私聊提醒（用户 2026-11-04）
         return;
+    }
+    if (!BOTC_AbilityWorks(p, 109)) {
+        BOTC_PmStore(g_teller, "【解谜大师猜测】" + BOTC_NameStr(p) + " 中毒/醉酒 → 能力失效，结果由你裁定。");
     }
     real = BOTC_SeatOfRole(109);
     if (real < 2 || real > 13) {
@@ -29824,18 +29840,18 @@ void BOTC_DeclareSlay (int p, int q) {
     // 以下都是【智能说书】的自动判定（电脑说书人一律当场判，不存在「被酒鬼看出破绽」的问题）
     // 不是真猎手（含酒鬼）：只是声称，无事发生
     if (BOTC_SeatTrueRole(p) != 10) {
-        BOTC_PubAnnounce("无事发生。");
+        BOTC_PubAnnounce("【说书人】：无事发生。");
         return;
     }
     // 中毒 / 酒鬼：能力失效（本人不当场知道），这一次也算用掉了
     if (BOTC_SeatImpaired(p)) {
-        BOTC_PubAnnounce("无事发生。");
+        BOTC_PubAnnounce("【说书人】：无事发生。");
         BOTC_LoseAbility(p, 12);
         return;
     }
     // 已经放过一次了
     if (g_tokOn[(((g_teller * 14) + p) * 256) + 12]) {
-        BOTC_PubAnnounce("无事发生。");
+        BOTC_PubAnnounce("【说书人】：无事发生。");
         return;
     }
     // 真的在射：目标是恶魔就死，其它人无事发生（能力都用掉）
@@ -29847,7 +29863,7 @@ void BOTC_DeclareSlay (int p, int q) {
         BOTC_SlayKill(p, q);
         return;
     }
-    BOTC_PubAnnounce("无事发生。");
+    BOTC_PubAnnounce("【说书人】：无事发生。");
     BOTC_LoseAbility(p, 12);
 }
 
@@ -30004,42 +30020,57 @@ void BOTC_PsyPick (int p, int q) {
         BOTC_PsyKill(q);
         return;
     }
-    BOTC_PubAnnounce("无事发生。");
+    BOTC_PubAnnounce("【说书人】：无事发生。");
 }
 
 void BOTC_PsyAsk (int p, int q) {
+    bool manual;
     if (!g_started || g_isNight) {
         return;
     }
+    manual = BOTC_SlayAskManual();
     g_slayAskOn = true;
-    g_slayAskSec = 30;                 // 【15 秒兜底】（用户 2026-11-01）：30 拍 = 15 秒，没选自动按【否】
     g_slayAskPsy = true;
     g_slayAskGolem = false;
     g_slayAskVirgin = false;
     g_slaySilentNo = false;
     DialogControlSetVisible(g_slayNo2, PlayerGroupSingle(g_teller), false);
-    DialogControlSetVisible(g_slayNo, PlayerGroupSingle(g_teller), true);
     g_slayAskP = p;
     g_slayAskQ = q;
-    // 【只有真的精神病能力才能杀人】（用户 2026-11-04）：任何人都能声称、都会弹这个框，
-    //   但只有真身精神病患者 / 借到该能力且清醒的人，说书人才能点【是】；假声称只能点【否】。
-    g_slayCanYes = BOTC_AbilityWorks(p, 84);
-    libNtve_gf_SetDialogItemText(g_slayTitle, BOTC_PlayerNameText(p) + StringToText(" 声称【精神病患者】要杀 ") + BOTC_PlayerNameText(q) + StringToText("：他死不死？"), PlayerGroupSingle(g_teller));
-    if (g_slayCanYes) {
+    if (manual) {
+        // 【说书人拍板】牙噶巴卜 / 无神论者局：不管真假声称，两个按钮都能点
+        g_slayAuto = false;
+        g_slayAskSec = 30;             // 30 拍 = 15 秒，没选自动按【否】
+        g_slayCanYes = true;
+        DialogControlSetVisible(g_slayNo, PlayerGroupSingle(g_teller), true);
+        libNtve_gf_SetDialogItemText(g_slayTitle, BOTC_PlayerNameText(p) + StringToText(" 声称【精神病患者】要杀 ") + BOTC_PlayerNameText(q) + StringToText("：他死不死？"), PlayerGroupSingle(g_teller));
         DialogControlSetVisible(g_slayYes, PlayerGroupSingle(g_teller), true);
         DialogControlSetPosition(g_slayYes, PlayerGroupSingle(g_teller), c_anchorTopLeft, 27, 81);
         DialogControlSetPosition(g_slayNo, PlayerGroupSingle(g_teller), c_anchorTopLeft, 351, 81);
+        DialogSetVisible(g_slayDlg, PlayerGroupSingle(g_teller), true);
+        // 【只有有能力的人才提醒】（用户 2026-11-04）：假声称不写私聊；中毒/醉酒额外提醒
+        if (BOTC_HasAbility(p, 84)) {
+            if (BOTC_AbilityWorks(p, 84)) {
+                BOTC_PmStore(g_teller, "【精神病患者】" + BOTC_NameStr(p) + " 声称要杀 " + BOTC_NameStr(q) + "，由你决定他死不死。");
+            }
+            else {
+                BOTC_PmStore(g_teller, "【精神病患者】" + BOTC_NameStr(p) + " 声称要杀 " + BOTC_NameStr(q) + "，但他中毒/醉酒 → 能力失效。");
+            }
+        }
+        return;
     }
-    else {
-        DialogControlSetVisible(g_slayYes, PlayerGroupSingle(g_teller), false);
-        DialogControlSetPosition(g_slayNo, PlayerGroupSingle(g_teller), c_anchorTopLeft, 189, 81);
-    }
-    DialogSetVisible(g_slayDlg, PlayerGroupSingle(g_teller), true);
-    if (g_slayCanYes) {
-        BOTC_PmStore(g_teller, "【精神病患者】" + BOTC_NameStr(p) + " 声称要杀 " + BOTC_NameStr(q) + "，由你决定他死不死。");
-    }
-    else {
-        BOTC_PmStore(g_teller, "【精神病患者】" + BOTC_NameStr(p) + " 声称要杀 " + BOTC_NameStr(q) + "，但没有可用的精神病能力（假声称 / 中毒 / 醉酒）→ 只能点【否】。");
+    // 【其他板子】不弹窗：1..15 秒内自动判定（有能力 = 是；没能力 / 中毒醉酒 = 否 + 无事发生）
+    g_slayAuto = true;
+    g_slayAskSec = RandomInt(2, 30);   // 0.5 秒一拍：1..15 秒
+    g_slayCanYes = BOTC_AbilityWorks(p, 84);
+    DialogSetVisible(g_slayDlg, PlayerGroupAll(), false);
+    if (BOTC_HasAbility(p, 84)) {
+        if (g_slayCanYes) {
+            BOTC_PmStore(g_teller, "【精神病患者】" + BOTC_NameStr(p) + " 声称要杀 " + BOTC_NameStr(q) + "，有能力，将自动结算。");
+        }
+        else {
+            BOTC_PmStore(g_teller, "【精神病患者】" + BOTC_NameStr(p) + " 声称要杀 " + BOTC_NameStr(q) + "，但他中毒/醉酒 → 自动按无事发生。");
+        }
     }
 }
 
@@ -30048,6 +30079,12 @@ void BOTC_PsyKill (int q) {
         return;
     }
     if (BOTC_SeatDead(q)) {
+        return;
+    }
+    // 【无敌 token 176】（用户 2026-11-04）：带着「无敌」的人白天也打不死 → 公屏无事发生
+    if (BOTC_ProtectTokOn(q, 176)) {
+        BOTC_PubAnnounce("【说书人】：无事发生。");
+        BOTC_PmStore(g_teller, "【精神病患者】选择 " + BOTC_NameStr(q) + "，但对方带着【无敌】→ 没有死亡。");
         return;
     }
     // 公开白天、非恶魔击杀：完全复用普通死亡链。
@@ -30119,8 +30156,11 @@ void BOTC_DamselGuess (int p, int q) {
         BOTC_PmStore(g_teller, "【落难少女】已经有爪牙猜错过 → 这一次猜测按规则无效。");
         return;
     }
-    if (BOTC_RoleTeam(BOTC_SeatTrueRole(p)) != 2 || BOTC_SeatImpaired(p)) {
-        BOTC_PmStore(g_teller, "【落难少女】" + BOTC_NameStr(p) + " 不是清醒的爪牙 → 这只是声称，你自己裁定。");
+    if (BOTC_RoleTeam(BOTC_SeatTrueRole(p)) != 2) {
+        return;                        // 假声称（不是爪牙）：不给说书人私聊提醒（用户 2026-11-04）
+    }
+    if (BOTC_SeatImpaired(p)) {
+        BOTC_PmStore(g_teller, "【落难少女】" + BOTC_NameStr(p) + " 中毒/醉酒 → 能力失效，这次猜测不结算。");
         return;
     }
     if (BOTC_HasAbility(q, 82) && !BOTC_SeatDead(q)) {
@@ -30569,38 +30609,64 @@ void BOTC_HdKill (int t) {
 }
 
 void BOTC_SlayAsk (int p, int q) {
+    bool manual;
     if (!g_started || g_isNight) {
         return;
     }
+    manual = BOTC_SlayAskManual();
     g_slayAskOn = true;
-    g_slayAskSec = 30;                 // 【15 秒兜底】（用户 2026-11-01）：30 拍 = 15 秒，没选自动按【否】
     g_slayAskGolem = false;
     g_slayAskPsy = false;
     g_slayAskVirgin = false;
     g_slaySilentNo = false;
-    DialogControlSetVisible(g_slayNo2, PlayerGroupSingle(g_teller), false);
-    DialogControlSetVisible(g_slayNo, PlayerGroupSingle(g_teller), true);
     g_slayAskP = p;
     g_slayAskQ = q;
     // 标题带上「谁猎杀谁」（替掉原来那两行说明；正文与参考行 2026-09-16 按要求删掉）
-    libNtve_gf_SetDialogItemText(g_slayTitle, BOTC_PlayerNameText(p) + StringToText(" 猎杀 ") + BOTC_PlayerNameText(q) + StringToText("：是否让他击杀？"), PlayerGroupSingle(g_teller));
-    // 【检测真身】只有「清醒的真猎手」才给【是】按钮；其余一律只留【否】（挪到正中间）
-    g_slayCanYes = BOTC_SlayCanKill(p);
-    if (g_slayCanYes) {
+    DialogControlSetVisible(g_slayNo2, PlayerGroupSingle(g_teller), false);
+    if (manual) {
+        // 【说书人拍板】牙噶巴卜 / 无神论者局：不管他是不是真猎手，两个按钮都能点
+        g_slayAuto = false;
+        g_slayAskSec = 30;             // 30 拍 = 15 秒，没选自动按【否】
+        g_slayCanYes = true;
+        DialogControlSetVisible(g_slayNo, PlayerGroupSingle(g_teller), true);
+        libNtve_gf_SetDialogItemText(g_slayTitle, BOTC_PlayerNameText(p) + StringToText(" 猎杀 ") + BOTC_PlayerNameText(q) + StringToText("：是否让他击杀？"), PlayerGroupSingle(g_teller));
         DialogControlSetVisible(g_slayYes, PlayerGroupSingle(g_teller), true);
         DialogControlSetPosition(g_slayYes, PlayerGroupSingle(g_teller), c_anchorTopLeft, 27, 81);
         DialogControlSetPosition(g_slayNo, PlayerGroupSingle(g_teller), c_anchorTopLeft, 351, 81);
+        DialogSetVisible(g_slayDlg, PlayerGroupSingle(g_teller), true);
+        // 发起人那边给个提示：让他知道球在说书人手里
+        BOTC_Notice(g_who[p], "已把猎杀请求发给说书人：" + BOTC_NameStr(q) + "。等他说书人决定。");
+        // 【只有有能力的人才提醒】（用户 2026-11-04）：假声称不写私聊；中毒 / 醉酒 / 已失去能力额外提醒
+        if (BOTC_HasAbility(p, 10)) {
+            if (BOTC_SlayCanKill(p)) {
+                BOTC_PmStore(g_teller, "【猎手请求】" + BOTC_NameStr(p) + " 声称【猎手】要杀 " + BOTC_NameStr(q) + "。供参考：他的猎手能力可用。");
+            }
+            else {
+                BOTC_PmStore(g_teller, "【猎手请求】" + BOTC_NameStr(p) + " 声称【猎手】要杀 " + BOTC_NameStr(q) + "。供参考：他中毒 / 醉酒 / 已经失去能力。");
+            }
+        }
+        return;
     }
-    else {
-        DialogControlSetVisible(g_slayYes, PlayerGroupSingle(g_teller), false);
-        DialogControlSetPosition(g_slayNo, PlayerGroupSingle(g_teller), c_anchorTopLeft, 189, 81);
+    // 【其他板子】不弹窗：1..15 秒内自动判定（有能力 = 是；没能力 / 中毒醉酒 = 否 + 无事发生）
+    g_slayAuto = true;
+    g_slayAskSec = RandomInt(2, 30);   // 0.5 秒一拍：1..15 秒
+    // 自动判定看的是「能力可用 + 目标在猎手眼里登记为恶魔」；登记不是恶魔时按规则也是无事发生
+    g_slayCanYes = BOTC_SlayCanKill(p) && (BOTC_PairTeam(p, q) == 3);
+    DialogSetVisible(g_slayDlg, PlayerGroupAll(), false);
+    BOTC_Notice(g_who[p], "你的猎杀声称已提交，结果稍后公布。");
+    if (BOTC_HasAbility(p, 10)) {
+        if (!BOTC_SlayCanKill(p)) {
+            BOTC_PmStore(g_teller, "【猎手请求】" + BOTC_NameStr(p) + " 声称【猎手】要杀 " + BOTC_NameStr(q) + "，但他中毒 / 醉酒 / 已经失去能力 → 自动按无事发生。");
+        }
+        else {
+            if (BOTC_PairTeam(p, q) != 3) {
+                BOTC_PmStore(g_teller, "【猎手请求】" + BOTC_NameStr(p) + " 声称【猎手】要杀 " + BOTC_NameStr(q) + "，能力可用，但目标不是恶魔 → 自动按无事发生。");
+            }
+            else {
+                BOTC_PmStore(g_teller, "【猎手请求】" + BOTC_NameStr(p) + " 声称【猎手】要杀 " + BOTC_NameStr(q) + "，能力可用，将自动结算。");
+            }
+        }
     }
-    DialogSetVisible(g_slayDlg, PlayerGroupSingle(g_teller), true);
-    // 发起人那边给个提示：让他知道球在说书人手里
-    BOTC_Notice(g_who[p], "已把猎杀请求发给说书人：" + BOTC_NameStr(q) + "。等他说书人决定。");
-    // 弹窗上不再写那行参考（用户要求只留标题 + 按钮），真身 / 状态改写成说书人的私聊日志 ----
-    //   想核对就翻「我的私聊」那一页；以后想把参考行放回弹窗，把这句的文案再 SetDialogItemText 一次即可
-    BOTC_PmStore(g_teller, "【猎手请求】" + BOTC_NameStr(p) + " 声称【猎手】要杀 " + BOTC_NameStr(q) + "。" + BOTC_SlayHintStr(p));
 }
 
 // 说书人的回答：ans = 1 → 执行击杀；ans = 0 → 无事发生
@@ -30635,7 +30701,7 @@ void BOTC_SlayAnswer (int ans) {
         }
         else {
             if (!g_slaySilentNo) {
-                BOTC_PubAnnounce("无事发生。");
+                BOTC_PubAnnounce("【说书人】：无事发生。");
             }
         }
         BOTC_SlayAskHide();
@@ -30646,7 +30712,7 @@ void BOTC_SlayAnswer (int ans) {
             BOTC_PsyKill(q);
         }
         else {
-            BOTC_PubAnnounce("无事发生。");
+            BOTC_PubAnnounce("【说书人】：无事发生。");
         }
         BOTC_SlayAskHide();
         return;
@@ -30659,7 +30725,7 @@ void BOTC_SlayAnswer (int ans) {
         else {
             BOTC_PmStore(g_teller, "【贞洁者】你点了【否】：这次不处决提名者，提名流程照常进行。");
             if (!g_slaySilentNo) {
-                BOTC_PubAnnounce("无事发生。");
+                BOTC_PubAnnounce("【说书人】：无事发生。");
             }
         }
         BOTC_SlayAskHide();
@@ -30673,12 +30739,12 @@ void BOTC_SlayAnswer (int ans) {
     }
     BOTC_SlayAskHide();
     if (ans == 0) {
-        BOTC_PubAnnounce("无事发生。");
+        BOTC_PubAnnounce("【说书人】：无事发生。");
         return;
     }
     // 拍板之后局势可能已经变了（比如他又死了 / 入夜了）：那就当无事发生
     if (!g_started || g_isNight || p < 1 || p > 13 || q < 2 || q > 13 || BOTC_SeatDead(q)) {
-        BOTC_PubAnnounce("无事发生。");
+        BOTC_PubAnnounce("【说书人】：无事发生。");
         return;
     }
     BOTC_SlayKill(p, q);
@@ -30686,6 +30752,7 @@ void BOTC_SlayAnswer (int ans) {
 
 void BOTC_SlayAskHide () {
     g_slayAskOn = false;
+    g_slayAuto = false;                // 自动判定也一并收掉
     g_slayAskSec = 0;                  // 【15 秒兜底】（用户 2026-11-01）：拍板了就停表
     g_slayAskP = 0;
     g_slayAskQ = 0;
@@ -30743,6 +30810,13 @@ string BOTC_SlayHintStr (int p) {
 //   「停音轨」用自己做的静音音轨 moren 顶住（不然星际自带的种族音乐会冒出来）
 void BOTC_SlayKill (int p, int q) {
     BOTC_LoseAbility(p, 12);
+    // 【无敌 token 176】（用户 2026-11-04）：带着「无敌」的人白天也打不死 → 公屏无事发生
+    if (BOTC_ProtectTokOn(q, 176)) {
+        BOTC_PubAnnounce("【说书人】：无事发生。");
+        BOTC_PmStore(g_teller, "【猎手】" + BOTC_NameStr(p) + " 猎杀 " + BOTC_NameStr(q) + "，但对方带着【无敌】→ 没有死亡。");
+        BOTC_GrimRender(g_teller);
+        return;
+    }
     BOTC_MusicStop();
     BOTC_MusicPlay(g_musicSilentName, 8, 0.5);
     g_snipeTarget = q;
@@ -31664,10 +31738,13 @@ void BOTC_AlsaahirSubmit (int p) {
     g_alsaDay[p] = g_dayNum;
     BOTC_PubAnnounce("【戏法师】" + BOTC_NameStr(seat) + " 公开猜测。爪牙：" + sm + "。");
     BOTC_PubAnnounce("恶魔：" + sd + "。");
+    if (!BOTC_HasAbility(seat, 149)) {
+        return;                        // 假声称：不给说书人私聊提醒（用户 2026-11-04）
+    }
     BOTC_PmStore(g_teller, "【戏法师】" + BOTC_NameStr(seat) + " 公开猜测：爪牙=" + sm + "；恶魔=" + sd + "。");
     works = BOTC_AbilityWorks(seat, 149);
     if (!works) {
-        BOTC_PmStore(g_teller, "【戏法师】" + BOTC_NameStr(seat) + " 没有可用能力（假声称、中毒、醉酒或来源失效），本次不判胜。");
+        BOTC_PmStore(g_teller, "【戏法师】" + BOTC_NameStr(seat) + " 中毒/醉酒或来源失效，本次不判胜。");
         return;
     }
     if (!BOTC_AlsaahirCorrect(p)) {
@@ -36601,8 +36678,7 @@ void BOTC_MoonChildDeclare (int p, int q) {
     BOTC_DeclareRender();
     BOTC_PubAnnounce("【月之子】" + BOTC_NameStr(p) + " 公开声明自己是【月之子】，并选择 " + BOTC_NameStr(q) + "。");
     if (!BOTC_HasAbility(p, 36)) {
-        BOTC_PmStore(g_teller, "【月之子】" + BOTC_NameStr(p) + " 只是声称 → 不结算。");
-        return;
+        return;                        // 假声称：不给说书人私聊提醒（用户 2026-11-04）
     }
     if (!BOTC_AbilityWorks(p, 36)) {
         g_moonDone[p] = true;
@@ -36812,7 +36888,7 @@ void BOTC_KlutzPick (int p, int q) {
             g_declarePick[g_who[p]] = false;
             BOTC_DeclareRender();
             BOTC_PubAnnounce("【呆瓜】" + BOTC_NameStr(p) + " 声称自己是呆瓜，并公开选择 " + BOTC_NameStr(q) + "。");
-            BOTC_PmStore(g_teller, "【呆瓜】" + BOTC_NameStr(p) + " 声称呆瓜并公开选择 " + BOTC_NameStr(q) + "（他不是真呆瓜，胜负你自己判）。");
+            // 假声称：不给说书人私聊提醒（用户 2026-11-04）
         }
         return;
     }
@@ -49404,8 +49480,11 @@ void BOTC_AlchemistGuess (int p, int role) {
     BOTC_PubAnnounce("【炼金术士】" + BOTC_NameStr(p) + " 公开猜测 " + BOTC_NameStr(g_alcSeat) + " 是" + g_roleName[role] + "。");
     // 谁都可以公开声称炼金术士；只有真正拥有这项能力且当前清醒的人产生效果。
     // 伪造声称不能覆盖真炼金术士已经记下的结果。
+    if (!BOTC_HasAbility(p, 95)) {
+        return;                        // 假声称：不给说书人私聊提醒（用户 2026-11-04）
+    }
     if (BOTC_SeatDead(p) || !BOTC_AbilityWorks(p, 95)) {
-        BOTC_PmStore(g_teller, "【炼金术士】" + BOTC_NameStr(p) + " 声称猜测 " + BOTC_NameStr(g_alcSeat) + " 是【" + g_roleName[role] + "】：这只是声称，不结算。");
+        BOTC_PmStore(g_teller, "【炼金术士】" + BOTC_NameStr(p) + " 声称猜测 " + BOTC_NameStr(g_alcSeat) + " 是【" + g_roleName[role] + "】：中毒/醉酒或已死亡 → 能力失效，不结算。");
         return;
     }
     if (BOTC_SeatTrueRole(g_alcSeat) == role) {
@@ -55635,7 +55714,21 @@ bool BOTC_Tick_Func (bool testConds, bool runActions) {
     if (g_slayAskOn && g_slayAskSec > 0) {
         g_slayAskSec = g_slayAskSec - 1;
         if (g_slayAskSec <= 0) {
-            BOTC_SlayAnswer(0);
+            if (g_slayAuto) {
+                if (g_slayCanYes) {
+                    BOTC_SlayAnswer(1);    // 真有对应能力 → 返回是
+                }
+                else {
+                    // 真猎手的这一次声称仍然用掉了机会（含中毒 / 醉酒 / 目标不是恶魔）
+                    if (!g_slayAskPsy && BOTC_HasAbility(g_slayAskP, 10)) {
+                        BOTC_LoseAbility(g_slayAskP, 12);
+                    }
+                    BOTC_SlayAnswer(0);    // 没能力 / 中毒醉酒 → 返回否（无事发生）
+                }
+            }
+            else {
+                BOTC_SlayAnswer(0);        // 说书人 15 秒没拍板 → 自动按【否】
+            }
         }
     }
     // 【精神病患者 · 猜拳 30 秒兜底】（用户 2026-11-03）：轮到的人一直不选就按【石头】自动继续，
