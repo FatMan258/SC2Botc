@@ -53892,7 +53892,6 @@ void BOTC_BuildBluffAsk () {
 }
 
 void BOTC_BluffAskStart () {
-    bool poppy;
     int i;
     int q;
     g_bluffAskQn = 0;
@@ -53903,20 +53902,18 @@ void BOTC_BluffAskStart () {
     if (BOTC_LegionOn()) {
         return;
     }
-    poppy = BOTC_PoppyActive();
-    // 罂粟种植者会阻止恶魔与爪牙互认；告密者仍会让爪牙单独得知不在场身份
-    if (!poppy) {
-        // 1) 全场所有恶魔（0 = 收件人为恶魔整体）
-        if (BOTC_EvilSeatAt(1) >= 2) {
-            g_bluffAskQ[g_bluffAskQn] = 0;
-            g_bluffAskQn = g_bluffAskQn + 1;
-        }
-        // 2) 疯子（真疯子，哲学家假装的那个不算）
-        q = BOTC_RealLunaticSeat();
-        if (q >= 2 && q <= 13) {
-            g_bluffAskQ[g_bluffAskQn] = q;
-            g_bluffAskQn = g_bluffAskQn + 1;
-        }
+    // 罂粟种植者只阻止互认（BOTC_SendFirstNightDemonInfo 已被跳过），
+    // 不在场身份仍要照常发给恶魔与疯子。
+    // 1) 全场所有恶魔（0 = 收件人为恶魔整体）
+    if (BOTC_EvilSeatAt(1) >= 2) {
+        g_bluffAskQ[g_bluffAskQn] = 0;
+        g_bluffAskQn = g_bluffAskQn + 1;
+    }
+    // 2) 疯子（真疯子，哲学家假装的那个不算）
+    q = BOTC_RealLunaticSeat();
+    if (q >= 2 && q <= 13) {
+        g_bluffAskQ[g_bluffAskQn] = q;
+        g_bluffAskQn = g_bluffAskQn + 1;
     }
     // 3) 告密者在场：每个真爪牙各收一次（提线木偶不算；罂粟在场也生效）
     if (BOTC_AbilityInPlay(92)) {
