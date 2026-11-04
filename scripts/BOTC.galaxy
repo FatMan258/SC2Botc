@@ -11198,13 +11198,13 @@ void BOTC_NightGo () {
                 }
             }
         }
-        // 造谣者（28）：入夜只提醒真实身份就是造谣者的玩家（用户 2026-11-04）。
-        //   假声称、借来的能力仍会公聊播报，但不再在入夜给说书人提示。
+        // 造谣者（28）：入夜只提醒真正拥有造谣者能力的玩家（用户 2026-11-04）。
+        //   假声称不给提示；哲学家 / 食人族 / 炼金术士借来的能力同样算，按能力层判定。
         for (q = 2; q <= 13; q += 1) {
             if (!g_gossipDone[q] || StringLength(g_gossipTextBy[q]) <= 0) {
                 continue;
             }
-            if (BOTC_SeatTrueRole(q) != 28) {
+            if (!BOTC_HasAbility(q, 28)) {
                 continue;
             }
             BOTC_PmStore(g_teller, "【造谣者】" + BOTC_NameStr(q) + " 今天的公开声明：「" + g_gossipTextBy[q] + "」。如果是真的，今晚一名玩家死亡，用【死亡标记】点他。");
@@ -22661,12 +22661,19 @@ void BOTC_PickChoose (int ob, int idx) {
             g_goblinClaimDay[gobSeat] = g_nightNum;
             g_goblinClaim[gobSeat] = true;
             BOTC_PubAnnounce(BOTC_NameStr(gobSeat) + " 公开声明自己是【哥布林】。");
-            if (BOTC_SeatImpaired(gobSeat)) {
-                BOTC_PmStore(g_teller, "【哥布林】" + BOTC_NameStr(gobSeat) + " 中毒/酒鬼 → 这次声明不生效（当天被处决也不算赢）。");
+            // 【只有真哥布林能力才生效】（用户 2026-11-04）：任何人都能声称，但假声称 / 借不到能力的人
+            //   不能给说书人「被处决就获胜」的错误提示；结算层在 BOTC_CheckWin 里另有 BOTC_AbilityWorks 兜底。
+            if (!BOTC_HasAbility(gobSeat, 99)) {
+                BOTC_PmStore(g_teller, "【哥布林】" + BOTC_NameStr(gobSeat) + " 只是声称（没有哥布林能力）→ 今天被处决也不会触发胜利。");
             }
             else {
-                BOTC_PmStore(g_teller, "【哥布林】" + BOTC_NameStr(gobSeat) + " 已公开声明：如果今天他被处决，他的阵营获胜。");
-                BOTC_Notice(g_teller, "【哥布林】他今天被处决的话 → 他的阵营获胜。");
+                if (BOTC_SeatImpaired(gobSeat)) {
+                    BOTC_PmStore(g_teller, "【哥布林】" + BOTC_NameStr(gobSeat) + " 中毒/酒鬼 → 这次声明不生效（当天被处决也不算赢）。");
+                }
+                else {
+                    BOTC_PmStore(g_teller, "【哥布林】" + BOTC_NameStr(gobSeat) + " 已公开声明：如果今天他被处决，他的阵营获胜。");
+                    BOTC_Notice(g_teller, "【哥布林】他今天被处决的话 → 他的阵营获胜。");
+                }
             }
             return;
         }
@@ -26546,6 +26553,14 @@ void BOTC_VizierClaim (int p) {
     else {
         BOTC_PmStore(g_teller, "【维齐尔·声称】" + BOTC_NameStr(seat));
     }
+    // 【只有真有能力才算使用能力】（用户 2026-11-04）：任何人都能公开声称维齐尔，
+    //   但只有真身 / 借到该能力的人真的在使用能力；假声称只作参考，由你决定是否公开票数。
+    if (BOTC_AbilityWorks(seat, 141)) {
+        BOTC_PmStore(g_teller, "【维齐尔】" + BOTC_NameStr(seat) + " 拥有可用的维齐尔能力：按他的声称公开票数。");
+    }
+    else {
+        BOTC_PmStore(g_teller, "【维齐尔】" + BOTC_NameStr(seat) + " 只是声称（没有可用的维齐尔能力）→ 是否公开票数由你裁定。");
+    }
     BOTC_Notice(p, "你已公开声称维齐尔。技能为白板，由说书人手工结算。");
 }
 
@@ -29695,13 +29710,15 @@ void BOTC_GuessPedant (int p, int q) {
         BOTC_GrimRender(g_teller);
         return;
     }
-    ped = BOTC_SeatOfRole(152);
-    if (ped >= 2 && ped <= 13) {
-        pk = ped;
+    // 【书生在场按能力层找】（用户 2026-11-04）：与 BOTC_PedantInPlay 同一口径，
+    //   真身书生、哲学家借来的、说书人赋予的都算；不能只按真身 152 查找，否则借来的书生永远不会被猜中。
+    ped = 0;
+    for (pk = 2; pk <= 13; pk += 1) {
+        if (ped == 0 && g_seatOn[pk] && BOTC_HasAbility(pk, 152)) {
+            ped = pk;
+        }
     }
-    else {
-        pk = 0;
-    }
+    pk = ped;
     // 无论猜没猜中，真书生都获得「已被猜测」标记
     if (pk >= 2) {
         g_tokOn[(((g_teller * 14) + pk) * 256) + 180] = true;
@@ -30004,7 +30021,9 @@ void BOTC_PsyAsk (int p, int q) {
     DialogControlSetVisible(g_slayNo, PlayerGroupSingle(g_teller), true);
     g_slayAskP = p;
     g_slayAskQ = q;
-    g_slayCanYes = true;      // 【用户 2026-10-03】始终给说书人「杀死 / 不杀死」两个选项（借到该能力的角色也算）
+    // 【只有真的精神病能力才能杀人】（用户 2026-11-04）：任何人都能声称、都会弹这个框，
+    //   但只有真身精神病患者 / 借到该能力且清醒的人，说书人才能点【是】；假声称只能点【否】。
+    g_slayCanYes = BOTC_AbilityWorks(p, 84);
     libNtve_gf_SetDialogItemText(g_slayTitle, BOTC_PlayerNameText(p) + StringToText(" 声称【精神病患者】要杀 ") + BOTC_PlayerNameText(q) + StringToText("：他死不死？"), PlayerGroupSingle(g_teller));
     if (g_slayCanYes) {
         DialogControlSetVisible(g_slayYes, PlayerGroupSingle(g_teller), true);
@@ -30016,7 +30035,12 @@ void BOTC_PsyAsk (int p, int q) {
         DialogControlSetPosition(g_slayNo, PlayerGroupSingle(g_teller), c_anchorTopLeft, 189, 81);
     }
     DialogSetVisible(g_slayDlg, PlayerGroupSingle(g_teller), true);
-    BOTC_PmStore(g_teller, "【精神病患者】" + BOTC_NameStr(p) + " 声称要杀 " + BOTC_NameStr(q) + "，由你决定他死不死。");
+    if (g_slayCanYes) {
+        BOTC_PmStore(g_teller, "【精神病患者】" + BOTC_NameStr(p) + " 声称要杀 " + BOTC_NameStr(q) + "，由你决定他死不死。");
+    }
+    else {
+        BOTC_PmStore(g_teller, "【精神病患者】" + BOTC_NameStr(p) + " 声称要杀 " + BOTC_NameStr(q) + "，但没有可用的精神病能力（假声称 / 中毒 / 醉酒）→ 只能点【否】。");
+    }
 }
 
 void BOTC_PsyKill (int q) {
@@ -38701,11 +38725,12 @@ bool BOTC_WakeSkipNow (int q) {
     if (r2 == 55 && BOTC_ProtectTokOn(q, 68)) {
         return true;                            // 女裁缝：一局一次，用过了就不再唤醒
     }
-    if (r2 == 58 && g_juggUsed[q]) {
-        return true;                            // 杂耍艺人：只在首个白天猜完之后的那一晚醒一次
+    // 【杂耍艺人】（用户 2026-11-04）：真正拥有该能力（含哲学家 / 食人族 / 炼金术士借来的）
+    //   当天公开猜测过，入夜才唤醒并给提示；假声称、酒鬼 / 提线木偶的假身份不唤醒。
+    if (BOTC_HasAbility(q, 58) && g_juggUsed[q]) {
+        return true;                            // 只在首个白天猜完之后的那一晚醒一次
     }
-    // 【杂耍艺人】（用户 2026-11-04）：只有真实角色当天公开猜测过，入夜才唤醒并给提示。
-    if (r2 == 58 && !g_juggDone[q]) {
+    if (BOTC_HasAbility(q, 58) && !g_juggDone[q]) {
         return true;
     }
     if (r2 == 90 && g_nightNum > g_seatFirstNight[q] && !BOTC_BountyTrigger()) {
