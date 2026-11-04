@@ -4126,6 +4126,7 @@ void BOTC_RefreshSessList (int p) {
     int maxSkip;
     int longB;
     bool first;
+    bool blindEntry;
     DialogControlRemoveAllItems(g_sessList[p], PlayerGroupSingle(p));
     k = 0;
     maxSkip = 0;
@@ -4142,8 +4143,14 @@ void BOTC_RefreshSessList (int p) {
                 continue;
             }
             // 【私聊可见性】关闭后，非说书人只隐藏其他会话；自己当前所在的会话始终保留。
+            //   【说书人的房间匿名可见】（用户 2026-11-04）：含说书人的会话对其他玩家照样列出来，
+            //   但只显示房主（说书人）一个人，成员一概不显示 ---- 让全场知道说书人正在与人私聊。
+            blindEntry = false;
             if (!g_pmVisOn && p != g_teller && !g_member[(s * 14) + p]) {
-                continue;
+                if (!g_member[(s * 14) + g_teller]) {
+                    continue;
+                }
+                blindEntry = true;
             }
             // 【夜里别暴露说书人】夜里说书人是在私聊里给被唤醒的人发信息的 ----
             //   有说书人参与的私聊一旦出现在这份列表里，等于告诉大家「刚才谁被叫去说话了」。
@@ -4161,17 +4168,24 @@ void BOTC_RefreshSessList (int p) {
             //   用鼠标滚轮左右查看；房主仍然排在最前。
             tot = 0;
             o = g_sessOwner[s];
-            if (o >= 1 && o <= 13 && g_member[(s * 14) + o]) {
-                lv_ord[tot] = o;
-                tot = tot + 1;
+            if (blindEntry) {
+                // 匿名条目只列说书人，其他成员不进入名字行。
+                lv_ord[0] = g_teller;
+                tot = 1;
             }
-            for (i = 1; i <= 13; i += 1) {
-                if (i == o) {
-                    continue;
-                }
-                if (g_member[(s * 14) + i]) {
-                    lv_ord[tot] = i;
+            else {
+                if (o >= 1 && o <= 13 && g_member[(s * 14) + o]) {
+                    lv_ord[tot] = o;
                     tot = tot + 1;
+                }
+                for (i = 1; i <= 13; i += 1) {
+                    if (i == o) {
+                        continue;
+                    }
+                    if (g_member[(s * 14) + i]) {
+                        lv_ord[tot] = i;
+                        tot = tot + 1;
+                    }
                 }
             }
             if (tot - 1 > maxSkip) {
@@ -4198,6 +4212,9 @@ void BOTC_RefreshSessList (int p) {
                 }
                 desc = desc + BOTC_NameStr(BOTC_PosOf(lv_ord[idx]));      // 【按位置取名字】（用户 2026-10-07）
                 first = false;
+            }
+            if (blindEntry) {
+                desc = desc + "（成员不可见）";
             }
             if (StringLength(desc) > longB) {
                 longB = StringLength(desc);
@@ -5020,7 +5037,24 @@ void BOTC_RequestChat (int p, int q) {
     BOTC_SessRepair();
     // 【夜晚】（用户 2026-09-20）：玩家不能主动找人私聊 ---- 会打断说书人正在进行的私聊；
     //   夜里要聊，一律由说书人自己发起。
+    //   【夜晚找说书人只提醒】（用户 2026-11-04）：玩家可以在夜里选说书人，但不建会话，
+    //   只把「某人想与你私聊」提醒给说书人，由说书人自己决定什么时候去找他。
     if (g_isNight && p != g_teller) {
+        if (q == g_teller) {
+            if (g_mySess[p] != 0) {
+                BOTC_Notice(p, "你正在私聊中，请先退出。");
+                return;
+            }
+            if (g_pmCool[(p * 14) + q] > 0) {
+                BOTC_Notice(p, "你已经提醒过说书人了，请稍后再试。");
+                return;
+            }
+            g_pmCool[(p * 14) + q] = 30;      // 30 拍 = 15 秒，避免连续点击刷屏
+            BOTC_NoticeKeep(g_teller, BOTC_NameStr(BOTC_PosOf(p)) + " 在夜晚请求与你私聊，是否去找他由你决定。");
+            BOTC_PlaySfxTo(g_sfxReqName, g_teller);
+            BOTC_Notice(p, "已提醒说书人：你想与他私聊，请等说书人来找你。");
+            return;
+        }
         BOTC_Notice(p, "现在是夜晚：不能主动找人私聊，等说书人来找你。");
         return;
     }
