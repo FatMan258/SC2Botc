@@ -277,7 +277,7 @@ class RoleSpecTests(unittest.TestCase):
             'g_tokName[175] = "死亡（饕餮）"',
             "g_roleDeathTok[154] = 175",
             "BOTC_GoonTouch(p, chosen[i]);",
-            "BOTC_WudChangeOpen(chosen[i], p);",
+            "BOTC_WudTryTrigger(chosen[i], p)",
             "BOTC_TaotieToggle(g_who[p], q);",
             "if (demonPick == 154)",
             "if (g_rsPick[154])",
@@ -286,7 +286,7 @@ class RoleSpecTests(unittest.TestCase):
             self.assertIn(marker, source)
 
     def test_recent_role_dds_use_uncompressed_rgba_format(self) -> None:
-        for index in (148, 149, 150, 151, 154):
+        for index in range(148, 164):
             for prefix, size in (("role", 128), ("night", 85), ("tk", 48)):
                 path = (
                     PROJECT_ROOT
@@ -299,6 +299,235 @@ class RoleSpecTests(unittest.TestCase):
                 self.assertEqual(struct.unpack_from("<I", raw, 84)[0], 0)
                 self.assertEqual(struct.unpack_from("<I", raw, 88)[0], 32)
                 self.assertEqual(len(raw), size * size * 4 + 128)
+
+    def test_heshang_runtime_entrypoints_match_spec(self) -> None:
+        spec = json.loads(
+            (PROJECT_ROOT / "roles" / "role_161_heshang.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        errors, _ = validate_spec(spec)
+        self.assertEqual(errors, [])
+
+        source = (PROJECT_ROOT / "scripts" / "BOTC.galaxy").read_text(
+            encoding="utf-8-sig"
+        )
+        for marker in (
+            "bool[14]    g_heshangSeatUsed;",
+            "int[14]     g_heshangSeatNight;",
+            "BOTC_HeshangTryBlockSelection(p, r)",
+            "BOTC_HeshangTryBlockSeat(src, srcRole, q)",
+            "BOTC_HeshangTryBlockSeat(d, 70, g_nodA)",
+            "BOTC_HeshangDawnClear();",
+            "BOTC_NoDashiiSync();",
+            "BOTC_HeshangAdjacentAlive(i, q)",
+            "g_heshangSeatUsed[h] = true;",
+            "if (!BOTC_AbilityWorks(src, role)) {",
+            "return false;                      // 刺客的刺杀明确不能被保护。",
+            "g_tokRole[197] = 161;",
+        ):
+            self.assertIn(marker, source)
+
+    def test_gudiao_runtime_entrypoints_match_spec(self) -> None:
+        spec = json.loads(
+            (PROJECT_ROOT / "roles" / "role_162_gudiao.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        errors, _ = validate_spec(spec)
+        self.assertEqual(errors, [])
+
+        source = (PROJECT_ROOT / "scripts" / "BOTC.galaxy").read_text(
+            encoding="utf-8-sig"
+        )
+        for marker in (
+            "int[14]     g_gdPrev;",
+            "int[14]     g_gdBy;",
+            "g_roleName[162]",
+            "g_tokName[198]",
+            "g_tokName[199]",
+            "g_tokName[200]",
+            "int[14]     g_gdFlightBy;",
+            "g_noAllFirst[162] = 26;",
+            "g_noAllOther[162] = 1;",
+            "BOTC_GudiaoNextTownsfolk(p, from, dir)",
+            "from = BOTC_GudiaoFlightSeat(p);",
+            "g_gdFlightBy[target] = p;",
+            "盘璇已移动，但蛊毒被和尚阻止",
+            "if (BOTC_SeatTeam(q) != 0) {",
+            "if (BOTC_SeatTrueRole(q) == 136) {",
+            "BOTC_HeshangTryBlockSeat(p, 162, target)",
+            "BOTC_GudiaoApply(p, change);",
+            "BOTC_GudiaoDuskClear();",
+            "BOTC_GudiaoSourceGone(q);",
+            "if (r == 162) {",
+            "if (g_miRole == 813)",
+            "RandomInt(1, 100) <= g_regDisguiseChance",
+        ):
+            self.assertIn(marker, source)
+
+    def test_warden_runtime_entrypoints_match_spec(self) -> None:
+        spec = json.loads(
+            (PROJECT_ROOT / "roles" / "role_163_warden.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        errors, _ = validate_spec(spec)
+        self.assertEqual(errors, [])
+
+        source = (PROJECT_ROOT / "scripts" / "BOTC.galaxy").read_text(
+            encoding="utf-8-sig"
+        )
+        for marker in (
+            "int[64]     g_wardenPick;",
+            "int[14]     g_wardenBy;",
+            "g_roleName[163]",
+            "g_roleTargets[163] = 3;",
+            "g_noAllFirst[163] = 26;",
+            "g_noAllOther[163] = 124;",
+            "g_tokName[201]",
+            "g_tokName[202]",
+            "if (r == 163) {",
+            "BOTC_WardenResolve(p, w1, w2, w3)",
+            "BOTC_WardenOpenChoice(p)",
+            "BOTC_WardenKillChoice(n + 1)",
+            "BOTC_WardenExecDeath(q)",
+            "BOTC_WardenClear(q, true)",
+            'return "选择至多三名玩家";',
+        ):
+            self.assertIn(marker, source)
+        self.assertNotIn("典狱长至少要选择一名玩家", source)
+        self.assertNotIn("if (!g_wardenAskBy", source)
+
+    def test_mastermind_overtime_win_is_not_overridden(self) -> None:
+        source = (PROJECT_ROOT / "scripts" / "BOTC.galaxy").read_text(
+            encoding="utf-8-sig"
+        )
+        self.assertIn(
+            "g_lastDeadSeat = 0;       // 这次恶魔死亡已经转化为主谋加时",
+            source,
+        )
+        self.assertIn(
+            "if (!g_manualWin && !g_mmExtra && side != 0",
+            source,
+        )
+
+    def test_half_immortal_redirect_uses_dedicated_prompt(self) -> None:
+        source = (PROJECT_ROOT / "scripts" / "BOTC.galaxy").read_text(
+            encoding="utf-8-sig"
+        )
+        self.assertIn("g_miRole = 815;", source)
+        self.assertIn(
+            "BOTC_HalfImmortalApply(seat, g_halfSlot, n + 1)",
+            source,
+        )
+        half_start = source.index("bool BOTC_HalfImmortalMaybePrompt (int p) {")
+        half_end = source.index("void BOTC_HalfImmortalApply (", half_start)
+        half_prompt = source[half_start:half_end]
+        self.assertNotIn("BOTC_SkillRender(1);", half_prompt)
+        self.assertNotIn("g_skillPicking[1] = true;", half_prompt)
+        self.assertNotIn("if (g_halfPick && p == 1)", source)
+
+    def test_summoner_only_offers_demons_from_current_script(self) -> None:
+        source = (PROJECT_ROOT / "scripts" / "BOTC.galaxy").read_text(
+            encoding="utf-8-sig"
+        )
+        can_use_start = source.index("bool BOTC_SummonerCanUseRole (int role) {")
+        can_use_end = source.index(
+            "void BOTC_SummonerGridCatalog (int p) {", can_use_start
+        )
+        can_use = source[can_use_start:can_use_end]
+        self.assertIn("if (!BOTC_BoardHasRole(role)) {", can_use)
+
+        catalog_start = can_use_end
+        catalog_end = source.index("int BOTC_SummonerSeat () {", catalog_start)
+        catalog = source[catalog_start:catalog_end]
+        self.assertIn("!BOTC_BoardHasRole(r)", catalog)
+
+    def test_limited_ability_prompts_include_selection_type(self) -> None:
+        source = (PROJECT_ROOT / "scripts" / "BOTC.galaxy").read_text(
+            encoding="utf-8-sig"
+        )
+        for marker in (
+            "string BOTC_LimitedAskText (int p, int r) {",
+            'if (r == 29) { pick = "选择一个角色"; }',
+            'if (r == 30) { pick = "选择一名已死亡玩家"; }',
+            'if (r == 55) { pick = "选择除你以外的两名玩家"; }',
+            'if (r == 56) { pick = "选择一个善良角色"; }',
+            'if (r == 77) { pick = "选择一名存活玩家"; }',
+            'if (r == 78) { pick = "选择恶魔或爪牙角色"; }',
+            'if (r == 124) { pick = "选择一个镇民角色"; }',
+            'return "是否发动能力（" + pick + "）";',
+            "BOTC_LimitedAskText(p, r)",
+            "BOTC_LimitedAskText(p, 46)",
+            "是否发动能力（选择自己是否醉酒）",
+        ):
+            self.assertIn(marker, source)
+
+    def test_wudao_triggers_for_selection_and_passive_effects(self) -> None:
+        source = (PROJECT_ROOT / "scripts" / "BOTC.galaxy").read_text(
+            encoding="utf-8-sig"
+        )
+        for marker in (
+            "bool BOTC_WudTryTrigger (int target, int source) {",
+            "void BOTC_WudCheckSelection (int source) {",
+            "BOTC_WudCheckSelection(p);",
+            "BOTC_WudTryTrigger(q, src);",
+            "BOTC_WudTryTrigger(t, p);",
+            "BOTC_WudTryTrigger(g_nodA, d);",
+            "BOTC_WudTryTrigger(g_nodB, d);",
+            "BOTC_WudTryTrigger(q, d);",
+            "BOTC_WudTryTrigger(who, m);",
+            "BOTC_WudTryTrigger(i, demon);",
+            "BOTC_WudTryTrigger(i, q);",
+            "BOTC_WudTryTrigger(q, p);",
+            "BOTC_WudTryTrigger(n1, k);",
+            "BOTC_WudTryTrigger(pick, who);",
+            "原效果仍会继续结算",
+        ):
+            self.assertIn(marker, source)
+
+    def test_painted_skin_revives_visible_death_and_restores_zombuul_life(self) -> None:
+        spec = json.loads(
+            (PROJECT_ROOT / "roles" / "role_155_paintedskin.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        errors, _ = validate_spec(spec)
+        self.assertEqual(errors, [])
+        self.assertEqual(spec["other_night_order"], 24)
+
+        source = (PROJECT_ROOT / "scripts" / "BOTC.galaxy").read_text(
+            encoding="utf-8-sig"
+        )
+        for marker in (
+            "wasZombuulFake = g_zombFake[q];",
+            "!BOTC_PublicDead(q) && !BOTC_SeatDead(q)",
+            "带有选择标记且广场显示为死亡",
+            "BOTC_LivingCorpseRevive(q);",
+            "wasLivingCorpse = g_liveCorpse[q];",
+            "wasVisibleDead = (BOTC_PublicDead(q) || g_zombFake[q]);",
+            "g_noAllOther[155] = 24;",
+            "if (wasLivingCorpse || wasVisibleDead) {",
+            "首次死亡能力与画皮攻击互相抵消",
+        ):
+            self.assertIn(marker, source)
+        hook_start = source.index("int BOTC_SkinDeathHook (int q) {")
+        hook_end = source.index("void BOTC_SkinChoose (int p, int q) {", hook_start)
+        hook = source[hook_start:hook_end]
+        self.assertIn("BOTC_LivingCorpseRevive(q);", hook)
+        self.assertIn("BOTC_RestoreOneShot(q);", hook)
+
+    def test_recent_minion_and_demon_names_are_colored_in_chat(self) -> None:
+        source = (PROJECT_ROOT / "scripts" / "BOTC.galaxy").read_text(
+            encoding="utf-8-sig"
+        )
+        for marker in (
+            'BOTC_PutWord(t, "饕餮", Color(255, 0, 0))',
+            'BOTC_PutWord(t, "蛊雕", Color(255, 69, 0))',
+            'BOTC_PutWord(t, "典狱长", Color(255, 0, 0))',
+        ):
+            self.assertIn(marker, source)
 
 
 class BoardPaginationTests(unittest.TestCase):
@@ -334,6 +563,47 @@ class BoardPaginationTests(unittest.TestCase):
         cover = PROJECT_ROOT / "assets" / "game" / "botc_board_cscd.dds"
         raw = cover.read_bytes()
         self.assertEqual(raw[:4], b"DDS ")
+        self.assertEqual(struct.unpack_from("<I", raw, 84)[0], 0)
+        self.assertEqual(struct.unpack_from("<I", raw, 88)[0], 32)
+        self.assertEqual(len(raw), 256 * 256 * 4 + 128)
+
+    def test_yihua_board_roster_and_cover(self) -> None:
+        source = (PROJECT_ROOT / "scripts" / "BOTC.galaxy").read_text(
+            encoding="utf-8-sig"
+        )
+        self.assertIn("return 14;  // 【板子张数】", source)
+        self.assertIn('return "移花接木";', source)
+        self.assertIn('return "botc_board_yhjm.dds";', source)
+        self.assertIn("if (slot == 11) {\n            return 15;", source)
+        self.assertIn("g_boardRoleN[15] = 25;", source)
+
+        roles = {
+            int(slot): int(role)
+            for slot, role in re.findall(
+                r"g_boardRole\[\(15 \* 256\) \+ (\d+)\]\s*=\s*(\d+);",
+                source,
+            )
+        }
+        self.assertEqual(
+            [roles[index] for index in range(25)],
+            [
+                50, 5, 116, 159, 24, 156, 161, 128, 105, 27, 28, 158, 74,
+                160, 37, 38, 157,
+                93, 155, 162, 39,
+                44, 154, 121, 163,
+            ],
+        )
+
+        for path, size in (
+            (PROJECT_ROOT / "assets" / "source" / "board_15_yihua.png", (550, 248)),
+            (PROJECT_ROOT / "assets" / "game" / "botc_board_yhjm.dds", (256, 256)),
+        ):
+            self.assertTrue(path.is_file())
+            self.assertGreater(path.stat().st_size, 0)
+        raw = (PROJECT_ROOT / "assets" / "game" / "botc_board_yhjm.dds").read_bytes()
+        self.assertEqual(raw[:4], b"DDS ")
+        self.assertEqual(struct.unpack_from("<I", raw, 12)[0], size[0])
+        self.assertEqual(struct.unpack_from("<I", raw, 16)[0], size[1])
         self.assertEqual(struct.unpack_from("<I", raw, 84)[0], 0)
         self.assertEqual(struct.unpack_from("<I", raw, 88)[0], 32)
         self.assertEqual(len(raw), 256 * 256 * 4 + 128)
@@ -447,6 +717,37 @@ class GameStartLogTests(unittest.TestCase):
         cancel_end = source.index("\n}\n", cancel_start)
         cancel = source[cancel_start:cancel_end]
         self.assertEqual(cancel.count("BOTC_ClearAllLogs();"), 2)
+
+
+class BluffPanelRegressionTests(unittest.TestCase):
+    def test_manual_bottom_right_bluff_panels_are_restored(self) -> None:
+        source = (PROJECT_ROOT / "scripts" / "BOTC.galaxy").read_text(
+            encoding="utf-8-sig"
+        )
+
+        self.assertGreaterEqual(
+            source.count(
+                "DialogControlSetVisible(g_bluffSeat[i], PlayerGroupSingle(g_teller), true);"
+            ),
+            2,
+        )
+        self.assertGreaterEqual(
+            source.count(
+                "DialogControlSetVisible(g_lbluffSeat[i], PlayerGroupSingle(g_teller), true);"
+            ),
+            2,
+        )
+        self.assertIn(
+            "DialogControlSetVisible(g_specBtn, PlayerGroupSingle(g_teller), g_started || g_isNight);",
+            source,
+        )
+        self.assertNotIn("g_specBluffBtn = BOTC_NewButton", source)
+        self.assertNotIn("if (c == g_specBluffBtn)", source)
+        self.assertNotIn("BOTC_BluffAskStart();", source)
+        self.assertIn(
+            "DialogSetVisible(g_bluffDlg, PlayerGroupSingle(g_teller), true);",
+            source,
+        )
 
 
 if __name__ == "__main__":

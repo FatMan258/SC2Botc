@@ -1,0 +1,95 @@
+{
+  "schema_version": 2,
+  "index": 158,
+  "name": "半仙",
+  "team": "townsfolk",
+  "alignment": "good",
+  "text": "任何在夜晚使用自身能力选择你的其他玩家，会改为选中另一名邪恶玩家作为替代。",
+  "lore": "半仙把针对自己的选择与恶意转移到邪恶玩家身上。",
+  "timing": "passive",
+  "frequency": "always",
+  "action": "passive",
+  "target_count": 0,
+  "first_night_order": null,
+  "other_night_order": null,
+  "role_keywords": "",
+  "target": {
+    "kind": "none",
+    "count": 0,
+    "living": false,
+    "allow_self": false,
+    "allow_repeat": false
+  },
+  "artwork": {
+    "source": "assets/source/role_158_half_immortal.png",
+    "source_url": "https://clocktower-wiki.gstonegames.com/index.php?title=%E5%8D%8A%E4%BB%99",
+    "role_icon": "botc_role158.dds",
+    "night_icon": "botc_night158.dds",
+    "token_icons": [
+      "botc_tk158.dds"
+    ]
+  },
+  "night_order": {
+    "section": "passive",
+    "anchor_role": null,
+    "relation": null,
+    "first": null,
+    "other": null
+  },
+  "tokens": [],
+  "jinxes": [
+    {
+      "role": "痢蛭",
+      "text": "痢蛭的宿主及其中毒效果不能被半仙转移。"
+    },
+    {
+      "role": "鸩",
+      "text": "鸩选择半仙时，半仙中毒并死亡，不会将目标转移为邪恶玩家。"
+    }
+  ],
+  "effects": [
+    {
+      "kind": "custom",
+      "id": "redirect_selected_half_immortal",
+      "notes": "夜间技能确认时，只将选中半仙的那一个目标槽改为说书人指定的一名邪恶玩家，其他目标不变。"
+    },
+    {
+      "kind": "custom",
+      "id": "storyteller_chooses_evil_target",
+      "notes": "说书人通过座位选择面板指定新的邪恶目标；允许选择已死亡邪恶玩家或能力使用者本人，但不能与其他已选目标重复。"
+    },
+    {
+      "kind": "custom",
+      "id": "no_per_night_limit",
+      "notes": "半仙没有每晚一次限制；同一晚的每次选择都可以触发。同一次多目标能力中，每个选中半仙的目标槽都分别改选。"
+    }
+  ],
+  "randomness": {
+    "declared": false,
+    "notes": ""
+  },
+  "tests": [
+    "夜间技能选中半仙时，说书人弹出座位选择面板。",
+    "说书人只能确认一名邪恶玩家作为替代目标。",
+    "多目标能力只改变选中半仙的槽，其他目标保持不变。",
+    "替代目标可以是已死亡邪恶玩家或能力使用者本人，但不能与其他目标重复。",
+    "没有其他合法邪恶目标时保留原来的半仙目标。",
+    "同一晚可以多次触发；同一次多目标能力中的每个半仙目标都会分别进入改选。",
+    "半仙完成改选后继续原能力结算，不会在同一条能力上再次触发使节。",
+    "白天选择半仙不会触发能力。",
+    "换座位、换说书人和新局重置时，半仙待选择状态保持正确。"
+  ],
+  "implementation": {
+    "required_functions": [
+      "BOTC_HalfImmortalSeat",
+      "BOTC_HalfImmortalMaybePrompt",
+      "BOTC_HalfImmortalApply"
+    ],
+    "required_symbols": [
+      "g_halfPick",
+      "g_halfBy",
+      "g_halfSlot",
+      "g_roleName[158]"
+    ]
+  }
+}

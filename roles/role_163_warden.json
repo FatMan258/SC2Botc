@@ -1,0 +1,132 @@
+{
+  "schema_version": 2,
+  "index": 163,
+  "name": "典狱长",
+  "team": "demon",
+  "alignment": "evil",
+  "text": "每个夜晚，你要选择至多三名玩家：如果明天白天他们之一死于处决，上次被你选择的其他玩家会在当晚死亡。否则，当晚他们之中会有一名玩家死亡。",
+  "lore": "典狱长对上一批被判罚的人执行连坐，或在无人被处决时择一人处死。",
+  "timing": "every_night",
+  "frequency": "always",
+  "action": "every_night",
+  "target_count": 3,
+  "first_night_order": 26,
+  "other_night_order": 124,
+  "role_keywords": "每个夜晚|额外死亡",
+  "effect_categories": [
+    "active_selection",
+    "delayed_death",
+    "execution_trigger",
+    "storyteller_choice",
+    "multi_target"
+  ],
+  "target": {
+    "kind": "players",
+    "count": 3,
+    "living": false,
+    "allow_self": true,
+    "allow_repeat": false
+  },
+  "artwork": {
+    "source": "assets/source/role_163_warden.png",
+    "source_url": "https://clocktower-wiki.gstonegames.com/index.php?title=%E5%85%B8%E7%8B%B1%E9%95%BF",
+    "role_icon": "botc_role163.dds",
+    "night_icon": "botc_night163.dds",
+    "token_icons": [
+      "botc_tk163.dds"
+    ]
+  },
+  "night_order": {
+    "section": "kill",
+    "anchor_role": "普卡",
+    "relation": "after",
+    "first": 26,
+    "other": 124
+  },
+  "tokens": [
+    {
+      "id": "warden_sentence",
+      "index": 201,
+      "slot": 201,
+      "name": "判罚（典狱长）",
+      "short": "判罚",
+      "effect": "记录典狱长本夜选择的上一批目标，下一夜根据这批目标是否有人被处决来结算死亡。",
+      "place": "典狱长确认零至三名玩家后，分别放在被选玩家身上；即使典狱长醉酒或中毒也放置。",
+      "remove": "下一轮判罚结算、典狱长死亡或离场、开始新一局时移除。",
+      "visibility": "storyteller",
+      "icon": "botc_tk163.dds",
+      "duration": "game"
+    },
+    {
+      "id": "warden_executed_today",
+      "index": 202,
+      "slot": 202,
+      "name": "死于今日（典狱长）",
+      "short": "死于今日",
+      "effect": "表示带判罚标记的玩家今天死于处决，下一轮典狱长结算时其他上一批目标会一起死亡。",
+      "place": "白天带判罚标记的玩家因处决死亡时放置。",
+      "remove": "下一轮判罚结算、典狱长死亡或离场、开始新一局时移除。",
+      "visibility": "storyteller",
+      "icon": "botc_tk163.dds",
+      "duration": "game"
+    }
+  ],
+  "jinxes": [
+    {
+      "role": "召唤师",
+      "text": "召唤师可以在第二个夜晚召唤典狱长，替代第三个夜晚的召唤。"
+    }
+  ],
+  "effects": [
+    {
+      "kind": "custom",
+      "id": "select_next_batch",
+      "notes": "首夜及之后每夜可选择零至三名不同玩家，先登记为下一批判罚；直接确认时本夜不放置新判罚。"
+    },
+    {
+      "kind": "custom",
+      "id": "resolve_previous_batch",
+      "notes": "玩家选择新一批后，才结算上一批；若选择莽夫导致典狱长醉酒，会先阻止上一批死亡结算。"
+    },
+    {
+      "kind": "custom",
+      "id": "execution_chain",
+      "notes": "上一批中有人白天死于处决时，除该死者外的其他上一批玩家在当晚死亡。"
+    },
+    {
+      "kind": "custom",
+      "id": "no_execution_single_death",
+      "notes": "上一批无人死于处决时，由说书人从上一批仍能死亡的玩家中选择一人在典狱长行动轮次死亡。"
+    }
+  ],
+  "randomness": {
+    "declared": false,
+    "notes": "无人死于处决时由说书人选择死亡玩家，不使用随机数。"
+  },
+  "tests": [
+    "首夜可以选择零至三名不同玩家；选择零人时直接确认且不放置判罚标记。",
+    "第二夜先选择新一批，再结算上一批。",
+    "上一批有人白天死于处决时，其他上一批玩家当晚死亡。",
+    "上一批无人死于处决时，由说书人选择其中一名仍能死亡的玩家死亡。",
+    "新一批选择到莽夫并导致典狱长醉酒时，上一批死亡结算被阻止。",
+    "判罚标记在典狱长中毒或醉酒时仍要放置。",
+    "典狱长死亡或离场时清除判罚与死于今日标记。"
+  ],
+  "implementation": {
+    "required_functions": [
+      "BOTC_WardenResolve",
+      "BOTC_WardenOpenChoice",
+      "BOTC_WardenKillChoice",
+      "BOTC_WardenExecDeath",
+      "BOTC_WardenClear"
+    ],
+    "required_symbols": [
+      "g_wardenPick",
+      "g_wardenBy",
+      "g_wardenAsk",
+      "g_roleName[163]",
+      "g_tokName[201]",
+      "g_tokName[202]"
+    ]
+  }
+}
