@@ -1,0 +1,109 @@
+{
+  "schema_version": 2,
+  "index": 159,
+  "name": "掮客",
+  "team": "townsfolk",
+  "alignment": "good",
+  "text": "每个夜晚，你要选择两名存活玩家：如果他们阵营相同，今晚任何玩家使用自身能力选择他们之一作为目标时，改为选中另一名玩家。",
+  "lore": "掮客促成两名同阵营玩家合作，使其他玩家针对他们的夜间选择发生转移。",
+  "timing": "other_nights",
+  "frequency": "always",
+  "action": "every_night",
+  "target_count": 2,
+  "first_night_order": 17,
+  "other_night_order": 4,
+  "role_keywords": "每个夜晚",
+  "target": {
+    "kind": "players",
+    "count": 2,
+    "living": true,
+    "allow_self": true,
+    "allow_repeat": false
+  },
+  "artwork": {
+    "source": "assets/source/role_159_broker.png",
+    "source_url": "https://clocktower-wiki.gstonegames.com/index.php?title=%E6%8E%AE%E5%AE%A2",
+    "role_icon": "botc_role159.dds",
+    "night_icon": "botc_night159.dds",
+    "token_icons": [
+      "botc_tk159.dds"
+    ]
+  },
+  "night_order": {
+    "section": "target_change",
+    "anchor_role": "水手",
+    "relation": "before",
+    "first": 17,
+    "other": 4
+  },
+  "tokens": [
+    {
+      "id": "broker_regular",
+      "index": 184,
+      "slot": 184,
+      "name": "熟客（掮客）",
+      "short": "熟客",
+      "effect": "本夜任何玩家使用能力选择其中一人时，会改为选择另一人。",
+      "place": "掮客选择两名存活玩家并确认本次发动后，分别放在两名玩家身上。",
+      "remove": "天亮、掮客离场或重新选择时移除。",
+      "visibility": "storyteller",
+      "icon": "botc_tk159.dds",
+      "duration": "night"
+    }
+  ],
+  "jinxes": [
+    {
+      "role": "刺客",
+      "text": "刺客攻击掮客选中的熟客时直接死亡，不会把攻击转移到另一名熟客。"
+    },
+    {
+      "role": "痢蛭",
+      "text": "痢蛭的宿主及其中毒效果不能被掮客转移。"
+    }
+  ],
+  "effects": [
+    {
+      "kind": "custom",
+      "id": "same_alignment_pair",
+      "notes": "掮客选择两名不同的存活玩家；阵营相同时，本夜两人获得熟客转选效果。"
+    },
+    {
+      "kind": "custom",
+      "id": "interference_storyteller_prompt",
+      "notes": "如果两名目标中包含陌客、间谍等互动干扰身份，暂停本轮并让说书人决定是否发动掮客。"
+    },
+    {
+      "kind": "custom",
+      "id": "silent_target_swap",
+      "notes": "夜间技能选中任意一名熟客时，实际结算目标改为另一名熟客；玩家私聊仍显示原始选择。"
+    }
+  ],
+  "randomness": {
+    "declared": false,
+    "notes": ""
+  },
+  "tests": [
+    "每个夜晚选择两名不同的存活玩家。",
+    "两名玩家阵营相同时显示熟客 token，本夜选择其中一人会改为另一人。",
+    "两名玩家阵营不同时不形成熟客。",
+    "目标中包含陌客或间谍时，说书人收到是否发动的选择面板。",
+    "说书人选择不发动时，本夜不形成熟客。",
+    "玩家私聊仍显示自己最初选择的两名玩家，不显示暗改结果。",
+    "天亮、掮客离场或重新选择时清除熟客状态。"
+  ],
+  "implementation": {
+    "required_functions": [
+      "BOTC_BrokerSelect",
+      "BOTC_BrokerAnswer",
+      "BOTC_BrokerRedirect",
+      "BOTC_BrokerClear"
+    ],
+    "required_symbols": [
+      "g_brokerOn",
+      "g_brokerA",
+      "g_brokerB",
+      "g_roleName[159]",
+      "g_tokName[184]"
+    ]
+  }
+}

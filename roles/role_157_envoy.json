@@ -1,0 +1,104 @@
+{
+  "schema_version": 2,
+  "index": 157,
+  "name": "使节",
+  "team": "outsider",
+  "alignment": "good",
+  "text": "每个夜晚限一次，一名玩家在使用自身能力选择邪恶玩家时会改为选中你，即使你已死亡。",
+  "lore": "使节远离家乡来到陌生的地方，因此容易成为他人能力选择的目标。",
+  "timing": "passive",
+  "frequency": "once_per_night",
+  "action": "passive",
+  "target_count": 0,
+  "first_night_order": null,
+  "other_night_order": null,
+  "role_keywords": "",
+  "target": {
+    "kind": "none",
+    "count": 0,
+    "living": false,
+    "allow_self": false,
+    "allow_repeat": false
+  },
+  "artwork": {
+    "source": "assets/source/role_157_envoy.png",
+    "source_url": "https://clocktower-wiki.gstonegames.com/index.php?title=%E4%BD%BF%E8%8A%82",
+    "role_icon": "botc_role157.dds",
+    "night_icon": "botc_night157.dds",
+    "token_icons": [
+      "botc_tk157.dds"
+    ]
+  },
+  "night_order": {
+    "section": "passive",
+    "anchor_role": null,
+    "relation": null,
+    "first": null,
+    "other": null
+  },
+  "tokens": [
+    {
+      "id": "envoy_triggered",
+      "index": 183,
+      "slot": 183,
+      "name": "已触发（使节）",
+      "short": "已触发",
+      "effect": "记录使节本晚已经改写了一次能力目标。",
+      "place": "说书人确认把包含邪恶玩家的本次选择改为使节后放置。",
+      "remove": "天亮或使节离场时移除。",
+      "visibility": "storyteller",
+      "icon": "botc_tk157.dds",
+      "duration": "night"
+    }
+  ],
+  "jinxes": [
+    {
+      "role": "痢蛭",
+      "text": "痢蛭的宿主及其中毒效果不能通过使节转移到其他玩家。"
+    }
+  ],
+  "effects": [
+    {
+      "kind": "custom",
+      "id": "evil_target_storyteller_prompt",
+      "notes": "任何技能确认前，如果本次所选目标中包含邪恶玩家，且使节本晚尚未触发、未中毒醉酒，就暂停原结算并提醒说书人判定。"
+    },
+    {
+      "kind": "custom",
+      "id": "replace_one_target",
+      "notes": "说书人选择触发时，把一个包含邪恶玩家的目标改为使节，然后继续结算原能力；也可以选择保持原目标。"
+    },
+    {
+      "kind": "custom",
+      "id": "once_per_night_and_works_dead",
+      "notes": "使节每晚最多触发一次；即使已经死亡仍可触发，天亮移除已触发记录。"
+    }
+  ],
+  "randomness": {
+    "declared": false,
+    "notes": ""
+  },
+  "tests": [
+    "任意技能选择包含邪恶玩家时，说书人会收到本次选择包含邪恶玩家的私聊提醒。",
+    "说书人可选择改为使节或保持原选择，选择后继续原能力结算。",
+    "选择改为使节时，一个邪恶目标槽替换为使节并放置已触发 token。",
+    "选择保持原选择时，本晚后续仍可能再次询问。",
+    "触发一次后，同一晚不再重复询问。",
+    "使节死亡后仍可触发，中毒、醉酒或活尸时不能触发。",
+    "天亮后已触发 token 和本晚状态被清除。"
+  ],
+  "implementation": {
+    "required_functions": [
+      "BOTC_EnvoySeat",
+      "BOTC_EnvoyMaybePrompt",
+      "BOTC_EnvoyAnswer",
+      "BOTC_EnvoyDawnClear"
+    ],
+    "required_symbols": [
+      "g_envoyNight",
+      "g_envoyUsed",
+      "g_roleName[157]",
+      "g_tokName[183]"
+    ]
+  }
+}

@@ -1,0 +1,111 @@
+{
+  "schema_version": 2,
+  "index": 161,
+  "name": "和尚",
+  "team": "townsfolk",
+  "alignment": "good",
+  "text": "每个夜晚，当有邪恶玩家的能力首次选择或影响与你邻近的存活玩家时，改为此次能力不生效并持续至下个黎明，且你会得知你的能力被触发。",
+  "lore": "和尚庇护邻座玩家，使第一次威胁到他们的邪恶能力失效。",
+  "timing": "passive",
+  "frequency": "conditional",
+  "action": "passive",
+  "target_count": 0,
+  "first_night_order": null,
+  "other_night_order": null,
+  "role_keywords": "每个夜晚",
+  "target": {
+    "kind": "none",
+    "count": 0,
+    "living": false,
+    "allow_self": false,
+    "allow_repeat": false
+  },
+  "artwork": {
+    "source": "assets/source/role_161_heshang.png",
+    "source_url": "https://clocktower-wiki.gstonegames.com/index.php?title=%E5%92%8C%E5%B0%9A",
+    "role_icon": "botc_role161.dds",
+    "night_icon": "botc_night161.dds",
+    "token_icons": [
+      "botc_tk161.dds"
+    ]
+  },
+  "night_order": {
+    "section": "interference",
+    "anchor_role": null,
+    "relation": null,
+    "first": null,
+    "other": null
+  },
+  "tokens": [
+    {
+      "id": "heshang_triggered",
+      "index": 186,
+      "slot": 186,
+      "name": "已生效（和尚）",
+      "short": "已生效",
+      "effect": "和尚本晚已经触发过一次能力。",
+      "place": "第一次成功阻止邪恶能力影响邻座存活玩家时，放在和尚身上。",
+      "remove": "天亮或和尚离场时移除。",
+      "visibility": "storyteller",
+      "icon": "botc_tk161.dds",
+      "duration": "night"
+    }
+  ],
+  "jinxes": [
+    {
+      "role": "利维坦",
+      "text": "如果利维坦提名并处决了与和尚邻近的存活玩家，善良阵营获胜。"
+    }
+  ],
+  "effects": [
+    {
+      "kind": "custom",
+      "id": "first_evil_effect_on_neighbor",
+      "notes": "每个夜晚首次有邪恶玩家的能力选择或影响和尚邻座的存活玩家时触发，并取消本次具体能力效果。"
+    },
+    {
+      "kind": "custom",
+      "id": "notify_heshang",
+      "notes": "和尚只会得知自己的能力被触发，不会得知来源或受影响的具体玩家。"
+    },
+    {
+      "kind": "custom",
+      "id": "persistent_until_dawn",
+      "notes": "诺-达鲺这类持续效果会被压制到黎明；开局已生效的持续效果不会触发。"
+    },
+    {
+      "kind": "custom",
+      "id": "unpreventable_effects",
+      "notes": "刺客等明确无法被阻止的能力不会触发和尚。"
+    }
+  ],
+  "randomness": {
+    "declared": false,
+    "notes": ""
+  },
+  "tests": [
+    "邪恶玩家的选择型能力首次选中和尚邻座的存活玩家时被取消。",
+    "和尚收到私聊提示，但不会得知来源或具体邻座。",
+    "同一夜晚和尚最多触发一次。",
+    "选择死亡邻座不会触发。",
+    "按玩家当前阵营判断，而不是只看角色类型。",
+    "刺客等不可阻止效果不会触发和尚。",
+    "游戏中途创造的诺-达鲺若会影响和尚邻座，其持续中毒被压制到黎明，攻击仍生效。",
+    "天亮清除已生效 token，并恢复被压制的持续效果。"
+  ],
+  "implementation": {
+    "required_functions": [
+      "BOTC_HeshangSeat",
+      "BOTC_HeshangTryBlockSelection",
+      "BOTC_HeshangTryBlockSeat",
+      "BOTC_HeshangDawnClear"
+    ],
+    "required_symbols": [
+      "g_heshangUsed",
+      "g_heshangBy",
+      "g_heshangNoDashiiMute",
+      "g_roleName[161]",
+      "g_tokName[186]"
+    ]
+  }
+}

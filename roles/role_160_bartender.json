@@ -1,0 +1,100 @@
+{
+  "schema_version": 2,
+  "index": 160,
+  "name": "酒保",
+  "team": "outsider",
+  "alignment": "good",
+  "text": "与你邻近的善良玩家（旅行者除外）之一醉酒，即使你死于处决。",
+  "lore": "酒保会让一名邻近的善良玩家持续醉酒。",
+  "timing": "setup",
+  "frequency": "always",
+  "action": "passive",
+  "target_count": 0,
+  "first_night_order": null,
+  "other_night_order": null,
+  "role_keywords": "醉酒",
+  "target": {
+    "kind": "none",
+    "count": 0,
+    "living": false,
+    "allow_self": false,
+    "allow_repeat": false
+  },
+  "artwork": {
+    "source": "assets/source/role_160_bartender.png",
+    "source_url": "https://clocktower-wiki.gstonegames.com/index.php?title=%E9%85%92%E4%BF%9D",
+    "role_icon": "botc_role160.dds",
+    "night_icon": "botc_night160.dds",
+    "token_icons": [
+      "botc_tk160.dds"
+    ]
+  },
+  "night_order": {
+    "section": "passive",
+    "anchor_role": null,
+    "relation": null,
+    "first": null,
+    "other": null
+  },
+  "tokens": [
+    {
+      "id": "bartender_drunk",
+      "index": 185,
+      "slot": 185,
+      "name": "醉酒（酒保）",
+      "short": "醉酒",
+      "effect": "该玩家失去能力，属于持续醉酒状态。",
+      "place": "随机配板或手动配板完成后，从酒保左右最近的善良非旅行者中随机选择一名。",
+      "remove": "酒保中毒、醉酒、失去能力或目标不再是合法邻座善良玩家时移除；酒保死亡不会移除。",
+      "visibility": "storyteller",
+      "icon": "botc_tk160.dds",
+      "duration": "game"
+    }
+  ],
+  "jinxes": [],
+  "effects": [
+    {
+      "kind": "custom",
+      "id": "random_adjacent_good",
+      "notes": "配板完成后立即检查酒保左右最近的两名现存玩家，过滤掉邪恶与旅行者；只有一名合法时直接选择，两名则随机选择，不弹出说书人面板。"
+    },
+    {
+      "kind": "custom",
+      "id": "persistent_after_death",
+      "notes": "酒保死亡不会清除醉酒；只有酒保中毒、醉酒、失去能力或失去角色时清除。"
+    },
+    {
+      "kind": "custom",
+      "id": "alignment_change_clear",
+      "notes": "被醉酒的玩家不再满足善良邻座条件时立即移除醉酒 token。"
+    }
+  ],
+  "randomness": {
+    "declared": true,
+    "notes": "两侧都存在合法善良玩家时随机选择一名。"
+  },
+  "tests": [
+    "随机和手动配板完成后自动放置醉酒 token。",
+    "只有一名合法邻座善良玩家时直接选中。",
+    "两侧都合法时随机选择，不弹出选择面板。",
+    "邪恶邻座和旅行者不会被选中。",
+    "酒保死亡后醉酒 token 保留。",
+    "酒保中毒、醉酒或失去能力后移除醉酒 token。",
+    "目标转为邪恶后移除醉酒 token。",
+    "新玩家成为酒保时按新的相邻关系重新随机选择。"
+  ],
+  "implementation": {
+    "required_functions": [
+      "BOTC_BartenderSetup",
+      "BOTC_BartenderSync",
+      "BOTC_BartenderClear",
+      "BOTC_BartenderApply"
+    ],
+    "required_symbols": [
+      "g_bartenderSeat",
+      "g_bartenderDrunk",
+      "g_roleName[160]",
+      "g_tokName[185]"
+    ]
+  }
+}

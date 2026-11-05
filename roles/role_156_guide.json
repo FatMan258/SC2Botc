@@ -1,0 +1,78 @@
+{
+  "schema_version": 2,
+  "index": 156,
+  "name": "引路人",
+  "team": "townsfolk",
+  "alignment": "good",
+  "text": "每个夜晚，你要选择除你以外的至多三名玩家：你会得知今晚是否有邪恶玩家的能力选择或影响了他们之中的玩家。",
+  "lore": "引路人关注夜晚中的人，并判断他们是否卷入邪恶能力的行动。",
+  "timing": "other_nights",
+  "frequency": "always",
+  "action": "every_night",
+  "target_count": 3,
+  "first_night_order": 85,
+  "other_night_order": 119,
+  "role_keywords": "每个夜晚",
+  "target": {
+    "kind": "players",
+    "count": 3,
+    "living": false,
+    "allow_self": false,
+    "allow_repeat": false
+  },
+  "artwork": {
+    "source": "assets/source/role_156_guide.png",
+    "source_url": "https://clocktower-wiki.gstonegames.com/index.php?title=%E5%BC%95%E8%B7%AF%E4%BA%BA",
+    "role_icon": "botc_role156.dds",
+    "night_icon": "botc_night156.dds",
+    "token_icons": [
+      "botc_tk156.dds"
+    ]
+  },
+  "night_order": {
+    "section": "information",
+    "anchor_role": "侍女",
+    "relation": "after",
+    "first": 85,
+    "other": 119
+  },
+  "tokens": [],
+  "jinxes": [],
+  "effects": [
+    {
+      "kind": "custom",
+      "id": "zero_to_three_targets",
+      "notes": "使用现有三目标技能面板，但允许只选零至三名不同玩家，并且不能选择自己。"
+    },
+    {
+      "kind": "custom",
+      "id": "storyteller_yes_no",
+      "notes": "确认目标后，说书人手动选择是或否；随后向引路人发送对应的是否信息。"
+    }
+  ],
+  "randomness": {
+    "declared": false,
+    "notes": ""
+  },
+  "tests": [
+    "首个夜晚和之后每个夜晚都会在侍女之后、数学家之前进入唤醒顺序。",
+    "技能面板显示三个目标槽，可以确认零名、一名、两名或三名玩家。",
+    "不能选择自己，重复点击已选玩家会取消该目标。",
+    "确认后弹出是 / 否面板，答案会以私聊信息发送给引路人。",
+    "引路人中毒、醉酒或处于活尸状态时可以收到错误答案。",
+    "说书人自己拿身份测试时也能打开目标面板并收到答案。"
+  ],
+  "implementation": {
+    "required_functions": [
+      "BOTC_SkillConfirm",
+      "BOTC_ManInfoOpen",
+      "BOTC_ManInfoYesNo"
+    ],
+    "required_symbols": [
+      "g_roleName[156]",
+      "g_roleTargets[156]",
+      "g_roleAct[156]",
+      "g_tipAbility[156]"
+    ]
+  }
+}

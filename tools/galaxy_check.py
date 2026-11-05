@@ -334,8 +334,8 @@ def check_script(path: Path) -> tuple[list[str], list[str]]:
 
     if "void BOTC_Init (" not in text and "void BOTC_Init()" not in text:
         errors.append("找不到 BOTC_Init()")
-    if "for (i = 0; i <= 154; i += 1)" not in text:
-        warnings.append("没有发现当前角色上限 154 的扫描循环，确认是否已扩展")
+    if "for (i = 0; i <= 163; i += 1)" not in text:
+        warnings.append("没有发现当前角色上限 163 的扫描循环，确认是否已扩展")
 
     return errors, warnings
 
