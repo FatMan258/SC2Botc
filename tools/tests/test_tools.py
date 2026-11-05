@@ -567,6 +567,47 @@ class BoardPaginationTests(unittest.TestCase):
         self.assertEqual(struct.unpack_from("<I", raw, 88)[0], 32)
         self.assertEqual(len(raw), 256 * 256 * 4 + 128)
 
+    def test_yihua_board_roster_and_cover(self) -> None:
+        source = (PROJECT_ROOT / "scripts" / "BOTC.galaxy").read_text(
+            encoding="utf-8-sig"
+        )
+        self.assertIn("return 14;  // 【板子张数】", source)
+        self.assertIn('return "移花接木";', source)
+        self.assertIn('return "botc_board_yhjm.dds";', source)
+        self.assertIn("if (slot == 11) {\n            return 15;", source)
+        self.assertIn("g_boardRoleN[15] = 25;", source)
+
+        roles = {
+            int(slot): int(role)
+            for slot, role in re.findall(
+                r"g_boardRole\[\(15 \* 256\) \+ (\d+)\]\s*=\s*(\d+);",
+                source,
+            )
+        }
+        self.assertEqual(
+            [roles[index] for index in range(25)],
+            [
+                50, 5, 116, 159, 24, 156, 161, 128, 105, 27, 28, 158, 74,
+                160, 37, 38, 157,
+                93, 155, 162, 39,
+                44, 154, 121, 163,
+            ],
+        )
+
+        for path, size in (
+            (PROJECT_ROOT / "assets" / "source" / "board_15_yihua.png", (550, 248)),
+            (PROJECT_ROOT / "assets" / "game" / "botc_board_yhjm.dds", (256, 256)),
+        ):
+            self.assertTrue(path.is_file())
+            self.assertGreater(path.stat().st_size, 0)
+        raw = (PROJECT_ROOT / "assets" / "game" / "botc_board_yhjm.dds").read_bytes()
+        self.assertEqual(raw[:4], b"DDS ")
+        self.assertEqual(struct.unpack_from("<I", raw, 12)[0], size[0])
+        self.assertEqual(struct.unpack_from("<I", raw, 16)[0], size[1])
+        self.assertEqual(struct.unpack_from("<I", raw, 84)[0], 0)
+        self.assertEqual(struct.unpack_from("<I", raw, 88)[0], 32)
+        self.assertEqual(len(raw), 256 * 256 * 4 + 128)
+
 
 class LogViewerTests(unittest.TestCase):
     def test_player_picker_rebuilds_for_current_seats(self) -> None:

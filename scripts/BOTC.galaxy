@@ -9194,17 +9194,17 @@ void BOTC_TestBoardAt (int p, string arg) {
     int n;
     int v;
     n = 0;
-    for (i = 2; i <= 14; i += 1) {
+    for (i = 2; i <= 15; i += 1) {
         if (n > 0 || i > StringLength(arg)) {
             continue;
         }
         v = StringToInt(StringSub(arg, i, StringLength(arg)));
-        if (v >= 1 && v <= 14) {
+        if (v >= 1 && v <= 15) {
             n = v;
         }
     }
     if (n < 1) {
-        BOTC_Notice(p, "读到的是「" + arg + "」。用法：-board 1 ～ -board 14（板子号 7 = 自定义剧本，13 = 全员追忆，14 = 成双成对）。");
+        BOTC_Notice(p, "读到的是「" + arg + "」。用法：-board 1 ～ -board 15（板子号 7 = 自定义剧本，13 = 全员追忆，14 = 成双成对，15 = 移花接木）。");
         return;
     }
     if (!g_boardOpen || g_boardFade < 4) {
@@ -10530,7 +10530,7 @@ void BOTC_NightOrderRender (int p) {
         DialogControlSetVisible(g_noName[i], PlayerGroupSingle(p), false);
     }
     b = g_board;
-    if (b < 1 || b > 14) {
+    if (b < 1 || b > 15) {
         b = 1;
     }
     for (r = 0; r <= 163; r += 1) {
@@ -11001,7 +11001,7 @@ bool BOTC_KeyInPlay (string key) {
         return false;
     }
     b = g_board;
-    if (b < 1 || b > 14) {
+    if (b < 1 || b > 15) {
         b = 1;                     // 还没选板子：按第 1 张板子算
     }
     for (i = 0; i < g_boardRoleN[b]; i += 1) {
@@ -11098,7 +11098,7 @@ void BOTC_LegacyApply (int b) {
     for (i = 0; i < 164; i += 1) {
         g_legacyOn[i] = false;
     }
-    if (b < 1 || b > 14) {
+    if (b < 1 || b > 15) {
         return;
     }
     for (i = 0; i < g_boardLegacyN[b]; i += 1) {
@@ -18129,6 +18129,34 @@ g_boardRole[(12 * 256) + 22] = 111;
     g_boardRole[(14 * 256) + 23] = 134;  // 奥赫
     g_boardRole[(14 * 256) + 24] = 70;   // 诺-达鲺
     g_boardLegacyN[14] = 0;
+    // 15 号板子 = 移花接木 v2.1.0：13 镇民 / 4 外来者 / 4 爪牙 / 4 恶魔。
+    g_boardRoleN[15] = 25;
+    g_boardRole[(15 * 256) + 0]  = 50;   // 数学家
+    g_boardRole[(15 * 256) + 1]  = 5;    // 占卜师
+    g_boardRole[(15 * 256) + 2]  = 116;  // 郎中
+    g_boardRole[(15 * 256) + 3]  = 159;  // 掮客
+    g_boardRole[(15 * 256) + 4]  = 24;   // 侍女
+    g_boardRole[(15 * 256) + 5]  = 156;  // 引路人
+    g_boardRole[(15 * 256) + 6]  = 161;  // 和尚
+    g_boardRole[(15 * 256) + 7]  = 128;  // 守夜人
+    g_boardRole[(15 * 256) + 8]  = 105;  // 村夫
+    g_boardRole[(15 * 256) + 9]  = 27;   // 赌徒
+    g_boardRole[(15 * 256) + 10] = 28;   // 造谣者
+    g_boardRole[(15 * 256) + 11] = 158;  // 半仙
+    g_boardRole[(15 * 256) + 12] = 74;   // 食人族
+    g_boardRole[(15 * 256) + 13] = 160;  // 酒保
+    g_boardRole[(15 * 256) + 14] = 37;   // 莽夫
+    g_boardRole[(15 * 256) + 15] = 38;   // 疯子
+    g_boardRole[(15 * 256) + 16] = 157;  // 使节
+    g_boardRole[(15 * 256) + 17] = 93;   // 提线木偶
+    g_boardRole[(15 * 256) + 18] = 155;  // 画皮
+    g_boardRole[(15 * 256) + 19] = 162;  // 蛊雕
+    g_boardRole[(15 * 256) + 20] = 39;   // 教父
+    g_boardRole[(15 * 256) + 21] = 44;   // 普卡
+    g_boardRole[(15 * 256) + 22] = 154;  // 饕餮
+    g_boardRole[(15 * 256) + 23] = 121;  // 混沌
+    g_boardRole[(15 * 256) + 24] = 163;  // 典狱长
+    g_boardLegacyN[15] = 0;
 g_jinxCount = 123;
     g_jinxA[0] = 103;  g_jinxB[0] = 94;
     g_jinxText[0] = "传教士 × 军团：如果传教士选中了军团，军团仍然保留能力，";
@@ -21582,7 +21610,7 @@ void BOTC_GridPlan () {
     int b;
     // 还没选出板子（g_board = 0）时按 1 号板子算，免得整个网格是空的（用户 2026-09-19）
     b = g_board;
-    if (b < 1 || b > 14) {
+    if (b < 1 || b > 15) {
         b = 1;
     }
     for (i = 0; i < 64; i += 1) {
@@ -21701,7 +21729,7 @@ void BOTC_GridBuildCat () {
     int t;
     BOTC_GridCatalogClear();
     b = g_board;
-    if (b < 1 || b > 14) {
+    if (b < 1 || b > 15) {
         b = 1;
     }
     for (i = 0; i < g_boardRoleN[b]; i += 1) {
@@ -22531,7 +22559,7 @@ int BOTC_RsPickedCount (int team) {
     int c;
     int r;
     b = g_board;
-    if (b < 1 || b > 14) {
+    if (b < 1 || b > 15) {
         b = 1;
     }
     c = 0;
@@ -33787,7 +33815,7 @@ void BOTC_ManInfoDreamer (int seat, int target) {
         wantEvil = false;                      // 他本身是邪恶 → 陪衬用善良角色
     }
     b = g_board;
-    if (b < 1 || b > 14) {
+    if (b < 1 || b > 15) {
         b = 1;
     }
     pick = 0;
@@ -48186,7 +48214,7 @@ void BOTC_TestHag (int role) {
     if (pick < 0) {
         pick = 21;
         b = g_board;
-        if (b < 1 || b > 14) {
+        if (b < 1 || b > 15) {
             b = 1;
         }
         for (i = 0; i < g_boardRoleN[b]; i += 1) {
@@ -50624,7 +50652,7 @@ void BOTC_ClaimHint () {
 //   渐变：用 4 档不同透明度的黑图（botc_black64/128/192 + botc_black）逐帧切换
 //==================================================================================================
 int BOTC_BoardCount () {
-    return 13;  // 【板子张数】（不含板子 7 自定义剧本）：13 = 全员追忆，14 = 成双成对
+    return 14;  // 【板子张数】（不含板子 7 自定义剧本）：14 = 移花接木
 }
 
 string BOTC_BoardName (int b) {
@@ -50669,6 +50697,9 @@ string BOTC_BoardName (int b) {
     }
     if (b == 14) {
         return "成双成对";
+    }
+    if (b == 15) {
+        return "移花接木";
     }
     return "未定";                 // ⚠ 兜底 return 必须是这个非 void 函数的**最后一句**，新板子往上面加
 }
@@ -50715,6 +50746,9 @@ string BOTC_BoardPic (int b) {
     }
     if (b == 14) {
         return "botc_board_cscd.dds";
+    }
+    if (b == 15) {
+        return "botc_board_yhjm.dds";
     }
     return "botc_blank.dds";       // ⚠ 同上：兜底 return 放最后
 }
@@ -52521,6 +52555,9 @@ int BOTC_BoardAtSlot (int slot) {
         if (slot == 10) {
             return 14;              // 成双成对
         }
+        if (slot == 11) {
+            return 15;              // 移花接木
+        }
         return 0;
     }
     if (slot == 0) {
@@ -52571,7 +52608,7 @@ void BOTC_BoardRender () {
             DialogControlSetVisible(g_boardPic[i], PlayerGroupAll(), true);
         }
     }
-    // 【一级分类布局】（用户 2026-11-01）：每行 6 张；官方剧本 3 张，更多剧本 11 张。
+    // 【一级分类布局】（用户 2026-11-01）：每行 6 张；官方剧本 3 张，更多剧本 12 张。
     for (i = 0; i < 12; i += 1) {
         if (i < 6) {
             DialogControlSetPosition(g_boardPic[i], PlayerGroupAll(), c_anchorTopLeft, 72 + (i * 310), 90);
@@ -52627,7 +52664,7 @@ void BOTC_BoardPick (int p, int b) {
     if (!g_boardOpen || g_boardFade < 4) {
         return;
     }
-    if (b < 1 || b > 14) {         // 横行霸道 = 8 / 何方教众 = 9 / 风雅集 = 10（编号不连续，不能再用 g_boardCount 当上限）
+    if (b < 1 || b > 15) {         // 横行霸道 = 8 / 何方教众 = 9 / 风雅集 = 10（编号不连续，不能再用 g_boardCount 当上限）
         return;
     }
     if (p == g_teller) {
@@ -52669,7 +52706,7 @@ int BOTC_BoardWinner () {
     int bestN;
     best = 1;
     bestN = -1;
-    for (i = 1; i <= 12; i += 1) {  // 板子号最大到 12（7 = 自定义剧本，没人能投票）
+    for (i = 1; i <= 15; i += 1) {  // 板子号最大到 15（7 = 自定义剧本，没人能投票）
         v = 0;
         for (k = 2; k <= 13; k += 1) {
             if (g_boardVote[k] == i) {
@@ -56696,7 +56733,7 @@ bool BOTC_BoardHasRole (int r) {
     int i;
     int b;
     b = g_board;
-    if (b < 1 || b > 14) {
+    if (b < 1 || b > 15) {
         b = 1;
     }
     for (i = 0; i < g_boardRoleN[b]; i += 1) {
@@ -56908,7 +56945,7 @@ void BOTC_BluffRoll () {
     //   2 = 首夜信息位 / 夜间不唤醒 / 其余镇民；3 = 外来者（最后兜底，尽量少选）。
     n = 0;
     b = g_board;
-    if (b < 1 || b > 14) {
+    if (b < 1 || b > 15) {
         b = 1;
     }
     for (i = 0; i < g_boardRoleN[b]; i += 1) {
