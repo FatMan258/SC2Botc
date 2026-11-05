@@ -39959,13 +39959,16 @@ void BOTC_ManInfoOpenSeats (int seat, string title, int kind) {
 
 // 【疯子 · 提线木偶】（用户 2026-11-01）：假爪牙信息发完后，再问一次说书人
 //   要不要额外告诉疯子「某玩家是提线木偶」。点【取消】= 不加这条信息。
-//   【场上没有真提线也弹】（用户 2026-11-02）：疯子认知里的提线木偶可能并不在场上，
-//   是否告知完全由说书人决定，所以不再按场上是否真有提线木偶提前跳过。
+//   【剧本里没有提线木偶就不弹】（用户 2026-11-05）：当前剧本的板子不含提线木偶（93）时
+//   直接跳过；只要剧本里有这个角色就一律弹出，不检查场上是否真有提线木偶。
 void BOTC_LunaticMarionetteAsk (int seat) {
     if (seat < 2 || seat > 13) {
         return;
     }
     if (!BOTC_IsLunatic(seat)) {
+        return;
+    }
+    if (!BOTC_BoardHasRole(93)) {
         return;
     }
     BOTC_ManInfoOpenSeats(seat, "【疯子】可选：填一名提线木偶的座位号（1~12）；点【取消】跳过", 15);
