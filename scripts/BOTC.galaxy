@@ -4348,7 +4348,6 @@ void BOTC_RefreshSessList (int p) {
     int i;
     int k;
     string desc;
-    string full;
     string nm;
     int n;
     int o;
@@ -4358,6 +4357,7 @@ void BOTC_RefreshSessList (int p) {
     int skip;
     int maxSkip;
     int longB;
+    int vis;
     bool first;
     bool blindEntry;
     DialogControlRemoveAllItems(g_sessList[p], PlayerGroupSingle(p));
@@ -4436,7 +4436,10 @@ void BOTC_RefreshSessList (int p) {
                 skip = 0;
             }
             desc = "私聊" + IntToString(s) + "：";
-            full = "私聊" + IntToString(s) + "：";
+            // 【宽度按真实显示名估算】（用户 2026-11-05 报「已经出现省略号却没有左右箭头」）：
+            //   原来用占位名「玩家N」算长度，13 人满房间也只有 55，永远到不了 60 的阈值，箭头从不出现。
+            //   现在按「私聊N：」前缀 + 每名成员「[编号] 战网名」的实际可见字符数累加（不含颜色标签）。
+            vis = 3 + StringLength(IntToString(s));
             if (skip > 0) {
                 desc = desc + "…";
             }
@@ -4445,10 +4448,11 @@ void BOTC_RefreshSessList (int p) {
                 nm = BOTC_NameStr(BOTC_PosOf(lv_ord[idx]));      // 【按位置取名字】（用户 2026-10-07）
                 // 【翻到最右边按钮会消失】（用户 2026-11-04）：宽度要按「不跳过任何成员」的全名算，
                 //   否则滚到右边只剩短名字时判定失败，按钮就被收起来了，再也翻不回去。
+                vis = vis + 4;                                   // 名字前的「[编号] 」标记
+                vis = vis + StringLength(TextToString(BOTC_SeatNameText(BOTC_PosOf(lv_ord[idx]))));
                 if (idx > 0) {
-                    full = full + "、";
+                    vis = vis + 1;                               // 「、」分隔
                 }
-                full = full + nm;
                 if (idx < skip) {
                     continue;
                 }
@@ -4460,10 +4464,10 @@ void BOTC_RefreshSessList (int p) {
             }
             if (blindEntry) {
                 desc = desc + "（成员不可见）";
-                full = full + "（成员不可见）";
+                vis = vis + 8;
             }
-            if (StringLength(full) > longB) {
-                longB = StringLength(full);
+            if (vis > longB) {
+                longB = vis;
             }
             DialogControlAddItem(g_sessList[p], PlayerGroupSingle(p), BOTC_NameSubst(desc));   // 私聊列表里的名字换成真名
             g_listSess[(p * 14) + k] = s;
@@ -4471,7 +4475,9 @@ void BOTC_RefreshSessList (int p) {
     }
     g_sessMaxSkip[p] = maxSkip;
     g_sessLong[p] = longB;
-    if (longB <= 60) {
+    // 【可见宽度阈值 40】（用户 2026-11-05）：按真实显示名估算后，约 40 个可见字符就会超出 480 宽的私聊框。
+    //   阈值过高会出现「列表已省略但箭头不出现」。
+    if (longB <= 40) {
         g_sessXOff[p] = 0;             // 滚动条不显示时不要停在「…」状态
     }
     if (g_sessXOff[p] > maxSkip) {
@@ -4505,7 +4511,7 @@ void BOTC_SessNavRender (int p) {
     if (p < 1 || p > 13) {
         return;
     }
-    need = (g_sessXOff[p] > 0 || (g_sessMaxSkip[p] > 0 && g_sessLong[p] > 60));
+    need = (g_sessXOff[p] > 0 || (g_sessMaxSkip[p] > 0 && g_sessLong[p] > 40));
     DialogControlSetVisible(g_sessPrevBtn[p], PlayerGroupSingle(p), need);
     DialogControlSetVisible(g_sessNextBtn[p], PlayerGroupSingle(p), need);
 }
@@ -4518,7 +4524,7 @@ void BOTC_SessNavStep (int p, int d) {
         return;
     }
     maxSkip = g_sessMaxSkip[p];
-    if (maxSkip <= 0 || g_sessLong[p] <= 60) {
+    if (maxSkip <= 0 || g_sessLong[p] <= 40) {
         return;
     }
     g_sessXOff[p] = g_sessXOff[p] + d;
