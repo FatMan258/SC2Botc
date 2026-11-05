@@ -324,7 +324,7 @@ class RoleSpecTests(unittest.TestCase):
             "g_heshangSeatUsed[h] = true;",
             "if (!BOTC_AbilityWorks(src, role)) {",
             "return false;                      // 刺客的刺杀明确不能被保护。",
-            "g_tokRole[186] = 161;",
+            "g_tokRole[197] = 161;",
         ):
             self.assertIn(marker, source)
 
@@ -344,9 +344,9 @@ class RoleSpecTests(unittest.TestCase):
             "int[14]     g_gdPrev;",
             "int[14]     g_gdBy;",
             "g_roleName[162]",
-            "g_tokName[187]",
-            "g_tokName[188]",
-            "g_tokName[189]",
+            "g_tokName[198]",
+            "g_tokName[199]",
+            "g_tokName[200]",
             "int[14]     g_gdFlightBy;",
             "g_noAllFirst[162] = 26;",
             "g_noAllOther[162] = 1;",
@@ -385,8 +385,8 @@ class RoleSpecTests(unittest.TestCase):
             "g_roleTargets[163] = 3;",
             "g_noAllFirst[163] = 26;",
             "g_noAllOther[163] = 124;",
-            "g_tokName[190]",
-            "g_tokName[191]",
+            "g_tokName[201]",
+            "g_tokName[202]",
             "if (r == 163) {",
             "BOTC_WardenResolve(p, w1, w2, w3)",
             "BOTC_WardenOpenChoice(p)",

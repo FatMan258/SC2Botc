@@ -46,8 +46,8 @@
   "tokens": [
     {
       "id": "warden_sentence",
-      "index": 190,
-      "slot": 190,
+      "index": 201,
+      "slot": 201,
       "name": "判罚（典狱长）",
       "short": "判罚",
       "effect": "记录典狱长本夜选择的上一批目标，下一夜根据这批目标是否有人被处决来结算死亡。",
@@ -59,8 +59,8 @@
     },
     {
       "id": "warden_executed_today",
-      "index": 191,
-      "slot": 191,
+      "index": 202,
+      "slot": 202,
       "name": "死于今日（典狱长）",
       "short": "死于今日",
       "effect": "表示带判罚标记的玩家今天死于处决，下一轮典狱长结算时其他上一批目标会一起死亡。",
@@ -125,8 +125,8 @@
       "g_wardenBy",
       "g_wardenAsk",
       "g_roleName[163]",
-      "g_tokName[190]",
-      "g_tokName[191]"
+      "g_tokName[201]",
+      "g_tokName[202]"
     ]
   }
 }

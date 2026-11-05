@@ -39,8 +39,8 @@
   "tokens": [
     {
       "id": "paintedskin_living_corpse",
-      "index": 181,
-      "slot": 181,
+      "index": 192,
+      "slot": 192,
       "name": "活尸（画皮）",
       "short": "活尸",
       "effect": "目标真实死亡但城镇广场仍显示存活，能力失效，能力互动暂时按存活处理。",
@@ -52,8 +52,8 @@
     },
     {
       "id": "paintedskin_selected",
-      "index": 182,
-      "slot": 182,
+      "index": 193,
+      "slot": 193,
       "name": "选择（画皮）",
       "short": "选择",
       "effect": "记录画皮选中的下一次死亡目标；首次攻击被挡住或画皮当时失能时也可以存在。",
@@ -143,8 +143,8 @@
       "g_skinChainBroken",
       "g_roleName[155]",
       "g_roleTargets[155]",
-      "g_tokName[181]",
-      "g_tokName[182]"
+      "g_tokName[192]",
+      "g_tokName[193]"
     ]
   }
 }

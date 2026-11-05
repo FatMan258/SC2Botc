@@ -39,8 +39,8 @@
   "tokens": [
     {
       "id": "broker_regular",
-      "index": 184,
-      "slot": 184,
+      "index": 195,
+      "slot": 195,
       "name": "熟客（掮客）",
       "short": "熟客",
       "effect": "本夜任何玩家使用能力选择其中一人时，会改为选择另一人。",
@@ -103,7 +103,7 @@
       "g_brokerA",
       "g_brokerB",
       "g_roleName[159]",
-      "g_tokName[184]"
+      "g_tokName[195]"
     ]
   }
 }

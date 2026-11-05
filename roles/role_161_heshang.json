@@ -39,8 +39,8 @@
   "tokens": [
     {
       "id": "heshang_triggered",
-      "index": 186,
-      "slot": 186,
+      "index": 197,
+      "slot": 197,
       "name": "已生效（和尚）",
       "short": "已生效",
       "effect": "和尚本晚已经触发过一次能力。",
@@ -105,7 +105,7 @@
       "g_heshangBy",
       "g_heshangNoDashiiMute",
       "g_roleName[161]",
-      "g_tokName[186]"
+      "g_tokName[197]"
     ]
   }
 }

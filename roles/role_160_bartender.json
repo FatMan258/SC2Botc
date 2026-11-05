@@ -39,8 +39,8 @@
   "tokens": [
     {
       "id": "bartender_drunk",
-      "index": 185,
-      "slot": 185,
+      "index": 196,
+      "slot": 196,
       "name": "醉酒（酒保）",
       "short": "醉酒",
       "effect": "该玩家失去能力，属于持续醉酒状态。",
@@ -94,7 +94,7 @@
       "g_bartenderSeat",
       "g_bartenderDrunk",
       "g_roleName[160]",
-      "g_tokName[185]"
+      "g_tokName[196]"
     ]
   }
 }

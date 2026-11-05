@@ -46,8 +46,8 @@
   "tokens": [
     {
       "id": "gudiao_poison",
-      "index": 187,
-      "slot": 187,
+      "index": 198,
+      "slot": 198,
       "name": "蛊毒（蛊雕）",
       "short": "蛊毒",
       "effect": "目标中毒，并且被能力查验身份或阵营时，可能被当作邪恶的蛊雕。",
@@ -59,8 +59,8 @@
     },
     {
       "id": "gudiao_turned",
-      "index": 188,
-      "slot": 188,
+      "index": 199,
+      "slot": 199,
       "name": "改变方向（蛊雕）",
       "short": "改变方向",
       "effect": "蛊雕之后每晚按逆时针方向寻找下一名存活镇民。",
@@ -72,8 +72,8 @@
     },
     {
       "id": "gudiao_flight",
-      "index": 189,
-      "slot": 189,
+      "index": 200,
+      "slot": 200,
       "name": "盘璇（蛊雕）",
       "short": "盘璇",
       "effect": "记录蛊雕当晚飞到哪名存活镇民；下一次按该位置继续沿当前方向前进。",
@@ -156,9 +156,9 @@
       "g_gdPrev",
       "g_gdBy",
       "g_roleName[162]",
-      "g_tokName[187]",
-      "g_tokName[188]",
-      "g_tokName[189]",
+      "g_tokName[198]",
+      "g_tokName[199]",
+      "g_tokName[200]",
       "g_gdFlightBy"
     ]
   }

@@ -39,8 +39,8 @@
   "tokens": [
     {
       "id": "envoy_triggered",
-      "index": 183,
-      "slot": 183,
+      "index": 194,
+      "slot": 194,
       "name": "已触发（使节）",
       "short": "已触发",
       "effect": "记录使节本晚已经改写了一次能力目标。",
@@ -98,7 +98,7 @@
       "g_envoyNight",
       "g_envoyUsed",
       "g_roleName[157]",
-      "g_tokName[183]"
+      "g_tokName[194]"
     ]
   }
 }
