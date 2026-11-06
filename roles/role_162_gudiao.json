@@ -1,0 +1,165 @@
+{
+  "schema_version": 2,
+  "index": 162,
+  "name": "蛊雕",
+  "team": "minion",
+  "alignment": "evil",
+  "text": "每个夜晚，你会得知顺时针方向上的下一名存活的镇民玩家的角色，他中毒且可能被当作邪恶的蛊雕，直到下个黄昏。每局游戏限一次，在夜晚时，你可以改变方向。",
+  "lore": "蛊雕停留在镇民之中，用蛊毒侵蚀下一位镇民并扰乱他的身份登记。",
+  "timing": "every_night",
+  "frequency": "conditional",
+  "action": "every_night",
+  "target_count": 0,
+  "first_night_order": 26,
+  "other_night_order": 1,
+  "role_keywords": "每个夜晚|中毒|可能",
+  "effect_categories": [
+    "automatic_target",
+    "information",
+    "persistent_status",
+    "interaction_interference",
+    "once_per_game_direction"
+  ],
+  "target": {
+    "kind": "none",
+    "count": 0,
+    "living": true,
+    "allow_self": false,
+    "allow_repeat": false
+  },
+  "artwork": {
+    "source": "assets/source/role_162_gudiao.png",
+    "source_url": "https://clocktower-wiki.gstonegames.com/index.php?title=%E8%9B%8A%E9%9B%95",
+    "role_icon": "botc_role162.dds",
+    "night_icon": "botc_night162.dds",
+    "token_icons": [
+      "botc_tk162.dds"
+    ]
+  },
+  "night_order": {
+    "section": "interference",
+    "anchor_role": "投毒者",
+    "relation": "after",
+    "first": 26,
+    "other": 1
+  },
+  "tokens": [
+    {
+      "id": "gudiao_poison",
+      "index": 198,
+      "slot": 198,
+      "name": "蛊毒（蛊雕）",
+      "short": "蛊毒",
+      "effect": "目标中毒，并且被能力查验身份或阵营时，可能被当作邪恶的蛊雕。",
+      "place": "蛊雕每个夜晚按当前方向确认下一名存活镇民后，放在该玩家身上。",
+      "remove": "下个黄昏、蛊雕离场或死亡时移除。目标死亡或不再是镇民不会使标记自动转移。",
+      "visibility": "storyteller",
+      "icon": "botc_tk162.dds",
+      "duration": "until_dusk"
+    },
+    {
+      "id": "gudiao_turned",
+      "index": 199,
+      "slot": 199,
+      "name": "改变方向（蛊雕）",
+      "short": "改变方向",
+      "effect": "蛊雕之后每晚按逆时针方向寻找下一名存活镇民。",
+      "place": "蛊雕每局第一次成功选择改变方向时，放在蛊雕身上。",
+      "remove": "蛊雕离场、死亡或开始新一局时移除。",
+      "visibility": "storyteller",
+      "icon": "botc_tk162.dds",
+      "duration": "game"
+    },
+    {
+      "id": "gudiao_flight",
+      "index": 200,
+      "slot": 200,
+      "name": "盘璇（蛊雕）",
+      "short": "盘璇",
+      "effect": "记录蛊雕当晚飞到哪名存活镇民；下一次按该位置继续沿当前方向前进。",
+      "place": "蛊雕每夜选中下一名存活镇民时放置，不要求蛊毒随后成功生效。",
+      "remove": "蛊雕下一次飞行、蛊雕离场、死亡或开始新一局时移除。",
+      "visibility": "storyteller",
+      "icon": "botc_tk162.dds",
+      "duration": "game"
+    }
+  ],
+  "jinxes": [
+    {
+      "role": "魔术师",
+      "text": "蛊雕会跳过魔术师。"
+    },
+    {
+      "role": "食人魔",
+      "text": "如果蛊毒玩家被食人魔当作邪恶的蛊雕，食人魔会得知自己转变为邪恶。"
+    },
+    {
+      "role": "炼金术士",
+      "text": "如果炼金术士本应获得蛊雕的能力，他不会拥有该能力，改为蛊雕一定在场。"
+    },
+    {
+      "role": "瘟疫医生",
+      "text": "如果说书人本应获得蛊雕的能力，改为一名爪牙获得该能力并得知此事。"
+    }
+  ],
+  "effects": [
+    {
+      "kind": "custom",
+      "id": "ordered_townsfolk_information",
+      "notes": "只按真实角色类型寻找存活镇民，不看当前阵营；死亡和非镇民会跳过，魔术师也跳过。"
+    },
+    {
+      "kind": "custom",
+      "id": "persistent_poison_until_dusk",
+      "notes": "蛊毒目标中毒到下个黄昏；即使目标死亡或不再是镇民，标记仍不转移。"
+    },
+    {
+      "kind": "custom",
+      "id": "flight_path_advances_independently",
+      "notes": "盘璇记录飞行位置，即使蛊毒被和尚阻止也会移动到本夜候选目标；下一次从盘璇位置继续。"
+    },
+    {
+      "kind": "custom",
+      "id": "interaction_registration",
+      "notes": "查验蛊毒目标的角色或阵营时，可能登记为邪恶的蛊雕；该干扰只改变身份与阵营登记。"
+    },
+    {
+      "kind": "custom",
+      "id": "direction_change",
+      "notes": "每局一次，蛊雕可在夜晚改变方向；改变后立即从自身向逆时针寻找，之后持续逆时针。"
+    }
+  ],
+  "randomness": {
+    "declared": true,
+    "notes": "互动干扰是否把蛊毒目标登记为邪恶的蛊雕，沿用地图的说书人互动干扰概率。"
+  },
+  "tests": [
+    "第一夜从蛊雕顺时针找到下一名存活镇民并得知其真实角色。",
+    "目标中毒直到下个黄昏，白天保持中毒，黄昏清除。",
+    "死亡玩家和非镇民会被跳过，当前阵营为邪恶的镇民仍会被选中。",
+    "改变方向后立即按逆时针寻找，之后持续逆时针。",
+    "同一名蛊雕每局只能成功改变一次方向。",
+    "蛊雕中毒或醉酒时不移动蛊毒，也不消耗改变方向机会。",
+    "目标登记为邪恶的蛊雕时，身份和阵营查验都只能得到该干扰结果。",
+    "目标死亡或角色类型改变后，蛊毒仍留在原座位直到黄昏或蛊雕离场。",
+    "蛊毒被和尚阻止时，盘璇仍移动到候选目标，下一夜从该位置继续飞行。"
+  ],
+  "implementation": {
+    "required_functions": [
+      "BOTC_GudiaoOpen",
+      "BOTC_GudiaoAnswer",
+      "BOTC_GudiaoNextTownsfolk",
+      "BOTC_GudiaoDuskClear",
+      "BOTC_GudiaoSourceGone"
+    ],
+    "required_symbols": [
+      "g_gdPrev",
+      "g_gdBy",
+      "g_roleName[162]",
+      "g_tokName[198]",
+      "g_tokName[199]",
+      "g_tokName[200]",
+      "g_gdFlightBy"
+    ]
+  }
+}

@@ -1,0 +1,150 @@
+{
+  "schema_version": 2,
+  "index": 155,
+  "name": "画皮",
+  "team": "minion",
+  "alignment": "evil",
+  "text": "在你的首个夜晚，你要选择一名存活玩家：他死亡但会被当作存活。当他下一次即将死亡时，他重生，随后你重获能力。",
+  "lore": "画皮秘密地让一名玩家成为活尸，并在其下一次死亡时将其复活，从而再次获得攻击能力。",
+  "timing": "first_night",
+  "frequency": "once_per_game",
+  "action": "conditional",
+  "target_count": 1,
+  "first_night_order": 24,
+  "other_night_order": 24,
+  "role_keywords": "活尸|额外死亡|复活|获得能力",
+  "target": {
+    "kind": "players",
+    "count": 1,
+    "living": true,
+    "allow_self": true,
+    "allow_repeat": false
+  },
+  "artwork": {
+    "source": "assets/source/role_155_paintedskin.png",
+    "source_url": "https://clocktower-wiki.gstonegames.com/index.php?title=%E7%94%BB%E7%9A%AE",
+    "role_icon": "botc_role155.dds",
+    "night_icon": "botc_night155.dds",
+    "token_icons": [
+      "botc_tk155.dds"
+    ]
+  },
+  "night_order": {
+    "section": "kill",
+    "anchor_role": "痢蛭",
+    "relation": "after",
+    "first": 24,
+    "other": 24
+  },
+  "tokens": [
+    {
+      "id": "paintedskin_living_corpse",
+      "index": 192,
+      "slot": 192,
+      "name": "活尸（画皮）",
+      "short": "活尸",
+      "effect": "目标真实死亡但城镇广场仍显示存活，能力失效，能力互动暂时按存活处理。",
+      "place": "画皮首次攻击或重获能力后的攻击成功穿过所有死亡阻断判定时，放在目标身上。",
+      "remove": "目标被画皮复活或新局开始时移除。",
+      "visibility": "storyteller",
+      "icon": "botc_tk155.dds",
+      "duration": "game"
+    },
+    {
+      "id": "paintedskin_selected",
+      "index": 193,
+      "slot": 193,
+      "name": "选择（画皮）",
+      "short": "选择",
+      "effect": "记录画皮选中的下一次死亡目标；首次攻击被挡住或画皮当时失能时也可以存在。",
+      "place": "画皮确认目标后放置；若攻击成功形成活尸则改放活尸标记。",
+      "remove": "目标下一次死亡被画皮处理、画皮离场或新局开始时移除。",
+      "visibility": "storyteller",
+      "icon": "botc_tk155.dds",
+      "duration": "game"
+    }
+  ],
+  "jinxes": [
+    {
+      "role": "红唇女郎",
+      "text": "恶魔因画皮成为活尸时按真实死亡处理；场上没有存活恶魔，红唇女郎不接任。"
+    }
+  ],
+  "effects": [
+    {
+      "kind": "custom",
+      "id": "attack_uses_standard_death_blockers",
+      "notes": "画皮攻击必须先经过无敌、免死、保护、僵怖假死等既有死亡阻断判定；被挡住时不形成活尸，但选中关系保留。"
+    },
+    {
+      "kind": "custom",
+      "id": "intercept_next_real_death",
+      "notes": "目标下一次真实死亡时，如果画皮清醒、存活且仍有能力，取消死亡、复活活尸并让画皮重获能力；目标当时本来就存活时只阻止死亡。"
+    },
+    {
+      "kind": "custom",
+      "id": "revive_selected_dead_player",
+      "notes": "如果带选择标记的玩家当前在城镇广场显示为死亡，画皮改为尝试复活他；只有从活尸或已显示死亡状态恢复时才刷新目标的一局一次能力。"
+    },
+    {
+      "kind": "custom",
+      "id": "zombuul_mutual_cancel",
+      "notes": "画皮首次攻击僵怖时，僵怖的首次死亡能力被触发并消耗，但不会死亡，也不会进入假死或活尸状态；选择标记保留。"
+    },
+    {
+      "kind": "custom",
+      "id": "source_failure",
+      "notes": "活尸形成后，画皮中毒、醉酒、死亡或失去能力会锁定该活尸死亡；白天立即公布，夜晚等天亮公布，画皮不重获能力。"
+    },
+    {
+      "kind": "custom",
+      "id": "restore_spent_one_shots",
+      "notes": "只要画皮成功处理目标的下一次死亡，无论目标原本是活尸还是普通存活，都按重新进场处理并恢复已经消耗的一局一次能力。"
+    },
+    {
+      "kind": "custom",
+      "id": "living_corpse_is_impaired",
+      "notes": "活尸按中毒 / 醉酒处理：技能确认不产生效果，恶魔活尸不能杀人，但能力互动仍可被当作存活。"
+    }
+  ],
+  "randomness": {
+    "declared": false,
+    "notes": ""
+  },
+  "tests": [
+    "首夜选择正常玩家后形成活尸，天亮不公布死亡，真实死亡人数立即计入胜负。",
+    "目标被无敌、免死、保护或僵怖假死挡住时不形成活尸，但保留选择标记。",
+    "被挡住的目标下一次真实死亡时，画皮取消死亡并重获能力。",
+    "活尸下一次死亡时恢复存活，不公开死亡，不触发死亡时能力。",
+    "画皮中毒、醉酒、死亡或失去能力后，活尸在白天立即公布、夜晚天亮公布。",
+    "画皮无法阻止目标下一次死亡时不重获能力，之后恢复清醒也不补发。",
+    "恶魔成为活尸时立即按没有存活恶魔结算，红唇女郎不接任。",
+    "画皮成功处理下一次死亡后刷新目标已经使用过的一局一次能力，包括目标原本并未进入活尸状态的情况。",
+    "活尸恶魔仍可打开技能面板，但确认后不能杀人。",
+    "画皮第一次攻击僵怖时与僵怖首次死亡能力互相抵消：僵怖不死亡，也不进入假死或活尸状态。",
+    "画皮阻止普通存活目标的死亡时不刷新该目标的一局一次能力。",
+    "画皮从活尸或已显示死亡状态复活目标时刷新其一局一次能力。",
+    "换座位、换说书人和新局重置后，活尸来源与选中关系仍绑定正确的玩家。"
+  ],
+  "implementation": {
+    "required_functions": [
+      "BOTC_SkinChoose",
+      "BOTC_SkinDeathHook",
+      "BOTC_SkinSourceCheck",
+      "BOTC_SkinSourceGone",
+      "BOTC_LivingCorpseRevive",
+      "BOTC_LivingCorpseFinalize"
+    ],
+    "required_symbols": [
+      "g_liveCorpse",
+      "g_liveCorpseFrom",
+      "g_skinTarget",
+      "g_skinTargetBy",
+      "g_skinChainBroken",
+      "g_roleName[155]",
+      "g_roleTargets[155]",
+      "g_tokName[192]",
+      "g_tokName[193]"
+    ]
+  }
+}
