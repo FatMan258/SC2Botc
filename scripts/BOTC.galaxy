@@ -26022,8 +26022,10 @@ void BOTC_FakeBtnRender () {
     bool show;
     show = false;
     if (g_teller >= 1 && g_teller <= 13) {
-        if (BOTC_BoardHasRole(18) || BOTC_BoardHasRole(75)) {
-            show = true;
+        if (!g_boardOpen) {
+            if (BOTC_BoardHasRole(18) || BOTC_BoardHasRole(75)) {
+                show = true;
+            }
         }
     }
     DialogSetVisible(g_fakeBtnDlg, PlayerGroupAll(), false);
@@ -26034,6 +26036,9 @@ void BOTC_FakeBtnRender () {
 
 void BOTC_FakeOpen () {
     if (g_teller < 1 || g_teller > 13) {
+        return;
+    }
+    if (g_boardOpen) {
         return;
     }
     if (!(BOTC_BoardHasRole(18) || BOTC_BoardHasRole(75))) {
@@ -58311,6 +58316,16 @@ void BOTC_HideAllUI () {
     DialogSetVisible(g_nomBtnDlg, PlayerGroupAll(), false);
     DialogSetVisible(g_chatBtnDlg, PlayerGroupAll(), false);
     DialogSetVisible(g_grimDlg, PlayerGroupAll(), false);
+    // 【伪造魔典】属于当前剧本，选板子时和魔典一起收起来
+    if (g_fakeBtnDlg != 0) {
+        DialogSetVisible(g_fakeBtnDlg, PlayerGroupAll(), false);
+    }
+    if (g_fakeDlg != 0) {
+        DialogSetVisible(g_fakeDlg, PlayerGroupAll(), false);
+    }
+    if (g_fakeAskDlg != 0) {
+        DialogSetVisible(g_fakeAskDlg, PlayerGroupAll(), false);
+    }
 
     DialogSetVisible(g_logDlg, PlayerGroupAll(), false);
     DialogSetVisible(g_logPickDlg, PlayerGroupAll(), false);
