@@ -70,6 +70,10 @@ int[196]    g_listSess;
 int[14]     g_sessXOff;           // 【私聊列表横向滚动】（用户 2026-11-04）：每个玩家名字行当前跳过前几个成员
 int[14]     g_sessMaxSkip;         // 当前最长那条私聊最多能跳过几个成员，用于限制滚动条滑块位置
 int[14]     g_sessLong;            // 最长那条私聊文字占多少字节：超过一个框宽才显示滚动条
+int[14]     g_sessBar;             // 【私聊横向滚动条】轨道
+int[14]     g_sessKnob;            // 【私聊横向滚动条】滑块
+int[14]     g_sessKnobX;           // 拖动中的实时滑块位置（松手后再吸附到成员边界）
+bool[14]    g_sessDrag;            // 是否正在拖动私聊横向滑块
 // 【私聊横向查看】（用户 2026-11-04）：成员名字超出私聊框时，在标题行右侧显示左右两个按钮翻看。
 int[14]     g_sessPrevBtn;        // 向左：少跳过几个成员
 int[14]     g_sessNextBtn;        // 向右：多跳过几个成员
@@ -127,19 +131,19 @@ int[14]     g_dlgDragMX;
 int[14]     g_dlgDragMY;
 int         g_tipBtnRules;        // 帮助面板底部【游戏规则】
 int         g_tipBtnStats;        // 帮助面板底部【场次统计】
-int         g_noDlg;
-int         g_noTitleL;
-int         g_noTitleR;
-int[24]     g_noIcon;            // 2 栏 × 12 行
-int[24]     g_noName;
-int         g_noClose;
+int[14]     g_noDlg;             // 每个玩家一份夜序窗口，拖动位置互不影响
+int[14]     g_noTitleL;
+int[14]     g_noTitleR;
+int[336]    g_noIcon;            // 玩家 × 2 栏 × 12 行
+int[336]    g_noName;
+int[14]     g_noClose;
 // 【夜间顺序表·翻页】（用户 2026-09-19）：星际的图标格子不接鼠标滚轮，所以用 ▲▼ 按钮翻页
-int         g_noShift;        // 现在从第几行开始显示（0 = 最上面 12 行）
-int         g_noMaxRows;      // 最长那一栏一共几行
-int         g_noUp;
-int         g_noDown;
-int         g_noPageLbl;
-int         g_noNote;          // 面板上那一行说明（第二栏是结算/死亡顺序，不是唤醒名单）
+int[14]     g_noShift;        // 每个玩家现在从第几行开始显示
+int[14]     g_noMaxRows;      // 每个玩家那份最长一栏一共几行
+int[14]     g_noUp;
+int[14]     g_noDown;
+int[14]     g_noPageLbl;
+int[14]     g_noNote;          // 面板上那一行说明（第二栏是结算/死亡顺序，不是唤醒名单）
 // 板子 → 角色清单（最多 8 个板子、每板子最多 128 个身份）
 int[16]     g_boardRoleN;
 int[4096]   g_boardRole;          // 每条板子 256 个角色槽，容纳全员追忆
@@ -209,20 +213,20 @@ int         g_abListPrev2;
 int         g_abListNext2;
 int         g_abListClose2;
 // 角色能力表（重做）：两页列表，每条 = 图标按钮 + 名字 + 能力
-int         g_abNewDlg;
-int         g_abNewLbl;           // 标题（顺带写页码）
-int         g_abNewClose;
-int         g_abNewStarNote;  // 角色能力表正下方那条注释（每个夜晚* = 第 2 夜起）
-int[26]     g_abNewHit;           // 每条的按钮（在图标下面，图标图盖住它：点图标就是点它）
-int[26]     g_abNewIcon;          // 每条的图标图（不接鼠标，点下去穿到按钮）
-int[26]     g_abNewName;
-int[26]     g_abNewAb;
-int[26]     g_abNewRole;          // 每个坑位摆的是哪个身份（点进去看详情要用）
-int[4]      g_abNewSec;           // 第 2 页的分段小标题
-int         g_abNewPrev;
-int         g_abNewNext;
-int         g_abViewBtn;          // 剧本角色表弹窗左上角【夜间行动顺序】切换
-int         g_noViewBtn;          // 夜间顺序弹窗左上角【剧本角色】切换
+int[14]     g_abNewDlg;           // 每个玩家一份剧本角色表，拖动位置互不影响
+int[14]     g_abNewLbl;           // 标题（顺带写页码）
+int[14]     g_abNewClose;
+int[14]     g_abNewStarNote;  // 角色能力表正下方那条注释（每个夜晚* = 第 2 夜起）
+int[364]    g_abNewHit;           // 玩家 × 26 个按钮
+int[364]    g_abNewIcon;
+int[364]    g_abNewName;
+int[364]    g_abNewAb;
+int[364]    g_abNewRole;          // 每个坑位摆的是哪个身份（点进去看详情要用）
+int[56]     g_abNewSec;           // 玩家 × 第 2 页的分段小标题
+int[14]     g_abNewPrev;
+int[14]     g_abNewNext;
+int[14]     g_abViewBtn;          // 剧本角色表弹窗左上角【夜间行动顺序】切换
+int[14]     g_noViewBtn;          // 夜间顺序弹窗左上角【剧本角色】切换
 // 【角色能力表 · 第 3 页「名词解释」】（用户 2026-09-20）
 string[164]  g_roleKey;        // 每个角色身上带哪些关键词（多个用 | 隔开）---- 决定名词页显示哪些词条
 text[8]     g_glossTitle;     // 词条标题（富文本：关键词带颜色）
@@ -233,14 +237,14 @@ text[8]     g_glossBody1;     // 正文（富文本：一行一个控件，中�
 text[8]     g_glossBody2;
 text[8]     g_glossBody3;
 int         g_glossCount;    // 词条总数
-int         g_glossNote;     // 顶部说明行
-int[8]      g_glossTitleCtl;
-int[24]     g_glossBodyCtl;  // 每词条 3 行：i*3 + 行号
+int[14]     g_glossNote;     // 顶部说明行
+int[112]    g_glossTitleCtl;
+int[336]    g_glossBodyCtl;  // 玩家 × 每词条 3 行：i*3 + 行号
 int[14]     g_abPage;
 int[14]     g_jinxPage;         // 【相克面板】每个玩家当前看到的那一页
 int[14]     g_glossPage;        // 【名词解释】每个玩家当前看到的那一页
-int         g_abSubPrev;        // 名词解释 / 相克规则共用的页内翻页
-int         g_abSubNext;
+int[14]     g_abSubPrev;        // 名词解释 / 相克规则共用的页内翻页
+int[14]     g_abSubNext;
 
 //--------------------------------------------------------------------------------------------------
 // 昼夜系统（仅说书人可切换）：夜晚上一层深蓝遮罩，只压暗地图，不影响面板可读性
@@ -406,11 +410,11 @@ int         g_cBootEdit;         // 【私货商人】长输入框
 int         g_cClearBtn;
 int         g_cBackBtn;
 int         g_jinxCount;
-int[123]    g_jinxA;
-int[123]    g_jinxB;
-string[123] g_jinxText;       // 相克规则：标题 = A × B，正文第 1 行（2026-10-10：何方教众那批加到最前面）
-string[123] g_jinxText2;      // 相克规则：正文第 2 行（离线切好，避免运行时对中文串取子串）
-string[123] g_jinxText3;      // 相克规则：正文第 3 行
+int[140]    g_jinxA;
+int[140]    g_jinxB;
+string[140] g_jinxText;       // 相克规则：标题 = A × B，正文第 1 行（2026-10-10：何方教众那批加到最前面）
+string[140] g_jinxText2;      // 相克规则：正文第 2 行（离线切好，避免运行时对中文串取子串）
+string[140] g_jinxText3;      // 相克规则：正文第 3 行
 // 说书人的「聊天时段」按钮（自由 / 公聊 / 私聊 循环切换）
 int         g_chatBtnDlg;
 int         g_chatBtn;
@@ -1378,7 +1382,7 @@ int         g_pacifistUsed;   // 和平主义者（33）成功发动过几次：
 // 【黯月初升 · 第 8 批】四个恶魔：僵怖（43）/ 普卡（44）/ 沙巴洛斯（45）/ 珀（46）
 bool[14]    g_zombUsed;       // 僵怖：这个座位的「第一次不会死」用过没有
 bool[14]    g_zombFake;       // 僵怖：现在处于「看起来死了其实活着」的状态（内部算活着）
-int         g_pukkaSeat;      // 普卡：现在被他毒的人（0 = 没有；普卡下一次行动时他会死）
+int         g_pukkaSeat;      // 普卡：上一次能力正常生效时选择的人；异常夜不替换，下一次清醒时毒发
 int         g_sabA;           // 沙巴洛斯：上一夜吃掉的第一名玩家（下一夜可能反刍）
 int         g_sabB;           // 沙巴洛斯：上一夜吃掉的第二名玩家
 bool[14]    g_sabRegurgDone;  // 沙巴洛斯：智能说书的反刍一局只能发动一次
@@ -1793,8 +1797,8 @@ int[56]       g_pickCatPageBy;     // 每位玩家 × 四类各自页码，避�
 int[56]       g_abCatPage;         // 能力表：每个玩家 × 4 类各自的页码
 int[4]        g_pickCatPrev;
 int[4]        g_pickCatNext;
-int[4]        g_abCatPrev;
-int[4]        g_abCatNext;
+int[56]       g_abCatPrev;
+int[56]       g_abCatNext;
 bool[14]      g_pickFilterGood;    // 身份网格当前页的过滤条件，翻页时继续沿用
 int[14]       g_pickFilterTeam;
 int[14]       g_pickFilterAlign;
@@ -1938,6 +1942,10 @@ bool        g_sessSilent;        // 批量解散私聊时不播「退出私聊�
 trigger     g_tClick;
 trigger     g_tChat;
 trigger     g_tHotKey;
+trigger     g_tWheel;              // 私聊成员栏：面板内滚轮左右查看成员
+trigger     g_tSessBarDown;
+trigger     g_tSessBarUp;
+trigger     g_tSessBarMove;
 trigger     g_tDlgDragDown;      // 【面板拖动·按下】（用户 2026-11-04）
 trigger     g_tDlgDragUp;        // 松开
 trigger     g_tDlgDragMove;      // 拖动
@@ -2277,8 +2285,12 @@ void   BOTC_GuessRoleOpen (int p);            // 全员追忆：玩家点"猜角
 void   BOTC_GuessRoleResolve (int p, int roleIdx); // 全员追忆：玩家选定一个角色比对真身份
 void   BOTC_SessNavRender (int p);            // 私聊列表横向查看：左右按钮显隐
 void   BOTC_SessNavStep (int p, int d);       // 私聊列表横向查看：向左 / 向右翻一个成员
+void   BOTC_SessBarRender (int p);            // 私聊横向滚动条：滑块位置与显隐
+void   BOTC_SessBarSetByMouse (int p, int mx); // 私聊横向滚动条：鼠标坐标换算
+bool   BOTC_Wheel_Func (bool testConds, bool runActions);
 void   BOTC_BuildManInfo ();
 void   BOTC_ManInfoOpen (int seat, int role, string extra);
+void   BOTC_GuideOpen (int seat, string extra);             // 引路人：独立初始化回答面板
 void   BOTC_ManInfoDreamer (int seat, int target);        // 筑梦师（48）：自动配一对角色，弹框让说书人过目
 void   BOTC_ManInfoOpenPre (int seat, int role, string extra, string pre);
 int    BOTC_RingDist (int a, int b);
@@ -2450,6 +2462,7 @@ void   BOTC_LleechPoisonClear (string why);   // 痢蛭（100）：他下的毒�
 void   BOTC_FearClear (string why);            // 恐惧之灵（102）：撤掉所有「恐惧」标记（用户 2026-10-03）
 void   BOTC_LleechHostCheck (int deadSeat);    // 痢蛭（100）：宿主死亡/离场 → 撤免死 + 痢蛭立即死亡（用户 2026-10-03）
 void   BOTC_PukkaResolve (int p, int t);       // 普卡：结算上一次的毒 + 毒新目标
+void   BOTC_PukkaExorcistResolve (int p);      // 普卡被驱魔：不选新目标，上一目标照常毒发
 void   BOTC_SabalosRevive (int q);             // 沙巴洛斯（45）：反刍（复活）
 int    BOTC_SabalosRegurgPick (int p);         // 沙巴洛斯：智能说书挑反刍对象（0 = 这次不反刍）
 void   BOTC_SabalosResolve (int p, int t1, int t2);   // 沙巴洛斯：先反刍，再吃两人
@@ -4383,8 +4396,8 @@ void BOTC_LogClose (int p) {
 void BOTC_AbClose (int p) {
     g_abOpen[p] = false;
     g_noOpen[p] = false;           // 夜序跟剧本角色表是同一个弹窗的两种视图（用户 2026-11-04）
-    DialogSetVisible(g_abNewDlg, PlayerGroupSingle(p), false);
-    DialogSetVisible(g_noDlg, PlayerGroupSingle(p), false);
+    DialogSetVisible(g_abNewDlg[p], PlayerGroupSingle(p), false);
+    DialogSetVisible(g_noDlg[p], PlayerGroupSingle(p), false);
     if (g_phase != 0 && !g_logOpen[p]) {
         DialogSetVisible(g_grimDlg, PlayerGroupSingle(p), true);
     }
@@ -4598,9 +4611,10 @@ void BOTC_RefreshSessList (int p) {
         libNtve_gf_SetDialogItemText(g_sessTitle[p], StringToText("当前没有进行中的私聊"), PlayerGroupSingle(p));
     }
     else {
-        libNtve_gf_SetDialogItemText(g_sessTitle[p], StringToText("进行中的私聊（选中后点「请求加入」）"), PlayerGroupSingle(p));
+        libNtve_gf_SetDialogItemText(g_sessTitle[p], StringToText("进行中的私聊（滚轮左右查看成员）"), PlayerGroupSingle(p));
     }
     BOTC_SessNavRender(p);
+    BOTC_SessBarRender(p);
 }
 
 void BOTC_RefreshSessListAll () {
@@ -4617,7 +4631,9 @@ void BOTC_SessNavRender (int p) {
     if (p < 1 || p > 13) {
         return;
     }
-    need = (g_sessXOff[p] > 0 || (g_sessMaxSkip[p] > 0 && g_sessLong[p] > 60));
+    // 只要有一条私聊超过「房主 + 一名成员」，就保留左右翻看入口。
+    // 不用整串名字的长度阈值判断，否则短名字或窄屏时按钮会整组消失。
+    need = (g_sessMaxSkip[p] > 0);
     DialogControlSetVisible(g_sessPrevBtn[p], PlayerGroupSingle(p), need);
     DialogControlSetVisible(g_sessNextBtn[p], PlayerGroupSingle(p), need);
 }
@@ -4630,7 +4646,7 @@ void BOTC_SessNavStep (int p, int d) {
         return;
     }
     maxSkip = g_sessMaxSkip[p];
-    if (maxSkip <= 0 || g_sessLong[p] <= 60) {
+    if (maxSkip <= 0) {
         return;
     }
     g_sessXOff[p] = g_sessXOff[p] + d;
@@ -4645,6 +4661,146 @@ void BOTC_SessNavStep (int p, int d) {
     if (sel >= 1) {
         DialogControlSelectItem(g_sessList[p], PlayerGroupSingle(p), sel);
     }
+}
+
+// 【私聊横向滚动条】成员多于房主 + 一人时显示，拖动滑块直接改变所有私聊行的成员起点。
+void BOTC_SessBarRender (int p) {
+    int knobX;
+    int maxSkip;
+    if (p < 1 || p > 13) {
+        return;
+    }
+    maxSkip = g_sessMaxSkip[p];
+    if (maxSkip <= 0) {
+        DialogControlSetVisible(g_sessBar[p], PlayerGroupSingle(p), false);
+        DialogControlSetVisible(g_sessKnob[p], PlayerGroupSingle(p), false);
+        return;
+    }
+    DialogControlSetVisible(g_sessBar[p], PlayerGroupSingle(p), true);
+    DialogControlSetVisible(g_sessKnob[p], PlayerGroupSingle(p), true);
+    if (g_sessDrag[p]) {
+        knobX = g_sessKnobX[p];
+    }
+    else {
+        knobX = (440 * g_sessXOff[p]) / maxSkip;
+    }
+    g_sessKnobX[p] = knobX;
+    DialogControlSetPosition(g_sessKnob[p], PlayerGroupSingle(p), c_anchorTopLeft, 10 + knobX, 81);
+}
+
+void BOTC_SessBarSetByMouse (int p, int mx) {
+    int maxSkip;
+    int v;
+    int sel;
+    maxSkip = g_sessMaxSkip[p];
+    if (maxSkip <= 0) {
+        return;
+    }
+    v = mx - 20;
+    if (v < 0) {
+        v = 0;
+    }
+    if (v > 440) {
+        v = 440;
+    }
+    // 拖动时先实时移动滑块，再按成员边界刷新文字；不要等列表重绘后才移动。
+    g_sessKnobX[p] = v;
+    DialogControlSetPosition(g_sessKnob[p], PlayerGroupSingle(p), c_anchorTopLeft, 10 + v, 81);
+    g_sessXOff[p] = (v * maxSkip) / 440;
+    sel = DialogControlGetSelectedItem(g_sessList[p], p);
+    BOTC_RefreshSessList(p);
+    if (sel >= 1) {
+        DialogControlSelectItem(g_sessList[p], PlayerGroupSingle(p), sel);
+    }
+}
+
+bool BOTC_SessBarDown_Func (bool testConds, bool runActions) {
+    int p;
+    int mx;
+    int my;
+    if (!runActions) {
+        return true;
+    }
+    p = EventPlayer();
+    if (p < 1 || p > 13 || g_hidden[p] || g_sessMaxSkip[p] <= 0) {
+        return true;
+    }
+    mx = EventMouseClickedPosXUI();
+    my = EventMouseClickedPosYUI();
+    if (mx < 20 || mx > 500 || my < 98 || my > 116) {
+        return true;
+    }
+    g_sessDrag[p] = true;
+    BOTC_SessBarSetByMouse(p, mx);
+    return true;
+}
+
+bool BOTC_SessBarUp_Func (bool testConds, bool runActions) {
+    int p;
+    if (!runActions) {
+        return true;
+    }
+    p = EventPlayer();
+    if (p >= 1 && p <= 13) {
+        g_sessDrag[p] = false;
+        BOTC_SessBarRender(p);
+    }
+    return true;
+}
+
+bool BOTC_SessBarMove_Func (bool testConds, bool runActions) {
+    int p;
+    if (!runActions) {
+        return true;
+    }
+    p = EventPlayer();
+    if (p < 1 || p > 13 || !g_sessDrag[p]) {
+        return true;
+    }
+    BOTC_SessBarSetByMouse(p, EventMouseMovedPosXUI());
+    return true;
+}
+
+// 【私聊成员栏 · 鼠标滚轮】只处理鼠标位于左上角私聊面板内的滚轮；
+// 上滚向左、下滚向右，滚轮移动后同步刷新文字、箭头和滚动条位置。
+bool BOTC_Wheel_Func (bool testConds, bool runActions) {
+    int p;
+    int spin;
+    int sel;
+    int mx;
+    int my;
+    if (!runActions) {
+        return true;
+    }
+    p = EventPlayer();
+    if (p < 1 || p > 13 || g_hidden[p] || g_sessMaxSkip[p] <= 0) {
+        return true;
+    }
+    mx = EventMouseMovedPosXUI();
+    my = EventMouseMovedPosYUI();
+    if (mx != 0 || my != 0) {
+        if (mx < 10 || mx > 510 || my < 20 || my > 318) {
+            return true;
+        }
+    }
+    spin = FixedToInt(EventMouseWheelSpin());
+    if (spin == 0) {
+        return true;
+    }
+    sel = DialogControlGetSelectedItem(g_sessList[p], p);
+    g_sessDrag[p] = false;
+    g_sessXOff[p] = g_sessXOff[p] - spin;
+    if (g_sessXOff[p] < 0) {
+        g_sessXOff[p] = 0;
+    }
+    if (g_sessXOff[p] > g_sessMaxSkip[p]) {
+        g_sessXOff[p] = g_sessMaxSkip[p];
+    }
+    BOTC_RefreshSessList(p);
+    if (sel >= 1) {
+        DialogControlSelectItem(g_sessList[p], PlayerGroupSingle(p), sel);
+    }
+    return true;
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -4775,8 +4931,8 @@ bool BOTC_DlgDragMove_Func (bool testConds, bool runActions) {
     if (ny > 30) { ny = 30; }
     g_abOffX[p] = nx;
     g_abOffY[p] = ny;
-    DialogSetPosition(g_abNewDlg, c_anchorCenter, nx, ny);
-    DialogSetPosition(g_noDlg, c_anchorCenter, nx, ny);
+    DialogSetPosition(g_abNewDlg[p], c_anchorCenter, nx, ny);
+    DialogSetPosition(g_noDlg[p], c_anchorCenter, nx, ny);
     return true;
 }
 // 私聊列表里选中了某条 → 【请求加入】冒出来；没选中就藏起来。
@@ -7483,16 +7639,16 @@ bool BOTC_ClickDo (bool testConds, bool runActions) {
             BOTC_RoleListRender(p);
             return true;
         }
-        if (c == g_abNewClose) {             BOTC_AbClose(p);             return true;         }
+        if (c == g_abNewClose[p]) {          BOTC_AbClose(p);             return true;         }
         for (q = 0; q < 4; q += 1) {
-            if (c == g_abCatPrev[q]) {
+            if (c == g_abCatPrev[(p * 4) + q]) {
                 if (g_abCatPage[(p * 4) + q] > 1) {
                     g_abCatPage[(p * 4) + q] = g_abCatPage[(p * 4) + q] - 1;
                 }
                 BOTC_AbNewRender(p);
                 return true;
             }
-            if (c == g_abCatNext[q]) {
+            if (c == g_abCatNext[(p * 4) + q]) {
                 if (g_abCatPage[(p * 4) + q] < BOTC_GridCatPages(q, BOTC_AbCatCap(q))) {
                     g_abCatPage[(p * 4) + q] = g_abCatPage[(p * 4) + q] + 1;
                 }
@@ -7500,7 +7656,7 @@ bool BOTC_ClickDo (bool testConds, bool runActions) {
                 return true;
             }
         }
-        if (c == g_abSubPrev) {
+        if (c == g_abSubPrev[p]) {
             if (g_abPage[p] == 3 && g_glossPage[p] > 1) {
                 g_glossPage[p] = g_glossPage[p] - 1;
             }
@@ -7510,7 +7666,7 @@ bool BOTC_ClickDo (bool testConds, bool runActions) {
             BOTC_AbNewRender(p);
             return true;
         }
-        if (c == g_abSubNext) {
+        if (c == g_abSubNext[p]) {
             if (g_abPage[p] == 3 && g_glossPage[p] < ((g_glossCount + 5) / 6)) {
                 g_glossPage[p] = g_glossPage[p] + 1;
             }
@@ -7520,7 +7676,7 @@ bool BOTC_ClickDo (bool testConds, bool runActions) {
             BOTC_AbNewRender(p);
             return true;
         }
-        if (c == g_abNewPrev) {
+        if (c == g_abNewPrev[p]) {
             if (g_abPage[p] > 1) {
                 g_abPage[p] = g_abPage[p] - 1;
             }
@@ -7528,7 +7684,7 @@ bool BOTC_ClickDo (bool testConds, bool runActions) {
             BOTC_AbNewRender(p);
             return true;
         }
-        if (c == g_abNewNext) {
+        if (c == g_abNewNext[p]) {
             if (g_abPage[p] < 5) {
                 if (g_abPage[p] == 3) { g_jinxPage[p] = 1; }
                 g_abPage[p] = g_abPage[p] + 1;
@@ -7537,9 +7693,9 @@ bool BOTC_ClickDo (bool testConds, bool runActions) {
             return true;
         }
         for (q = 0; q < 22; q += 1) {
-            if (c == g_abNewHit[q]) {
+            if (c == g_abNewHit[(p * 26) + q]) {
                 // 【剧本角色表 → 帮助详情】（用户 2026-11-04）：剧本角色表保持打开，帮助面板直接显示该角色详情
-                g_tipForce[p] = g_abNewRole[q];
+                g_tipForce[p] = g_abNewRole[(p * 26) + q];
                 g_tipMode[p] = 1;
                 BOTC_TipOpen(p);
                 return true;
@@ -7562,23 +7718,23 @@ bool BOTC_ClickDo (bool testConds, bool runActions) {
                 return true;
             }
         }
-        if (c == g_noUp) {
+        if (c == g_noUp[p]) {
             BOTC_NightOrderScroll(p, -6);
             return true;
         }
-        if (c == g_noDown) {
+        if (c == g_noDown[p]) {
             BOTC_NightOrderScroll(p, 6);
             return true;
         }
-        if (c == g_noClose) {
+        if (c == g_noClose[p]) {
             BOTC_AbClose(p);           // 统一关闭剧本角色表 / 夜间顺序两个视图
             return true;
         }
-        if (c == g_abViewBtn) {
+        if (c == g_abViewBtn[p]) {
             BOTC_AbViewNight(p);       // 左上角【夜间行动顺序】
             return true;
         }
-        if (c == g_noViewBtn) {
+        if (c == g_noViewBtn[p]) {
             BOTC_AbViewRole(p);        // 左上角【剧本角色】
             return true;
         }
@@ -8450,16 +8606,16 @@ bool BOTC_ClickDo (bool testConds, bool runActions) {
         BOTC_RoleListRender(p);
         return true;
     }
-    if (c == g_abNewClose) {         BOTC_AbClose(p);         return true;     }
+    if (c == g_abNewClose[p]) {      BOTC_AbClose(p);         return true;     }
     for (q = 0; q < 4; q += 1) {
-        if (c == g_abCatPrev[q]) {
+        if (c == g_abCatPrev[(p * 4) + q]) {
             if (g_abCatPage[(p * 4) + q] > 1) {
                 g_abCatPage[(p * 4) + q] = g_abCatPage[(p * 4) + q] - 1;
             }
             BOTC_AbNewRender(p);
             return true;
         }
-        if (c == g_abCatNext[q]) {
+        if (c == g_abCatNext[(p * 4) + q]) {
             if (g_abCatPage[(p * 4) + q] < BOTC_GridCatPages(q, BOTC_AbCatCap(q))) {
                 g_abCatPage[(p * 4) + q] = g_abCatPage[(p * 4) + q] + 1;
             }
@@ -8467,7 +8623,7 @@ bool BOTC_ClickDo (bool testConds, bool runActions) {
             return true;
         }
     }
-    if (c == g_abSubPrev) {
+    if (c == g_abSubPrev[p]) {
         if (g_abPage[p] == 3 && g_glossPage[p] > 1) {
             g_glossPage[p] = g_glossPage[p] - 1;
         }
@@ -8477,7 +8633,7 @@ bool BOTC_ClickDo (bool testConds, bool runActions) {
         BOTC_AbNewRender(p);
         return true;
     }
-    if (c == g_abSubNext) {
+    if (c == g_abSubNext[p]) {
         if (g_abPage[p] == 3 && g_glossPage[p] < ((g_glossCount + 5) / 6)) {
             g_glossPage[p] = g_glossPage[p] + 1;
         }
@@ -8487,7 +8643,7 @@ bool BOTC_ClickDo (bool testConds, bool runActions) {
         BOTC_AbNewRender(p);
         return true;
     }
-    if (c == g_abNewPrev) {
+    if (c == g_abNewPrev[p]) {
         if (g_abPage[p] > 1) {
             g_abPage[p] = g_abPage[p] - 1;
         }
@@ -8495,7 +8651,7 @@ bool BOTC_ClickDo (bool testConds, bool runActions) {
         BOTC_AbNewRender(p);
         return true;
     }
-    if (c == g_abNewNext) {
+    if (c == g_abNewNext[p]) {
         if (g_abPage[p] < 5) {
             if (g_abPage[p] == 3) { g_jinxPage[p] = 1; }
             g_abPage[p] = g_abPage[p] + 1;
@@ -8504,9 +8660,9 @@ bool BOTC_ClickDo (bool testConds, bool runActions) {
         return true;
     }
     for (q = 0; q < 22; q += 1) {
-        if (c == g_abNewHit[q]) {
+        if (c == g_abNewHit[(p * 26) + q]) {
             // 【剧本角色表 → 帮助详情】（用户 2026-11-04）：剧本角色表保持打开，帮助面板直接显示该角色详情
-            g_tipForce[p] = g_abNewRole[q];
+            g_tipForce[p] = g_abNewRole[(p * 26) + q];
             g_tipMode[p] = 1;
             BOTC_TipOpen(p);
             return true;
@@ -8529,23 +8685,23 @@ bool BOTC_ClickDo (bool testConds, bool runActions) {
             return true;
         }
     }
-    if (c == g_noUp) {
+    if (c == g_noUp[p]) {
         BOTC_NightOrderScroll(p, -6);
         return true;
     }
-    if (c == g_noDown) {
+    if (c == g_noDown[p]) {
         BOTC_NightOrderScroll(p, 6);
         return true;
     }
-    if (c == g_noClose) {
+    if (c == g_noClose[p]) {
         BOTC_AbClose(p);           // 统一关闭剧本角色表 / 夜间顺序两个视图
         return true;
     }
-    if (c == g_abViewBtn) {
+    if (c == g_abViewBtn[p]) {
         BOTC_AbViewNight(p);       // 左上角【夜间行动顺序】
         return true;
     }
-    if (c == g_noViewBtn) {
+    if (c == g_noViewBtn[p]) {
         BOTC_AbViewRole(p);        // 左上角【剧本角色】
         return true;
     }
@@ -10597,7 +10753,14 @@ void BOTC_BuildPanel (int p) {
 
     // 「进行中的私聊」紧挨着三个按钮下方
     g_sessTitle[p] = BOTC_NewLabel(DialogLastCreated(), 330, 18, 10, 66, StringToText("当前没有进行中的私聊"));
-    g_sessList[p] = BOTC_NewList(DialogLastCreated(), 480, 162, 10, 86);
+    g_sessList[p] = BOTC_NewList(DialogLastCreated(), 480, 156, 10, 92);
+    // 列表下方的可拖动横向滚动条；显隐和滑块位置统一由 BOTC_SessBarRender 处理。
+    g_sessBar[p] = BOTC_NewImageItem(DialogLastCreated(), 480, 8, 10, 82, "ui_sess_track.dds");
+    g_sessKnob[p] = BOTC_NewImageItem(DialogLastCreated(), 44, 12, 10, 81, "ui_sess_knob.dds");
+    DialogControlSetVisible(g_sessBar[p], PlayerGroupAll(), false);
+    DialogControlSetVisible(g_sessKnob[p], PlayerGroupAll(), false);
+    g_sessKnobX[p] = 0;
+    g_sessDrag[p] = false;
     // 【私聊横向查看】（用户 2026-11-04）：成员名字超出私聊框时，标题行右侧出现左右两个按钮翻看。
     //   显隐统一交给 BOTC_SessNavRender 处理。
     g_sessPrevBtn[p] = BOTC_NewButton(DialogLastCreated(), 40, 22, 350, 62, "<");
@@ -10760,7 +10923,7 @@ void BOTC_AbilityOpen (int p) {
     BOTC_AbNewRender(p);
     g_abOpen[p] = true;
     g_noOpen[p] = false;
-    DialogSetVisible(g_noDlg, PlayerGroupSingle(p), false);   // 切回剧本角色视图时收掉夜序视图
+    DialogSetVisible(g_noDlg[p], PlayerGroupSingle(p), false);   // 切回剧本角色视图时收掉夜序视图
     // 回到上次拖动的位置（0,0 = 屏幕正中心；局内记忆、退出地图后重置）
     ox = g_abOffX[p];
     oy = g_abOffY[p];
@@ -10768,10 +10931,10 @@ void BOTC_AbilityOpen (int p) {
     if (ox > 370) { ox = 370; }
     if (oy < -30) { oy = -30; }
     if (oy > 30) { oy = 30; }
-    DialogSetPosition(g_abNewDlg, c_anchorCenter, ox, oy);
-    DialogSetPosition(g_noDlg, c_anchorCenter, ox, oy);   // 夜序视图同一窗口，位置保持一致
+    DialogSetPosition(g_abNewDlg[p], c_anchorCenter, ox, oy);
+    DialogSetPosition(g_noDlg[p], c_anchorCenter, ox, oy);   // 夜序视图同一窗口，位置保持一致
     // 【剧本角色表与魔典共存】（用户 2026-11-04）：打开角色表不再收起魔典
-    DialogSetVisible(g_abNewDlg, PlayerGroupSingle(p), true);
+    DialogSetVisible(g_abNewDlg[p], PlayerGroupSingle(p), true);
 }
 
 // ---- 夜间顺序表 ----
@@ -11147,39 +11310,43 @@ void BOTC_NoteClose (int p) {
 
 void BOTC_BuildNightOrder () {
     int i;
-    DialogCreate(1180, 1080, c_anchorCenter, 0, 0, false);
-    g_noDlg = DialogLastCreated();
-    DialogSetVisible(g_noDlg, PlayerGroupAll(), false);
-    g_noViewBtn = BOTC_NewButton(g_noDlg, 170, 28, 20, 4, "剧本角色");
-    g_noTitleL = BOTC_NewLabel(g_noDlg, 280, 36, 240, 8, StringToText("首夜"));
-    libNtve_gf_SetDialogItemStyle(g_noTitleL, "ModLeftSize20Bold", PlayerGroupAll());
-    libNtve_gf_SetDialogItemAcceptMouse(g_noTitleL, false, PlayerGroupAll());
-    g_noTitleR = BOTC_NewLabel(g_noDlg, 460, 36, 530, 8, StringToText("从第二个夜晚开始"));
-    libNtve_gf_SetDialogItemStyle(g_noTitleR, "ModLeftSize20Bold", PlayerGroupAll());
-    libNtve_gf_SetDialogItemAcceptMouse(g_noTitleR, false, PlayerGroupAll());
-    // 说明（用户 2026-09-20）：**部分行动是能力在夜间造成死亡的顺序**，不代表当晚要唤醒他们
-    g_noNote = BOTC_NewLabel(g_noDlg, 460, 22, 530, 34, StringToText("（部分行动为能力在夜间造成死亡的顺序，不代表需要唤醒）"));
-    libNtve_gf_SetDialogItemStyle(g_noNote, "ModLeftSize16Bold", PlayerGroupAll());
-    libNtve_gf_SetDialogItemAcceptMouse(g_noNote, false, PlayerGroupAll());
-    for (i = 0; i < 24; i += 1) {
-        libNtve_gf_CreateDialogItemImage(g_noDlg, 85, 85, c_anchorCenter, 0, 0, StringToText(""), null, c_triggerImageTypeNormal, true, Color(100, 100, 100), c_triggerBlendModeNormal);
-        g_noIcon[i] = DialogControlLastCreated();
-        DialogControlSetSize(g_noIcon[i], PlayerGroupAll(), 85, 85);
-        libNtve_gf_SetDialogItemAcceptMouse(g_noIcon[i], false, PlayerGroupAll());
-        libNtve_gf_SetDialogItemImage(g_noIcon[i], "botc_blank.dds", PlayerGroupAll());
-        DialogControlSetVisible(g_noIcon[i], PlayerGroupAll(), false);
-        g_noName[i] = BOTC_NewLabel(g_noDlg, 340, 30, 40, 60, StringToText(""));
-        libNtve_gf_SetDialogItemStyle(g_noName[i], "ModLeftSize20Bold", PlayerGroupAll());
-        libNtve_gf_SetDialogItemAcceptMouse(g_noName[i], false, PlayerGroupAll());
-        DialogControlSetVisible(g_noName[i], PlayerGroupAll(), false);
+    int p;
+    int base;
+    for (p = 1; p <= 13; p += 1) {
+        base = p * 24;
+        DialogCreate(1180, 1080, c_anchorCenter, 0, 0, false);
+        g_noDlg[p] = DialogLastCreated();
+        DialogSetVisible(g_noDlg[p], PlayerGroupAll(), false);
+        g_noViewBtn[p] = BOTC_NewButton(g_noDlg[p], 170, 28, 20, 4, "剧本角色");
+        g_noTitleL[p] = BOTC_NewLabel(g_noDlg[p], 280, 36, 240, 8, StringToText("首夜"));
+        libNtve_gf_SetDialogItemStyle(g_noTitleL[p], "ModLeftSize20Bold", PlayerGroupAll());
+        libNtve_gf_SetDialogItemAcceptMouse(g_noTitleL[p], false, PlayerGroupAll());
+        g_noTitleR[p] = BOTC_NewLabel(g_noDlg[p], 460, 36, 530, 8, StringToText("从第二个夜晚开始"));
+        libNtve_gf_SetDialogItemStyle(g_noTitleR[p], "ModLeftSize20Bold", PlayerGroupAll());
+        libNtve_gf_SetDialogItemAcceptMouse(g_noTitleR[p], false, PlayerGroupAll());
+        g_noNote[p] = BOTC_NewLabel(g_noDlg[p], 460, 22, 530, 34, StringToText("（部分行动为能力在夜间造成死亡的顺序，不代表需要唤醒）"));
+        libNtve_gf_SetDialogItemStyle(g_noNote[p], "ModLeftSize16Bold", PlayerGroupAll());
+        libNtve_gf_SetDialogItemAcceptMouse(g_noNote[p], false, PlayerGroupAll());
+        for (i = 0; i < 24; i += 1) {
+            libNtve_gf_CreateDialogItemImage(g_noDlg[p], 85, 85, c_anchorCenter, 0, 0, StringToText(""), null, c_triggerImageTypeNormal, true, Color(100, 100, 100), c_triggerBlendModeNormal);
+            g_noIcon[base + i] = DialogControlLastCreated();
+            DialogControlSetSize(g_noIcon[base + i], PlayerGroupAll(), 85, 85);
+            libNtve_gf_SetDialogItemAcceptMouse(g_noIcon[base + i], false, PlayerGroupAll());
+            libNtve_gf_SetDialogItemImage(g_noIcon[base + i], "botc_blank.dds", PlayerGroupAll());
+            DialogControlSetVisible(g_noIcon[base + i], PlayerGroupAll(), false);
+            g_noName[base + i] = BOTC_NewLabel(g_noDlg[p], 340, 30, 40, 60, StringToText(""));
+            libNtve_gf_SetDialogItemStyle(g_noName[base + i], "ModLeftSize20Bold", PlayerGroupAll());
+            libNtve_gf_SetDialogItemAcceptMouse(g_noName[base + i], false, PlayerGroupAll());
+            DialogControlSetVisible(g_noName[base + i], PlayerGroupAll(), false);
+        }
+        g_noClose[p] = BOTC_NewButton(g_noDlg[p], 160, 40, 360, 1000, "关闭");
+        g_noUp[p] = BOTC_NewButton(g_noDlg[p], 150, 40, 20, 1000, "▲ 上一页");
+        g_noDown[p] = BOTC_NewButton(g_noDlg[p], 150, 40, 190, 1000, "▼ 下一页");
+        g_noPageLbl[p] = BOTC_NewLabel(g_noDlg[p], 340, 30, 530, 1006, StringToText(""));
+        libNtve_gf_SetDialogItemStyle(g_noPageLbl[p], "ModLeftSize20Bold", PlayerGroupAll());
+        libNtve_gf_SetDialogItemAcceptMouse(g_noPageLbl[p], false, PlayerGroupAll());
+        DialogSetVisible(g_noDlg[p], PlayerGroupSingle(p), false);
     }
-    g_noClose = BOTC_NewButton(g_noDlg, 160, 40, 360, 1000, "关闭");   // 与剧本角色表同一行、同一位置
-    // 翻页：▲/▼ 各翻 6 行，中间一行小字写「现在显示第几到第几行」
-    g_noUp = BOTC_NewButton(g_noDlg, 150, 40, 20, 1000, "▲ 上一页");
-    g_noDown = BOTC_NewButton(g_noDlg, 150, 40, 190, 1000, "▼ 下一页");
-    g_noPageLbl = BOTC_NewLabel(g_noDlg, 340, 30, 530, 1006, StringToText(""));
-    libNtve_gf_SetDialogItemStyle(g_noPageLbl, "ModLeftSize20Bold", PlayerGroupAll());
-    libNtve_gf_SetDialogItemAcceptMouse(g_noPageLbl, false, PlayerGroupAll());
 }
 
 // 画一行：col 0 = 首夜 / 1 = 第二夜起，row 0..11，r = 身份索引
@@ -11187,7 +11354,7 @@ void BOTC_NightOrderRow (int p, int col, int row, int r) {
     int idx;
     int x;
     int y;
-    idx = (col * 12) + row;
+    idx = (p * 24) + (col * 12) + row;
     x = 40 + (col * 490);
     y = 60 + (row * 84);
     libNtve_gf_SetDialogItemImage(g_noIcon[idx], BOTC_NightIconName(r), PlayerGroupSingle(p));
@@ -11206,10 +11373,12 @@ void BOTC_NightOrderRender (int p) {
     int o;
     int row;
     int b;
+    int base;
     bool[164] showRole;
+    base = p * 24;
     for (i = 0; i < 24; i += 1) {
-        DialogControlSetVisible(g_noIcon[i], PlayerGroupSingle(p), false);
-        DialogControlSetVisible(g_noName[i], PlayerGroupSingle(p), false);
+        DialogControlSetVisible(g_noIcon[base + i], PlayerGroupSingle(p), false);
+        DialogControlSetVisible(g_noName[base + i], PlayerGroupSingle(p), false);
     }
     b = g_board;
     if (b < 1 || b > 15) {
@@ -11236,12 +11405,12 @@ void BOTC_NightOrderRender (int p) {
             showRole[r] = true;
         }
     }
-    g_noMaxRows = 0;
+    g_noMaxRows[p] = 0;
     // 左栏第 0 行：固定（跟着翻页平移，翻下去就藏起来）
-    libNtve_gf_SetDialogItemText(g_noName[0], StringToText("爪牙与恶魔互相得知"), PlayerGroupSingle(p));
-    libNtve_gf_SetDialogItemStyle(g_noName[0], "ModLeftSize20Bold", PlayerGroupSingle(p));
-    DialogControlSetPosition(g_noName[0], PlayerGroupSingle(p), c_anchorTopLeft, 44, 90 - (g_noShift * 84));
-    DialogControlSetVisible(g_noName[0], PlayerGroupSingle(p), (g_noShift == 0));
+    libNtve_gf_SetDialogItemText(g_noName[base], StringToText("爪牙与恶魔互相得知"), PlayerGroupSingle(p));
+    libNtve_gf_SetDialogItemStyle(g_noName[base], "ModLeftSize20Bold", PlayerGroupSingle(p));
+    DialogControlSetPosition(g_noName[base], PlayerGroupSingle(p), c_anchorTopLeft, 44, 90 - (g_noShift[p] * 84));
+    DialogControlSetVisible(g_noName[base], PlayerGroupSingle(p), (g_noShift[p] == 0));
     // 左栏：按首夜顺序
     row = 1;
     for (o = 1; o <= 127; o += 1) {
@@ -11250,14 +11419,14 @@ void BOTC_NightOrderRender (int p) {
             if (g_noAllFirst[r] != o) {
                 continue;
             }
-            if ((row - g_noShift) >= 0 && (row - g_noShift) < 11) {
-                BOTC_NightOrderRow(p, 0, row - g_noShift, r);
+            if ((row - g_noShift[p]) >= 0 && (row - g_noShift[p]) < 11) {
+                BOTC_NightOrderRow(p, 0, row - g_noShift[p], r);
             }
             row = row + 1;
         }
     }
-    if (row > g_noMaxRows) {
-        g_noMaxRows = row;
+    if (row > g_noMaxRows[p]) {
+        g_noMaxRows[p] = row;
     }
     // 右栏：第二夜起
     row = 0;
@@ -11267,37 +11436,37 @@ void BOTC_NightOrderRender (int p) {
             if (g_noAllOther[r] != o) {
                 continue;
             }
-            if ((row - g_noShift) >= 0 && (row - g_noShift) < 11) {
-                BOTC_NightOrderRow(p, 1, row - g_noShift, r);
+            if ((row - g_noShift[p]) >= 0 && (row - g_noShift[p]) < 11) {
+                BOTC_NightOrderRow(p, 1, row - g_noShift[p], r);
             }
             row = row + 1;
         }
     }
-    if (row > g_noMaxRows) {
-        g_noMaxRows = row;
+    if (row > g_noMaxRows[p]) {
+        g_noMaxRows[p] = row;
     }
-    libNtve_gf_SetDialogItemText(g_noPageLbl, StringToText("显示第 " + IntToString(g_noShift + 1) + " - " + IntToString(g_noShift + 11) + " 行（最长一栏 " + IntToString(g_noMaxRows) + " 行）"), PlayerGroupSingle(p));
-    if (g_noShift + 11 >= g_noMaxRows) {
-        libNtve_gf_SetDialogItemText(g_noPageLbl, StringToText("显示第 " + IntToString(g_noShift + 1) + " - " + IntToString(g_noMaxRows) + " 行（共 " + IntToString(g_noMaxRows) + " 行）"), PlayerGroupSingle(p));
+    libNtve_gf_SetDialogItemText(g_noPageLbl[p], StringToText("显示第 " + IntToString(g_noShift[p] + 1) + " - " + IntToString(g_noShift[p] + 11) + " 行（最长一栏 " + IntToString(g_noMaxRows[p]) + " 行）"), PlayerGroupSingle(p));
+    if (g_noShift[p] + 11 >= g_noMaxRows[p]) {
+        libNtve_gf_SetDialogItemText(g_noPageLbl[p], StringToText("显示第 " + IntToString(g_noShift[p] + 1) + " - " + IntToString(g_noMaxRows[p]) + " 行（共 " + IntToString(g_noMaxRows[p]) + " 行）"), PlayerGroupSingle(p));
     }
-    if (g_noMaxRows <= 11) {
-        libNtve_gf_SetDialogItemText(g_noPageLbl, StringToText("共 " + IntToString(g_noMaxRows) + " 行"), PlayerGroupSingle(p));
+    if (g_noMaxRows[p] <= 11) {
+        libNtve_gf_SetDialogItemText(g_noPageLbl[p], StringToText("共 " + IntToString(g_noMaxRows[p]) + " 行"), PlayerGroupSingle(p));
     }
 }
 
 // 翻页：delta = +6 / -6；越界自动夹住（最长一栏 - 12 = 最后一页）
 void BOTC_NightOrderScroll (int p, int delta) {
     int maxShift;
-    maxShift = g_noMaxRows - 11;
+    maxShift = g_noMaxRows[p] - 11;
     if (maxShift < 0) {
         maxShift = 0;
     }
-    g_noShift = g_noShift + delta;
-    if (g_noShift < 0) {
-        g_noShift = 0;
+    g_noShift[p] = g_noShift[p] + delta;
+    if (g_noShift[p] < 0) {
+        g_noShift[p] = 0;
     }
-    if (g_noShift > maxShift) {
-        g_noShift = maxShift;
+    if (g_noShift[p] > maxShift) {
+        g_noShift[p] = maxShift;
     }
     BOTC_NightOrderRender(p);
 }
@@ -11305,11 +11474,11 @@ void BOTC_NightOrderScroll (int p, int delta) {
 void BOTC_NightOrderOpen (int p) {
     int ox;
     int oy;
-    g_noShift = 0;              // 每次打开都从最上面开始
+    g_noShift[p] = 0;              // 每次打开都从最上面开始
     BOTC_NightOrderRender(p);
     g_noOpen[p] = true;
     g_abOpen[p] = false;
-    DialogSetVisible(g_abNewDlg, PlayerGroupSingle(p), false);
+    DialogSetVisible(g_abNewDlg[p], PlayerGroupSingle(p), false);
     // 与剧本角色表共用一个窗口：尺寸、位置完全一致，拖动其中一个两个视图一起走
     ox = g_abOffX[p];
     oy = g_abOffY[p];
@@ -11317,14 +11486,14 @@ void BOTC_NightOrderOpen (int p) {
     if (ox > 370) { ox = 370; }
     if (oy < -30) { oy = -30; }
     if (oy > 30) { oy = 30; }
-    DialogSetPosition(g_noDlg, c_anchorCenter, ox, oy);
-    DialogSetPosition(g_abNewDlg, c_anchorCenter, ox, oy);
-    DialogSetVisible(g_noDlg, PlayerGroupSingle(p), true);
+    DialogSetPosition(g_noDlg[p], c_anchorCenter, ox, oy);
+    DialogSetPosition(g_abNewDlg[p], c_anchorCenter, ox, oy);
+    DialogSetVisible(g_noDlg[p], PlayerGroupSingle(p), true);
 }
 
 void BOTC_NightOrderClose (int p) {
     g_noOpen[p] = false;
-    DialogSetVisible(g_noDlg, PlayerGroupSingle(p), false);
+    DialogSetVisible(g_noDlg[p], PlayerGroupSingle(p), false);
 }
 
 // 【剧本角色表 ↔ 夜间行动顺序】（用户 2026-11-04）：同一个弹窗，左上角按钮切换两个视图
@@ -11398,106 +11567,104 @@ void BOTC_BuildAbNew () {
     int f;
     int i;
     int p;
-    // 【剧本角色表】（用户 2026-11-04）：首次打开在屏幕正中心；按住顶部可拖动，
-    //   位置当局记住、退出地图后重置。左上角【夜间行动顺序】切到夜序视图。
-    DialogCreate(1180, 1080, c_anchorCenter, 0, 0, false);
-    g_abNewDlg = DialogLastCreated();
-    DialogSetVisible(g_abNewDlg, PlayerGroupAll(), false);
-
-    g_abViewBtn = BOTC_NewButton(g_abNewDlg, 200, 30, 20, 4, "夜间行动顺序");
-    g_abNewLbl = BOTC_NewLabel(g_abNewDlg, 920, 30, 240, 6, StringToText("剧本角色表"));
-    libNtve_gf_SetDialogItemStyle(g_abNewLbl, "ModLeftSize20Bold", PlayerGroupAll());
-    libNtve_gf_SetDialogItemAcceptMouse(g_abNewLbl, false, PlayerGroupAll());
-
-    for (i = 0; i < 4; i += 1) {
-        g_abNewSec[i] = BOTC_NewLabel(g_abNewDlg, 560, 26, 20, 44, StringToText(""));
-        libNtve_gf_SetDialogItemStyle(g_abNewSec[i], "ModLeftSize20Bold", PlayerGroupAll());
-        libNtve_gf_SetDialogItemAcceptMouse(g_abNewSec[i], false, PlayerGroupAll());
-        DialogControlSetVisible(g_abNewSec[i], PlayerGroupAll(), false);
-    }
-
-    for (i = 0; i < 26; i += 1) {
-        g_abNewHit[i] = BOTC_NewButton(g_abNewDlg, 85, 85, 20, 60, "");
-        libNtve_gf_CreateDialogItemImage(g_abNewDlg, 85, 85, c_anchorCenter, 0, 0, StringToText(""), null, c_triggerImageTypeNormal, true, Color(100, 100, 100), c_triggerBlendModeNormal);
-        g_abNewIcon[i] = DialogControlLastCreated();
-        DialogControlSetSize(g_abNewIcon[i], PlayerGroupAll(), 85, 85);
-        libNtve_gf_SetDialogItemAcceptMouse(g_abNewIcon[i], false, PlayerGroupAll());   // 图片层不接鼠标：点下去穿到下面的按钮（跟魔典座位一样）
-        libNtve_gf_SetDialogItemImage(g_abNewIcon[i], BOTC_NightIconName(i), PlayerGroupAll());
-        DialogControlSetPosition(g_abNewIcon[i], PlayerGroupAll(), c_anchorTopLeft, 20, 60);
-        DialogControlSetVisible(g_abNewIcon[i], PlayerGroupAll(), false);
-        g_abNewName[i] = BOTC_NewLabel(g_abNewDlg, 340, 26, 110, 64, StringToText(""));
-        libNtve_gf_SetDialogItemStyle(g_abNewName[i], "ModLeftSize20Bold", PlayerGroupAll());
-        libNtve_gf_SetDialogItemAcceptMouse(g_abNewName[i], false, PlayerGroupAll());
-        g_abNewAb[i] = BOTC_NewLabel(g_abNewDlg, 460, 78, 110, 92, StringToText(""));
-        libNtve_gf_SetDialogItemStyle(g_abNewAb[i], "ModLeftSize16Bold", PlayerGroupAll());
-        libNtve_gf_SetDialogItemAcceptMouse(g_abNewAb[i], false, PlayerGroupAll());
-        DialogControlSetVisible(g_abNewHit[i], PlayerGroupAll(), false);
-        DialogControlSetVisible(g_abNewName[i], PlayerGroupAll(), false);
-        DialogControlSetVisible(g_abNewAb[i], PlayerGroupAll(), false);
-    }
-    for (i = 0; i < 4; i += 1) {
-        g_abCatPrev[i] = BOTC_NewButton(g_abNewDlg, 38, 22, 865, 44, "<");
-        g_abCatNext[i] = BOTC_NewButton(g_abNewDlg, 38, 22, 909, 44, ">");
-        DialogControlSetVisible(g_abCatPrev[i], PlayerGroupAll(), false);
-        DialogControlSetVisible(g_abCatNext[i], PlayerGroupAll(), false);
-    }
-
-    // 【第 3 页：名词解释】（用户 2026-09-20）：6 条，每条 = 标题 1 行 + 正文 3 行
-    g_glossNote = BOTC_NewLabel(g_abNewDlg, 1140, 24, 20, 44, StringToText(""));
-    libNtve_gf_SetDialogItemStyle(g_glossNote, "ModLeftSize16Bold", PlayerGroupAll());
-    libNtve_gf_SetDialogItemAcceptMouse(g_glossNote, false, PlayerGroupAll());
-    DialogControlSetVisible(g_glossNote, PlayerGroupAll(), false);
-    for (i = 0; i < 6; i += 1) {
-        g_glossTitleCtl[i] = BOTC_NewLabel(g_abNewDlg, 1140, 26, 20, 74 + (i * 130), StringToText(""));
-        libNtve_gf_SetDialogItemStyle(g_glossTitleCtl[i], "ModLeftSize20Bold", PlayerGroupAll());
-        libNtve_gf_SetDialogItemAcceptMouse(g_glossTitleCtl[i], false, PlayerGroupAll());
-        DialogControlSetVisible(g_glossTitleCtl[i], PlayerGroupAll(), false);
-        for (f = 0; f < 3; f += 1) {
-            g_glossBodyCtl[(i * 3) + f] = BOTC_NewLabel(g_abNewDlg, 1140, 26, 20, 104 + (i * 130) + (f * 30), StringToText(""));
-            libNtve_gf_SetDialogItemStyle(g_glossBodyCtl[(i * 3) + f], "ModLeftSize16Bold", PlayerGroupAll());
-            libNtve_gf_SetDialogItemAcceptMouse(g_glossBodyCtl[(i * 3) + f], false, PlayerGroupAll());
-            DialogControlSetVisible(g_glossBodyCtl[(i * 3) + f], PlayerGroupAll(), false);
-        }
-    }
-    g_abNewPrev = BOTC_NewButton(g_abNewDlg, 200, 40, 20, 1000, "上一页");
-    g_abNewNext = BOTC_NewButton(g_abNewDlg, 200, 40, 240, 1000, "下一页");
-    g_abNewClose = BOTC_NewButton(g_abNewDlg, 160, 40, 460, 1000, "关闭");   // 用户 2026-11-04：移到【下一页】右边
-
-    // 【正下方居中的注释】（用户 2026-09-20）：每个夜晚后面的星号 = 从第 2 夜开始行动
-    g_abNewStarNote = BOTC_NewLabelC(g_abNewDlg, 1140, 26, 20, 952, StringToText("每个夜晚* 代表从第二夜开始"));
-    libNtve_gf_SetDialogItemStyle(g_abNewStarNote, "ModLeftSize20Bold", PlayerGroupAll());
-    libNtve_gf_SetDialogItemAcceptMouse(g_abNewStarNote, false, PlayerGroupAll());
-    DialogControlSetVisible(g_abNewStarNote, PlayerGroupAll(), false);
-    g_abSubPrev = BOTC_NewButton(g_abNewDlg, 38, 22, 865, 44, "<");
-    g_abSubNext = BOTC_NewButton(g_abNewDlg, 38, 22, 909, 44, ">");
-    DialogControlSetVisible(g_abSubPrev, PlayerGroupAll(), false);
-    DialogControlSetVisible(g_abSubNext, PlayerGroupAll(), false);
+    int base;
+    int gbase;
     for (p = 1; p <= 13; p += 1) {
+        base = p * 26;
+        gbase = p * 8;
+        DialogCreate(1180, 1080, c_anchorCenter, 0, 0, false);
+        g_abNewDlg[p] = DialogLastCreated();
+        DialogSetVisible(g_abNewDlg[p], PlayerGroupAll(), false);
+        g_abViewBtn[p] = BOTC_NewButton(g_abNewDlg[p], 200, 30, 20, 4, "夜间行动顺序");
+        g_abNewLbl[p] = BOTC_NewLabel(g_abNewDlg[p], 920, 30, 240, 6, StringToText("剧本角色表"));
+        libNtve_gf_SetDialogItemStyle(g_abNewLbl[p], "ModLeftSize20Bold", PlayerGroupAll());
+        libNtve_gf_SetDialogItemAcceptMouse(g_abNewLbl[p], false, PlayerGroupAll());
+        for (i = 0; i < 4; i += 1) {
+            g_abNewSec[(p * 4) + i] = BOTC_NewLabel(g_abNewDlg[p], 560, 26, 20, 44, StringToText(""));
+            libNtve_gf_SetDialogItemStyle(g_abNewSec[(p * 4) + i], "ModLeftSize20Bold", PlayerGroupAll());
+            libNtve_gf_SetDialogItemAcceptMouse(g_abNewSec[(p * 4) + i], false, PlayerGroupAll());
+            DialogControlSetVisible(g_abNewSec[(p * 4) + i], PlayerGroupAll(), false);
+        }
+        for (i = 0; i < 26; i += 1) {
+            g_abNewHit[base + i] = BOTC_NewButton(g_abNewDlg[p], 85, 85, 20, 60, "");
+            libNtve_gf_CreateDialogItemImage(g_abNewDlg[p], 85, 85, c_anchorCenter, 0, 0, StringToText(""), null, c_triggerImageTypeNormal, true, Color(100, 100, 100), c_triggerBlendModeNormal);
+            g_abNewIcon[base + i] = DialogControlLastCreated();
+            DialogControlSetSize(g_abNewIcon[base + i], PlayerGroupAll(), 85, 85);
+            libNtve_gf_SetDialogItemAcceptMouse(g_abNewIcon[base + i], false, PlayerGroupAll());
+            libNtve_gf_SetDialogItemImage(g_abNewIcon[base + i], BOTC_NightIconName(i), PlayerGroupAll());
+            DialogControlSetPosition(g_abNewIcon[base + i], PlayerGroupAll(), c_anchorTopLeft, 20, 60);
+            DialogControlSetVisible(g_abNewIcon[base + i], PlayerGroupAll(), false);
+            g_abNewName[base + i] = BOTC_NewLabel(g_abNewDlg[p], 340, 26, 110, 64, StringToText(""));
+            libNtve_gf_SetDialogItemStyle(g_abNewName[base + i], "ModLeftSize20Bold", PlayerGroupAll());
+            libNtve_gf_SetDialogItemAcceptMouse(g_abNewName[base + i], false, PlayerGroupAll());
+            g_abNewAb[base + i] = BOTC_NewLabel(g_abNewDlg[p], 460, 78, 110, 92, StringToText(""));
+            libNtve_gf_SetDialogItemStyle(g_abNewAb[base + i], "ModLeftSize16Bold", PlayerGroupAll());
+            libNtve_gf_SetDialogItemAcceptMouse(g_abNewAb[base + i], false, PlayerGroupAll());
+            DialogControlSetVisible(g_abNewHit[base + i], PlayerGroupAll(), false);
+            DialogControlSetVisible(g_abNewName[base + i], PlayerGroupAll(), false);
+            DialogControlSetVisible(g_abNewAb[base + i], PlayerGroupAll(), false);
+        }
+        for (i = 0; i < 4; i += 1) {
+            g_abCatPrev[(p * 4) + i] = BOTC_NewButton(g_abNewDlg[p], 38, 22, 865, 44, "<");
+            g_abCatNext[(p * 4) + i] = BOTC_NewButton(g_abNewDlg[p], 38, 22, 909, 44, ">");
+            DialogControlSetVisible(g_abCatPrev[(p * 4) + i], PlayerGroupAll(), false);
+            DialogControlSetVisible(g_abCatNext[(p * 4) + i], PlayerGroupAll(), false);
+        }
+        g_glossNote[p] = BOTC_NewLabel(g_abNewDlg[p], 1140, 24, 20, 44, StringToText(""));
+        libNtve_gf_SetDialogItemStyle(g_glossNote[p], "ModLeftSize16Bold", PlayerGroupAll());
+        libNtve_gf_SetDialogItemAcceptMouse(g_glossNote[p], false, PlayerGroupAll());
+        DialogControlSetVisible(g_glossNote[p], PlayerGroupAll(), false);
+        for (i = 0; i < 6; i += 1) {
+            g_glossTitleCtl[gbase + i] = BOTC_NewLabel(g_abNewDlg[p], 1140, 26, 20, 74 + (i * 130), StringToText(""));
+            libNtve_gf_SetDialogItemStyle(g_glossTitleCtl[gbase + i], "ModLeftSize20Bold", PlayerGroupAll());
+            libNtve_gf_SetDialogItemAcceptMouse(g_glossTitleCtl[gbase + i], false, PlayerGroupAll());
+            DialogControlSetVisible(g_glossTitleCtl[gbase + i], PlayerGroupAll(), false);
+            for (f = 0; f < 3; f += 1) {
+                g_glossBodyCtl[(p * 24) + (i * 3) + f] = BOTC_NewLabel(g_abNewDlg[p], 1140, 26, 20, 104 + (i * 130) + (f * 30), StringToText(""));
+                libNtve_gf_SetDialogItemStyle(g_glossBodyCtl[(p * 24) + (i * 3) + f], "ModLeftSize16Bold", PlayerGroupAll());
+                libNtve_gf_SetDialogItemAcceptMouse(g_glossBodyCtl[(p * 24) + (i * 3) + f], false, PlayerGroupAll());
+                DialogControlSetVisible(g_glossBodyCtl[(p * 24) + (i * 3) + f], PlayerGroupAll(), false);
+            }
+        }
+        g_abNewPrev[p] = BOTC_NewButton(g_abNewDlg[p], 200, 40, 20, 1000, "上一页");
+        g_abNewNext[p] = BOTC_NewButton(g_abNewDlg[p], 200, 40, 240, 1000, "下一页");
+        g_abNewClose[p] = BOTC_NewButton(g_abNewDlg[p], 160, 40, 460, 1000, "关闭");
+        g_abNewStarNote[p] = BOTC_NewLabelC(g_abNewDlg[p], 1140, 26, 20, 952, StringToText("每个夜晚* 代表从第二夜开始"));
+        libNtve_gf_SetDialogItemStyle(g_abNewStarNote[p], "ModLeftSize20Bold", PlayerGroupAll());
+        libNtve_gf_SetDialogItemAcceptMouse(g_abNewStarNote[p], false, PlayerGroupAll());
+        DialogControlSetVisible(g_abNewStarNote[p], PlayerGroupAll(), false);
+        g_abSubPrev[p] = BOTC_NewButton(g_abNewDlg[p], 38, 22, 865, 44, "<");
+        g_abSubNext[p] = BOTC_NewButton(g_abNewDlg[p], 38, 22, 909, 44, ">");
+        DialogControlSetVisible(g_abSubPrev[p], PlayerGroupAll(), false);
+        DialogControlSetVisible(g_abSubNext[p], PlayerGroupAll(), false);
         g_glossPage[p] = 1;
         for (i = 0; i < 4; i += 1) {
             g_abCatPage[(p * 4) + i] = 1;
         }
+        DialogSetVisible(g_abNewDlg[p], PlayerGroupSingle(p), false);
     }
 }
 
 // 每条摆到 (col,row)：图标按钮 + 名字 + 能力（位置/大小 = 旧版排版，一模一样）
 void BOTC_AbNewEntry (int p, int slot, int r, int x, int y, int w) {
-    g_abNewRole[slot] = r;
-    DialogControlSetPosition(g_abNewHit[slot], PlayerGroupSingle(p), c_anchorTopLeft, x, y);
-    DialogControlSetPosition(g_abNewIcon[slot], PlayerGroupSingle(p), c_anchorTopLeft, x, y);
-    libNtve_gf_SetDialogItemImage(g_abNewIcon[slot], BOTC_NightIconName(r), PlayerGroupSingle(p));
-    DialogControlSetPosition(g_abNewName[slot], PlayerGroupSingle(p), c_anchorTopLeft, x + 92, y + 4);
-    DialogControlSetPosition(g_abNewAb[slot], PlayerGroupSingle(p), c_anchorTopLeft, x + 92, y + 34);
+    int idx;
+    idx = (p * 26) + slot;
+    g_abNewRole[idx] = r;
+    DialogControlSetPosition(g_abNewHit[idx], PlayerGroupSingle(p), c_anchorTopLeft, x, y);
+    DialogControlSetPosition(g_abNewIcon[idx], PlayerGroupSingle(p), c_anchorTopLeft, x, y);
+    libNtve_gf_SetDialogItemImage(g_abNewIcon[idx], BOTC_NightIconName(r), PlayerGroupSingle(p));
+    DialogControlSetPosition(g_abNewName[idx], PlayerGroupSingle(p), c_anchorTopLeft, x + 92, y + 4);
+    DialogControlSetPosition(g_abNewAb[idx], PlayerGroupSingle(p), c_anchorTopLeft, x + 92, y + 34);
     // 【条目宽度 w】（用户 2026-10-04）：爪牙 / 恶魔 那两段改成**三列**，文字框必须跟着变窄，
     //   否则会压到右边那一列的图标上。镇民 / 外来者 / 传奇仍然用 460（两列）。
-    DialogControlSetSize(g_abNewName[slot], PlayerGroupSingle(p), w, 26);
-    DialogControlSetSize(g_abNewAb[slot], PlayerGroupSingle(p), w, 78);
-    libNtve_gf_SetDialogItemText(g_abNewName[slot], TextWithColor(StringToText(g_roleName[r]), BOTC_RoleTeamColor(r)), PlayerGroupSingle(p));
-    libNtve_gf_SetDialogItemText(g_abNewAb[slot], BOTC_KeyColor(g_tipAbility[r]), PlayerGroupSingle(p));
-    DialogControlSetVisible(g_abNewHit[slot], PlayerGroupSingle(p), true);
-    DialogControlSetVisible(g_abNewIcon[slot], PlayerGroupSingle(p), true);
-    DialogControlSetVisible(g_abNewName[slot], PlayerGroupSingle(p), true);
-    DialogControlSetVisible(g_abNewAb[slot], PlayerGroupSingle(p), true);
+    DialogControlSetSize(g_abNewName[idx], PlayerGroupSingle(p), w, 26);
+    DialogControlSetSize(g_abNewAb[idx], PlayerGroupSingle(p), w, 78);
+    libNtve_gf_SetDialogItemText(g_abNewName[idx], TextWithColor(StringToText(g_roleName[r]), BOTC_RoleTeamColor(r)), PlayerGroupSingle(p));
+    libNtve_gf_SetDialogItemText(g_abNewAb[idx], BOTC_KeyColor(g_tipAbility[r]), PlayerGroupSingle(p));
+    DialogControlSetVisible(g_abNewHit[idx], PlayerGroupSingle(p), true);
+    DialogControlSetVisible(g_abNewIcon[idx], PlayerGroupSingle(p), true);
+    DialogControlSetVisible(g_abNewName[idx], PlayerGroupSingle(p), true);
+    DialogControlSetVisible(g_abNewAb[idx], PlayerGroupSingle(p), true);
 }
 
 void BOTC_AbCatCtrlRender (int p, int t) {
@@ -11519,8 +11686,8 @@ void BOTC_AbCatCtrlRender (int p, int t) {
     }
     g_abCatPage[(p * 4) + t] = page;
     if (pages <= 1) {
-        DialogControlSetVisible(g_abCatPrev[t], PlayerGroupSingle(p), false);
-        DialogControlSetVisible(g_abCatNext[t], PlayerGroupSingle(p), false);
+        DialogControlSetVisible(g_abCatPrev[(p * 4) + t], PlayerGroupSingle(p), false);
+        DialogControlSetVisible(g_abCatNext[(p * 4) + t], PlayerGroupSingle(p), false);
         return;
     }
     // 镇民有两列，底部最后一行结束于 y=822；翻页按钮放到它右下方的空行。
@@ -11528,12 +11695,12 @@ void BOTC_AbCatCtrlRender (int p, int t) {
     if (t == 1) { y = 46; }
     if (t == 2) { y = 416; }
     if (t == 3) { y = 686; }
-    DialogControlSetPosition(g_abCatPrev[t], PlayerGroupSingle(p), c_anchorTopLeft, 865, y);
-    DialogControlSetPosition(g_abCatNext[t], PlayerGroupSingle(p), c_anchorTopLeft, 909, y);
-    libNtve_gf_SetDialogItemText(g_abCatPrev[t], StringToText("<"), PlayerGroupSingle(p));
-    libNtve_gf_SetDialogItemText(g_abCatNext[t], StringToText(">"), PlayerGroupSingle(p));
-    DialogControlSetVisible(g_abCatPrev[t], PlayerGroupSingle(p), true);
-    DialogControlSetVisible(g_abCatNext[t], PlayerGroupSingle(p), true);
+    DialogControlSetPosition(g_abCatPrev[(p * 4) + t], PlayerGroupSingle(p), c_anchorTopLeft, 865, y);
+    DialogControlSetPosition(g_abCatNext[(p * 4) + t], PlayerGroupSingle(p), c_anchorTopLeft, 909, y);
+    libNtve_gf_SetDialogItemText(g_abCatPrev[(p * 4) + t], StringToText("<"), PlayerGroupSingle(p));
+    libNtve_gf_SetDialogItemText(g_abCatNext[(p * 4) + t], StringToText(">"), PlayerGroupSingle(p));
+    DialogControlSetVisible(g_abCatPrev[(p * 4) + t], PlayerGroupSingle(p), true);
+    DialogControlSetVisible(g_abCatNext[(p * 4) + t], PlayerGroupSingle(p), true);
 }
 
 //==================================================================================================
@@ -11709,9 +11876,11 @@ void BOTC_GlossRender (int p) {
     int pages;
     int seen;
     int skip;
+    int tb;
+    int bb;
     int tot;
     bool show;
-    libNtve_gf_SetDialogItemText(g_abNewLbl, StringToText("剧本角色表  3 / 5 ---- 名词解释"), PlayerGroupSingle(p));
+    libNtve_gf_SetDialogItemText(g_abNewLbl[p], StringToText("剧本角色表  3 / 5 ---- 名词解释"), PlayerGroupSingle(p));
     tot = 0;
     for (i = 0; i < g_glossCount; i += 1) {
         show = false;
@@ -11736,6 +11905,8 @@ void BOTC_GlossRender (int p) {
     if (page < 1) { page = 1; }
     if (page > pages) { page = pages; }
     g_glossPage[p] = page;
+    tb = p * 8;
+    bb = p * 24;
     seen = 0;
     skip = (page - 1) * 6;
     n = 0;
@@ -11760,19 +11931,19 @@ void BOTC_GlossRender (int p) {
         if (n >= 6) {
             break;
         }
-        libNtve_gf_SetDialogItemText(g_glossTitleCtl[n], BOTC_KeyColor(g_glossTitle[i]), PlayerGroupSingle(p));
-        DialogControlSetVisible(g_glossTitleCtl[n], PlayerGroupSingle(p), true);
-        libNtve_gf_SetDialogItemText(g_glossBodyCtl[(n * 3) + 0], BOTC_KeyColor(g_glossBody1[i]), PlayerGroupSingle(p));
-        DialogControlSetVisible(g_glossBodyCtl[(n * 3) + 0], PlayerGroupSingle(p), true);
-        libNtve_gf_SetDialogItemText(g_glossBodyCtl[(n * 3) + 1], BOTC_KeyColor(g_glossBody2[i]), PlayerGroupSingle(p));
-        DialogControlSetVisible(g_glossBodyCtl[(n * 3) + 1], PlayerGroupSingle(p), true);
-        libNtve_gf_SetDialogItemText(g_glossBodyCtl[(n * 3) + 2], BOTC_KeyColor(g_glossBody3[i]), PlayerGroupSingle(p));
-        DialogControlSetVisible(g_glossBodyCtl[(n * 3) + 2], PlayerGroupSingle(p), true);
+        libNtve_gf_SetDialogItemText(g_glossTitleCtl[tb + n], BOTC_KeyColor(g_glossTitle[i]), PlayerGroupSingle(p));
+        DialogControlSetVisible(g_glossTitleCtl[tb + n], PlayerGroupSingle(p), true);
+        libNtve_gf_SetDialogItemText(g_glossBodyCtl[bb + (n * 3) + 0], BOTC_KeyColor(g_glossBody1[i]), PlayerGroupSingle(p));
+        DialogControlSetVisible(g_glossBodyCtl[bb + (n * 3) + 0], PlayerGroupSingle(p), true);
+        libNtve_gf_SetDialogItemText(g_glossBodyCtl[bb + (n * 3) + 1], BOTC_KeyColor(g_glossBody2[i]), PlayerGroupSingle(p));
+        DialogControlSetVisible(g_glossBodyCtl[bb + (n * 3) + 1], PlayerGroupSingle(p), true);
+        libNtve_gf_SetDialogItemText(g_glossBodyCtl[bb + (n * 3) + 2], BOTC_KeyColor(g_glossBody3[i]), PlayerGroupSingle(p));
+        DialogControlSetVisible(g_glossBodyCtl[bb + (n * 3) + 2], PlayerGroupSingle(p), true);
         n = n + 1;
         seen = seen + 1;
     }
-    DialogControlSetVisible(g_abSubPrev, PlayerGroupSingle(p), (pages > 1));
-    DialogControlSetVisible(g_abSubNext, PlayerGroupSingle(p), (pages > 1));
+    DialogControlSetVisible(g_abSubPrev[p], PlayerGroupSingle(p), (pages > 1));
+    DialogControlSetVisible(g_abSubNext[p], PlayerGroupSingle(p), (pages > 1));
 }
 
 void BOTC_LegacyApply (int b) {
@@ -11846,12 +12017,16 @@ void BOTC_JinxRender (int p) {
     int seen;
     int skip;
     string jx;
-    libNtve_gf_SetDialogItemText(g_abNewLbl, StringToText("剧本角色表  4 / 5 ---- 相克规则"), PlayerGroupSingle(p));
+    int tb;
+    int bb;
+    libNtve_gf_SetDialogItemText(g_abNewLbl[p], StringToText("剧本角色表  4 / 5 ---- 相克规则"), PlayerGroupSingle(p));
     pages = BOTC_JinxPageCount(p);
     page = g_jinxPage[p];
     if (page < 1) { page = 1; }
     if (page > pages) { page = pages; }
     g_jinxPage[p] = page;
+    tb = p * 8;
+    bb = p * 24;
     n = 0;
     seen = 0;
     skip = (page - 1) * 6;
@@ -11870,39 +12045,39 @@ void BOTC_JinxRender (int p) {
         if (n >= 6) {
             break;
         }
-        libNtve_gf_SetDialogItemText(g_glossTitleCtl[n], BOTC_KeyColor(StringToText(g_roleName[g_jinxA[i]] + " × " + g_roleName[g_jinxB[i]])), PlayerGroupSingle(p));
-        DialogControlSetVisible(g_glossTitleCtl[n], PlayerGroupSingle(p), true);
-        libNtve_gf_SetDialogItemText(g_glossBodyCtl[(n * 3) + 0], BOTC_KeyColor(StringToText(g_jinxText[i])), PlayerGroupSingle(p));
-        DialogControlSetVisible(g_glossBodyCtl[(n * 3) + 0], PlayerGroupSingle(p), true);
+        libNtve_gf_SetDialogItemText(g_glossTitleCtl[tb + n], BOTC_KeyColor(StringToText(g_roleName[g_jinxA[i]] + " × " + g_roleName[g_jinxB[i]])), PlayerGroupSingle(p));
+        DialogControlSetVisible(g_glossTitleCtl[tb + n], PlayerGroupSingle(p), true);
+        libNtve_gf_SetDialogItemText(g_glossBodyCtl[bb + (n * 3) + 0], BOTC_KeyColor(StringToText(g_jinxText[i])), PlayerGroupSingle(p));
+        DialogControlSetVisible(g_glossBodyCtl[bb + (n * 3) + 0], PlayerGroupSingle(p), true);
         for (f = 1; f < 3; f += 1) {
             jx = g_jinxText2[i];
             if (f == 2) {
                 jx = g_jinxText3[i];
             }
             if (StringLength(jx) > 0) {
-                libNtve_gf_SetDialogItemText(g_glossBodyCtl[(n * 3) + f], BOTC_KeyColor(StringToText(jx)), PlayerGroupSingle(p));
-                DialogControlSetVisible(g_glossBodyCtl[(n * 3) + f], PlayerGroupSingle(p), true);
+                libNtve_gf_SetDialogItemText(g_glossBodyCtl[bb + (n * 3) + f], BOTC_KeyColor(StringToText(jx)), PlayerGroupSingle(p));
+                DialogControlSetVisible(g_glossBodyCtl[bb + (n * 3) + f], PlayerGroupSingle(p), true);
             }
             else {
-                libNtve_gf_SetDialogItemText(g_glossBodyCtl[(n * 3) + f], StringToText(""), PlayerGroupSingle(p));
-                DialogControlSetVisible(g_glossBodyCtl[(n * 3) + f], PlayerGroupSingle(p), false);
+                libNtve_gf_SetDialogItemText(g_glossBodyCtl[bb + (n * 3) + f], StringToText(""), PlayerGroupSingle(p));
+                DialogControlSetVisible(g_glossBodyCtl[bb + (n * 3) + f], PlayerGroupSingle(p), false);
             }
         }
         n = n + 1;
         seen = seen + 1;
     }
     if (n == 0) {
-        libNtve_gf_SetDialogItemText(g_glossTitleCtl[0], StringToText("本局没有相克规则。"), PlayerGroupSingle(p));
-        DialogControlSetVisible(g_glossTitleCtl[0], PlayerGroupSingle(p), true);
+        libNtve_gf_SetDialogItemText(g_glossTitleCtl[tb], StringToText("本局没有相克规则。"), PlayerGroupSingle(p));
+        DialogControlSetVisible(g_glossTitleCtl[tb], PlayerGroupSingle(p), true);
     }
-    DialogControlSetVisible(g_abSubPrev, PlayerGroupSingle(p), (pages > 1));
-    DialogControlSetVisible(g_abSubNext, PlayerGroupSingle(p), (pages > 1));
+    DialogControlSetVisible(g_abSubPrev[p], PlayerGroupSingle(p), (pages > 1));
+    DialogControlSetVisible(g_abSubNext[p], PlayerGroupSingle(p), (pages > 1));
 }
 
 void BOTC_LegacyRender (int p) {
     int i;
     int n;
-    libNtve_gf_SetDialogItemText(g_abNewLbl, StringToText("剧本角色表  5 / 5 ---- 传奇 / 奇遇角色"), PlayerGroupSingle(p));
+    libNtve_gf_SetDialogItemText(g_abNewLbl[p], StringToText("剧本角色表  5 / 5 ---- 传奇 / 奇遇角色"), PlayerGroupSingle(p));
     n = 0;
     for (i = 0; i < 164; i += 1) {
         if (!g_legacyOn[i]) {
@@ -11985,29 +12160,37 @@ void BOTC_AbNewRender (int p) {
     int start;
     int shown;
     int base;
+    int pb;
+    int sb;
+    int tb;
+    int bb;
     BOTC_GridPlan();           // 【保险】每次渲染都按当前板子重算一遍格子（用户 2026-09-19）
     BOTC_GridBuildCat();
+    pb = p * 26;
+    sb = p * 4;
+    tb = p * 8;
+    bb = p * 24;
     for (i = 0; i < 26; i += 1) {
-        DialogControlSetVisible(g_abNewHit[i], PlayerGroupSingle(p), false);
-        DialogControlSetVisible(g_abNewIcon[i], PlayerGroupSingle(p), false);
-        DialogControlSetVisible(g_abNewName[i], PlayerGroupSingle(p), false);
-        DialogControlSetVisible(g_abNewAb[i], PlayerGroupSingle(p), false);
+        DialogControlSetVisible(g_abNewHit[pb + i], PlayerGroupSingle(p), false);
+        DialogControlSetVisible(g_abNewIcon[pb + i], PlayerGroupSingle(p), false);
+        DialogControlSetVisible(g_abNewName[pb + i], PlayerGroupSingle(p), false);
+        DialogControlSetVisible(g_abNewAb[pb + i], PlayerGroupSingle(p), false);
     }
     for (i = 0; i < 4; i += 1) {
-        DialogControlSetVisible(g_abNewSec[i], PlayerGroupSingle(p), false);
-        DialogControlSetVisible(g_abCatPrev[i], PlayerGroupSingle(p), false);
-        DialogControlSetVisible(g_abCatNext[i], PlayerGroupSingle(p), false);
+        DialogControlSetVisible(g_abNewSec[sb + i], PlayerGroupSingle(p), false);
+        DialogControlSetVisible(g_abCatPrev[sb + i], PlayerGroupSingle(p), false);
+        DialogControlSetVisible(g_abCatNext[sb + i], PlayerGroupSingle(p), false);
     }
-    DialogControlSetVisible(g_abNewStarNote, PlayerGroupSingle(p), false);
-    DialogControlSetVisible(g_abSubPrev, PlayerGroupSingle(p), false);
-    DialogControlSetVisible(g_abSubNext, PlayerGroupSingle(p), false);
+    DialogControlSetVisible(g_abNewStarNote[p], PlayerGroupSingle(p), false);
+    DialogControlSetVisible(g_abSubPrev[p], PlayerGroupSingle(p), false);
+    DialogControlSetVisible(g_abSubNext[p], PlayerGroupSingle(p), false);
     // 名词页的控件先全部藏起来（不是第 3 页的时候就保持藏着的状态）
-    DialogControlSetVisible(g_glossNote, PlayerGroupSingle(p), false);
+    DialogControlSetVisible(g_glossNote[p], PlayerGroupSingle(p), false);
     for (f = 0; f < 6; f += 1) {
-        DialogControlSetVisible(g_glossTitleCtl[f], PlayerGroupSingle(p), false);
+        DialogControlSetVisible(g_glossTitleCtl[tb + f], PlayerGroupSingle(p), false);
     }
     for (f = 0; f < 18; f += 1) {
-        DialogControlSetVisible(g_glossBodyCtl[f], PlayerGroupSingle(p), false);
+        DialogControlSetVisible(g_glossBodyCtl[bb + f], PlayerGroupSingle(p), false);
     }
     if (g_abPage[p] == 3) {
         BOTC_GlossRender(p);
@@ -12022,9 +12205,9 @@ void BOTC_AbNewRender (int p) {
         return;
     }
     // 第 1、2 页（角色能力表）正下方那条注释
-    DialogControlSetVisible(g_abNewStarNote, PlayerGroupSingle(p), true);
+    DialogControlSetVisible(g_abNewStarNote[p], PlayerGroupSingle(p), true);
     if (g_abPage[p] <= 1) {
-        libNtve_gf_SetDialogItemText(g_abNewLbl, StringToText("剧本角色表  1 / 5 ---- ") + TextWithColor(StringToText("善良阵营·镇民"), BOTC_RoleTeamColor(0)), PlayerGroupSingle(p));
+        libNtve_gf_SetDialogItemText(g_abNewLbl[p], StringToText("剧本角色表  1 / 5 ---- ") + TextWithColor(StringToText("善良阵营·镇民"), BOTC_RoleTeamColor(0)), PlayerGroupSingle(p));
         t = 0;
         cap = BOTC_AbCatCap(t);
         pages = BOTC_GridCatPages(t, cap);
@@ -12041,7 +12224,7 @@ void BOTC_AbNewRender (int p) {
         BOTC_AbCatCtrlRender(p, 0);
     }
     else {
-        libNtve_gf_SetDialogItemText(g_abNewLbl, StringToText("剧本角色表  2 / 5 ---- 外来者 / 爪牙 / 恶魔"), PlayerGroupSingle(p));
+        libNtve_gf_SetDialogItemText(g_abNewLbl[p], StringToText("剧本角色表  2 / 5 ---- 外来者 / 爪牙 / 恶魔"), PlayerGroupSingle(p));
         for (t = 1; t <= 3; t += 1) {
             cap = BOTC_AbCatCap(t);
             pages = BOTC_GridCatPages(t, cap);
@@ -12056,18 +12239,18 @@ void BOTC_AbNewRender (int p) {
             if (t == 2) { base = 6; }
             if (t == 3) { base = 12; }
             if (t == 1) {
-                libNtve_gf_SetDialogItemText(g_abNewSec[t - 1], TextWithColor(StringToText("善良阵营·外来者"), BOTC_RoleTeamColor(t)), PlayerGroupSingle(p));
-                DialogControlSetPosition(g_abNewSec[t - 1], PlayerGroupSingle(p), c_anchorTopLeft, 20, 46);
+                libNtve_gf_SetDialogItemText(g_abNewSec[sb + t - 1], TextWithColor(StringToText("善良阵营·外来者"), BOTC_RoleTeamColor(t)), PlayerGroupSingle(p));
+                DialogControlSetPosition(g_abNewSec[sb + t - 1], PlayerGroupSingle(p), c_anchorTopLeft, 20, 46);
             }
             if (t == 2) {
-                libNtve_gf_SetDialogItemText(g_abNewSec[t - 1], TextWithColor(StringToText("邪恶阵营·爪牙"), BOTC_RoleTeamColor(t)), PlayerGroupSingle(p));
-                DialogControlSetPosition(g_abNewSec[t - 1], PlayerGroupSingle(p), c_anchorTopLeft, 20, 416);
+                libNtve_gf_SetDialogItemText(g_abNewSec[sb + t - 1], TextWithColor(StringToText("邪恶阵营·爪牙"), BOTC_RoleTeamColor(t)), PlayerGroupSingle(p));
+                DialogControlSetPosition(g_abNewSec[sb + t - 1], PlayerGroupSingle(p), c_anchorTopLeft, 20, 416);
             }
             if (t == 3) {
-                libNtve_gf_SetDialogItemText(g_abNewSec[t - 1], TextWithColor(StringToText("邪恶阵营·恶魔"), BOTC_RoleTeamColor(t)), PlayerGroupSingle(p));
-                DialogControlSetPosition(g_abNewSec[t - 1], PlayerGroupSingle(p), c_anchorTopLeft, 20, 686);
+                libNtve_gf_SetDialogItemText(g_abNewSec[sb + t - 1], TextWithColor(StringToText("邪恶阵营·恶魔"), BOTC_RoleTeamColor(t)), PlayerGroupSingle(p));
+                DialogControlSetPosition(g_abNewSec[sb + t - 1], PlayerGroupSingle(p), c_anchorTopLeft, 20, 686);
             }
-            DialogControlSetVisible(g_abNewSec[t - 1], PlayerGroupSingle(p), (g_gridCatN[t] > 0));
+            DialogControlSetVisible(g_abNewSec[sb + t - 1], PlayerGroupSingle(p), (g_gridCatN[t] > 0));
             for (i = 0; i < shown; i += 1) {
                 if (t == 1) {
                     BOTC_AbNewEntry(p, base + i, g_gridCatRole[(t * 128) + start + i], 20 + ((i / 3) * 580), 76 + ((i % 3) * 110), 460);
@@ -17940,31 +18123,31 @@ void BOTC_InitRoleTexts () {
     g_tipLine[3704] = StringToText("· 该死亡不算恶魔攻击；点击进入白天时移除已猜测 token。");
     g_tipLine[3705] = StringToText("· 首夜到达书生顺位时，所有恶魔都会得知书生在场；不会唤醒书生本人。");
     g_tipRoleAt[152] = 3698; g_tipRoleN[152] = 8;
-    g_tipLine[3706] = StringToText("【角色能力】");
-    g_tipLine[3707] = StringToText("在你的首个夜晚，你要选择一名玩家：他会知道狐媚娘在场。如果你死于处决，当晚他转变为邪恶阵营。");
-    g_tipLine[3708] = StringToText("【角色简介】");
-    g_tipLine[3709] = StringToText("狐媚娘以暴露自身为代价选中一名玩家；若自己死于处决，受选者会在下一夜堕入邪恶。");
-    g_tipLine[3710] = StringToText("【规则细节】");
-    g_tipLine[3711] = StringToText("· 首夜选择时能力失效，受选者不会立即得知；狐媚娘恢复能力后会自动补发告知。");
-    g_tipLine[3712] = StringToText("· 因处决死亡后的下一夜处理阵营变化；受选者已经是邪恶时无事发生。");
+    g_tipLine[3706] = StringToText("狐媚娘（爪牙）");
+    g_tipLine[3707] = StringToText("【角色能力】");
+    g_tipLine[3708] = StringToText("在你的首个夜晚，你要选择一名玩家：他会知道狐媚娘在场。如果你死于处决，当晚他转变为邪恶阵营。");
+    g_tipLine[3709] = StringToText("【角色简介】");
+    g_tipLine[3710] = StringToText("狐媚娘会魅惑她中意的玩家使其加入邪恶阵营……以自身死亡为代价。");
+    g_tipLine[3711] = StringToText("【规则细节】");
+    g_tipLine[3712] = StringToText("· 狐媚娘恢复清醒健康后，受选者会立即得知狐媚娘在场；若狐媚娘死因是处决，受选者当晚转为邪恶，已经是邪恶时无事发生。");
     g_tipRoleAt[153] = 3706; g_tipRoleN[153] = 7;
-    g_tipLine[3713] = StringToText("【角色能力】");
-    g_tipLine[3714] = StringToText("每个夜晚*，你要选择任意数量的非旅行者玩家或一名旅行者玩家：如果他们的角色类型均不相同，他们死亡。[+1外来者]");
-    g_tipLine[3715] = StringToText("【角色简介】");
-    g_tipLine[3716] = StringToText("饕餮会在夜里吞下所选的不同类型角色；只要所选玩家中出现两种相同角色类型，它就什么也吃不到。");
-    g_tipLine[3717] = StringToText("【规则细节】");
-    g_tipLine[3718] = StringToText("· 可以不选择任何玩家；这视为选择零名玩家，不会造成死亡。");
-    g_tipLine[3719] = StringToText("· 只有所有目标的当前角色类型都不同时才全部死亡；例如两名镇民和一名外来者会导致无人死亡。");
-    g_tipLine[3720] = StringToText("· 死亡按选择顺序依次结算；若中途因心上人等能力使饕餮醉酒或中毒，后续目标不再死亡。");
+    g_tipLine[3713] = StringToText("饕餮（恶魔）");
+    g_tipLine[3714] = StringToText("【角色能力】");
+    g_tipLine[3715] = StringToText("每个夜晚*，你要选择任意数量的非旅行者玩家或一名旅行者玩家：如果他们的角色类型均不相同，他们死亡。[+1外来者]");
+    g_tipLine[3716] = StringToText("【角色简介】");
+    g_tipLine[3717] = StringToText("饕餮食量惊人，有的时候它会在夜里大肆杀戮来满足自己无尽的饥饿。");
+    g_tipLine[3718] = StringToText("【规则细节】");
+    g_tipLine[3719] = StringToText("· 可以不选择任何玩家；所有目标的角色类型均不相同时才全部死亡，哪怕只有两名目标类型相同也会无人死亡。");
+    g_tipLine[3720] = StringToText("· 死亡按选择顺序结算；若中途饕餮醉酒或中毒，后续目标不再死亡。选择旅行者时不能再选择其他玩家。");
     g_tipRoleAt[154] = 3713; g_tipRoleN[154] = 8;
-    g_tipLine[3721] = StringToText("【角色能力】");
-    g_tipLine[3722] = StringToText("在你的首个夜晚，你要选择一名存活玩家：他死亡但会被当作存活。当他下一次即将死亡时，他重生，随后你重获能力。");
-    g_tipLine[3723] = StringToText("【角色简介】");
-    g_tipLine[3724] = StringToText("画皮让一名玩家秘密成为活尸：真实生命已经结束，但城镇广场仍显示其存活。");
-    g_tipLine[3725] = StringToText("【规则细节】");
-    g_tipLine[3726] = StringToText("· 只有攻击能够造成死亡时才形成活尸；被无敌、免死或其他保护挡住时仍保留选中标记，之后目标第一次真实死亡会触发画皮复活。");
-    g_tipLine[3727] = StringToText("· 活尸失去能力，能力互动中仍按存活计算；来源中毒、醉酒或死亡后，白天立即公布其死亡，夜晚天亮公布。");
-    g_tipLine[3728] = StringToText("· 带选择标记者下一次死亡时，若尚未死亡则阻止；若已显示死亡则复活。只有从活尸或已显示死亡状态复活时才刷新目标的一局一次能力。");
+    g_tipLine[3721] = StringToText("画皮（爪牙）");
+    g_tipLine[3722] = StringToText("【角色能力】");
+    g_tipLine[3723] = StringToText("在你的首个夜晚，你要选择一名存活玩家：他死亡但会被当作存活。当他下一次即将死亡时，他重生，随后你重获能力。");
+    g_tipLine[3724] = StringToText("【角色简介】");
+    g_tipLine[3725] = StringToText("画皮迅速并秘密地进行攻击，神不知鬼不觉，时刻觊觎着下一个目标。");
+    g_tipLine[3726] = StringToText("【规则细节】");
+    g_tipLine[3727] = StringToText("· 被画皮攻击者进入活尸状态：广场显示存活，实际上已死亡。攻击被保护完全阻止时不会形成活尸，而是保持存活。");
+    g_tipLine[3728] = StringToText("· 目标下一次即将死亡时，画皮阻止死亡并复活他，随后重获能力。若画皮因任何原因无法阻止这次死亡，则不能复活，也不会重获能力。");
     g_tipRoleAt[155] = 3721; g_tipRoleN[155] = 8;
     g_tipLine[3729] = StringToText("【角色能力】");
     g_tipLine[3730] = StringToText("每个夜晚，你要选择除你以外的至多三名玩家：你会得知今晚是否有邪恶玩家的能力选择或影响了他们之中的玩家。");
@@ -18031,15 +18214,15 @@ void BOTC_InitRoleTexts () {
     g_tipLine[3785] = StringToText("· 每局可成功改变一次方向；从逆时针方向寻找下一名存活镇民，之后持续使用该方向。");
     g_tipLine[3786] = StringToText("· 相克：蛊雕会跳过魔术师；食人魔把蛊毒目标当作邪恶的蛊雕时会得知自己转变为邪恶。");
     g_tipRoleAt[162] = 3777; g_tipRoleN[162] = 10;
-    g_tipLine[3787] = StringToText("【角色能力】");
-    g_tipLine[3788] = StringToText("每个夜晚，你要选择至多三名玩家：如果明天白天他们之一死于处决，上次被你选择的其他玩家会在当晚死亡。否则，当晚他们之中会有一名玩家死亡。");
-    g_tipLine[3789] = StringToText("【角色简介】");
-    g_tipLine[3790] = StringToText("典狱长对上一批被判罚的人执行连坐，或在无人被处决时择一人处死。");
-    g_tipLine[3791] = StringToText("【规则细节】");
-    g_tipLine[3792] = StringToText("· 每夜可以选择零至三名不同玩家；直接确认表示本夜不放置新判罚，但仍会结算上一批。");
+    g_tipLine[3787] = StringToText("典狱长（恶魔）");
+    g_tipLine[3788] = StringToText("【角色能力】");
+    g_tipLine[3789] = StringToText("每个夜晚，你要选择至多三名玩家：如果明天白天他们之一死于处决，上次被你选择的其他玩家会在当晚死亡。否则，当晚他们之中会有一名玩家死亡。");
+    g_tipLine[3790] = StringToText("【角色简介】");
+    g_tipLine[3791] = StringToText("典狱长对“有罪之人”做出判罚，以连坐或择其一的方式。");
+    g_tipLine[3792] = StringToText("【规则细节】");
     g_tipLine[3793] = StringToText("· 上一批中有人白天死于处决时，除该死者外的其他上一批玩家当晚死亡。");
     g_tipLine[3794] = StringToText("· 若上一批无人死于处决，则由说书人在上一批仍能死亡的玩家中选择一人，在典狱长行动轮次死亡。");
-    g_tipLine[3795] = StringToText("· 判罚标记即使典狱长醉酒或中毒也要放置；典狱长死亡或离场时清除其判罚与死于今日标记。");
+    g_tipLine[3795] = StringToText("· 相克：召唤师可以在第二个夜晚召唤典狱长来替代第三个夜晚的召唤。");
     g_tipRoleAt[163] = 3787; g_tipRoleN[163] = 9;
     g_tipAbility[126] = StringToText("与你邻近的两名镇民玩家会在其首次死亡时被当作仍然存活。[-1 外来者]");
     g_tipAbility[127] = StringToText("如果多于一名善良玩家被处决，邪恶阵营获胜。所有玩家都知道利维坦在场。持有第五天提示时，进入夜晚、第五天之后的白天或恢复能力时能力生效则邪恶阵营获胜。");
@@ -23228,7 +23411,7 @@ g_boardRole[(12 * 256) + 22] = 111;
     g_boardRole[(15 * 256) + 23] = 121;  // 混沌
     g_boardRole[(15 * 256) + 24] = 163;  // 典狱长
     g_boardLegacyN[15] = 0;
-g_jinxCount = 123;
+g_jinxCount = 139;
     g_jinxA[0] = 103;  g_jinxB[0] = 94;
     g_jinxText[0] = "传教士 × 军团：如果传教士选中了军团，军团仍然保留能力，";
     g_jinxText2[0] = "但传教士可能会得知自己选中了军团。";
@@ -23723,6 +23906,70 @@ g_jinxCount = 123;
     g_jinxText[122] = "瘟疫医生与狐媚娘：如果说书人本应获得狐媚娘能力，改为一名爪牙获得，且他会得知此事。";
     g_jinxText2[122] = "";
     g_jinxText3[122] = "";
+    g_jinxA[123] = 156;  g_jinxB[123] = 24;
+    g_jinxText[123] = "引路人与侍女：侍女会得知引路人是否醒来，即使她是在引路人之前醒来。";
+    g_jinxText2[123] = "";
+    g_jinxText3[123] = "";
+    g_jinxA[124] = 156;  g_jinxB[124] = 50;
+    g_jinxText[124] = "引路人与数学家：引路人会得知数学家是否被影响，即使他是在数学家之前醒来。";
+    g_jinxText2[124] = "";
+    g_jinxText3[124] = "";
+    g_jinxA[125] = 124;  g_jinxB[125] = 86;
+    g_jinxText[125] = "鸩与罂粟种植者：如果鸩选择了罂粟种植者，罂粟种植者不会因为鸩的能力中毒。";
+    g_jinxText2[125] = "";
+    g_jinxText3[125] = "";
+    g_jinxA[126] = 124;  g_jinxB[126] = 158;
+    g_jinxText[126] = "鸩与半仙：如果鸩选择了半仙，半仙会中毒并死亡。";
+    g_jinxText2[126] = "";
+    g_jinxText3[126] = "";
+    g_jinxA[127] = 118;  g_jinxB[127] = 105;
+    g_jinxText[127] = "悟道者与村夫：如果村夫不足 3 人，悟道者可以变成新的村夫；超过 1 名村夫时有一名村夫醉酒。";
+    g_jinxText2[127] = "";
+    g_jinxText3[127] = "";
+    g_jinxA[128] = 118;  g_jinxB[128] = 50;
+    g_jinxText[128] = "悟道者与数学家：数学家会得知悟道者产生了错误信息或「能力未正常生效」。";
+    g_jinxText2[128] = "";
+    g_jinxText3[128] = "";
+    g_jinxA[129] = 137;  g_jinxB[129] = 126;
+    g_jinxText[129] = "瘟疫医生与赶尸人：如果说书人本应获得赶尸人的能力，改为一名爪牙获得，且他会得知此事。";
+    g_jinxText2[129] = "";
+    g_jinxText3[129] = "";
+    g_jinxA[130] = 162;  g_jinxB[130] = 95;
+    g_jinxText[130] = "蛊雕与炼金术士：炼金术士不能获得蛊雕能力；蛊雕必定在场，并可按炼金术士规则公开猜测蛊雕。";
+    g_jinxText2[130] = "";
+    g_jinxText3[130] = "";
+    g_jinxA[131] = 162;  g_jinxB[131] = 136;
+    g_jinxText[131] = "蛊雕与魔术师：蛊雕会跳过魔术师。";
+    g_jinxText2[131] = "";
+    g_jinxText3[131] = "";
+    g_jinxA[132] = 162;  g_jinxB[132] = 148;
+    g_jinxText[132] = "蛊雕与食人魔：如果「蛊毒」玩家被食人魔当作邪恶的蛊雕，食人魔会得知自己转变为邪恶。";
+    g_jinxText2[132] = "";
+    g_jinxText3[132] = "";
+    g_jinxA[133] = 162;  g_jinxB[133] = 137;
+    g_jinxText[133] = "蛊雕与瘟疫医生：如果说书人本应获得蛊雕能力，改为一名爪牙获得，且他会得知此事。";
+    g_jinxText2[133] = "";
+    g_jinxText3[133] = "";
+    g_jinxA[134] = 127;  g_jinxB[134] = 161;
+    g_jinxText[134] = "利维坦与和尚：如果利维坦提名并处决了与和尚邻近的存活玩家，善良阵营获胜。";
+    g_jinxText2[134] = "";
+    g_jinxText3[134] = "";
+    g_jinxA[135] = 163;  g_jinxB[135] = 150;
+    g_jinxText[135] = "典狱长与召唤师：召唤师可以在第二个夜晚召唤典狱长，替代第三个夜晚的召唤。";
+    g_jinxText2[135] = "";
+    g_jinxText3[135] = "";
+    g_jinxA[136] = 100;  g_jinxB[136] = 158;
+    g_jinxText[136] = "痢蛭与半仙：痢蛭的宿主及其中毒效果无法被转移。";
+    g_jinxText2[136] = "";
+    g_jinxText3[136] = "";
+    g_jinxA[137] = 100;  g_jinxB[137] = 157;
+    g_jinxText[137] = "痢蛭与使节：痢蛭的宿主及其中毒效果无法被转移。";
+    g_jinxText2[137] = "";
+    g_jinxText3[137] = "";
+    g_jinxA[138] = 100;  g_jinxB[138] = 159;
+    g_jinxText[138] = "痢蛭与掮客：痢蛭的宿主及其中毒效果无法被转移。";
+    g_jinxText2[138] = "";
+    g_jinxText3[138] = "";
     for (i = 1; i <= 13; i += 1) {
         g_noOpen[i] = false;
     }
@@ -34796,6 +35043,10 @@ bool BOTC_PickModeRoleAllowed (int p, int r) {
     if (mode == 20) {
         return (r == 18 || r == 75);
     }
+    // 【炼金术士 × 蛊雕】：炼金术士不能借用蛊雕能力。
+    if (mode == 21 && r == 162) {
+        return false;
+    }
     if (mode == 22) {
         seat = BOTC_SeatOfRole(r);
         return (seat >= 2 && seat <= 13 && !BOTC_SeatDead(seat));
@@ -39087,6 +39338,36 @@ void BOTC_ManInfoOpen (int seat, int role, string extra) {
     DialogSetVisible(g_miDlg, PlayerGroupSingle(g_teller), true);
 }
 
+// 【引路人（156）】独立初始化回答面板。不能只依赖通用答题框的上一次状态：
+// 数学家、蛊雕等共用同一块对话框，残留的输入框或旧标题会让这里看似没有弹出。
+void BOTC_GuideOpen (int seat, string extra) {
+    if (seat < 1 || seat > 13) {
+        return;
+    }
+    BOTC_MiSeatFieldsReset();
+    DialogControlSetVisible(g_miEdit, PlayerGroupSingle(g_teller), false);
+    DialogControlSetVisible(g_miEdit2, PlayerGroupSingle(g_teller), false);
+    DialogControlSetVisible(g_miEdit3, PlayerGroupSingle(g_teller), false);
+    DialogControlSetVisible(g_miEdit4, PlayerGroupSingle(g_teller), false);
+    DialogControlSetVisible(g_miOk, PlayerGroupSingle(g_teller), false);
+    DialogControlSetVisible(g_miCancel, PlayerGroupSingle(g_teller), false);
+    DialogControlSetVisible(g_miNote, PlayerGroupSingle(g_teller), false);
+    DialogControlSetVisible(g_miX, PlayerGroupSingle(g_teller), true);
+    DialogSetVisible(g_miDlg, PlayerGroupAll(), false);
+    g_miSeat = seat;
+    g_miRole = 156;
+    g_miExtra = extra;
+    libNtve_gf_SetDialogItemText(g_miTitle, BOTC_NameSubstText(StringToText("【引路人】" + BOTC_NameStr(seat) + " 选择的目标：" + extra + "；今晚其中是否有人被邪恶能力选择或影响？")), PlayerGroupSingle(g_teller));
+    libNtve_gf_SetDialogItemText(g_miYes, StringToText("是"), PlayerGroupSingle(g_teller));
+    libNtve_gf_SetDialogItemText(g_miNo, StringToText("否"), PlayerGroupSingle(g_teller));
+    libNtve_gf_SetDialogItemText(g_miEdit, StringToText(""), PlayerGroupSingle(g_teller));
+    DialogControlSetPosition(g_miYes, PlayerGroupSingle(g_teller), c_anchorTopLeft, 117, 79);
+    DialogControlSetPosition(g_miNo, PlayerGroupSingle(g_teller), c_anchorTopLeft, 351, 79);
+    DialogControlSetVisible(g_miYes, PlayerGroupSingle(g_teller), true);
+    DialogControlSetVisible(g_miNo, PlayerGroupSingle(g_teller), true);
+    DialogSetVisible(g_miDlg, PlayerGroupSingle(g_teller), true);
+}
+
 // 筑梦师（48）：脚本按规则自动配好「真身 + 一个对立大类的陪衬」，弹框让说书人过目再发（用户 2026-09-21）
 //   规则：两个角色里一个是他的真身；另一个必须与他同一大类（镇民/外来者对爪牙/恶魔）。
 //   优先挑**不在场**的角色当陪衬，实在没有再用在场的。
@@ -39848,6 +40129,13 @@ int BOTC_TrueNumAns (int role, int seat) {
             n = n + 1;
         }
         if (g_skillT2[seat] >= 2 && !g_wokeTonight[g_skillT2[seat]] && BOTC_HasAbility(g_skillT2[seat], 50) && !BOTC_SeatDead(g_skillT2[seat])) {
+            n = n + 1;
+        }
+        // 【相克：侍女 × 引路人】：引路人每晚都会醒来；即使侍女先行动，也要计入。
+        if (g_skillT1[seat] >= 2 && !g_wokeTonight[g_skillT1[seat]] && BOTC_HasAbility(g_skillT1[seat], 156) && !BOTC_SeatDead(g_skillT1[seat])) {
+            n = n + 1;
+        }
+        if (g_skillT2[seat] >= 2 && !g_wokeTonight[g_skillT2[seat]] && BOTC_HasAbility(g_skillT2[seat], 156) && !BOTC_SeatDead(g_skillT2[seat])) {
             n = n + 1;
         }
     }
@@ -45146,7 +45434,10 @@ bool BOTC_SummonerCanUseRole (int role) {
     if (g_nightNum == 3) {
         return true;
     }
-    return (g_nightNum == 2 && role == 44);
+    if (g_nightNum == 2) {
+        return (role == 44 || (role == 163 && BOTC_BoardHasRole(163)));
+    }
+    return false;
 }
 
 void BOTC_SummonerGridCatalog (int p) {
@@ -45164,7 +45455,7 @@ void BOTC_SummonerGridCatalog (int p) {
         if (g_roleName[r] == "" || BOTC_RoleTeam(r) != 3 || r == 146 || !BOTC_BoardHasRole(r)) {
             continue;
         }
-        if (g_nightNum == 2 && r != 44) {
+        if (g_nightNum == 2 && r != 44 && !(r == 163 && BOTC_BoardHasRole(163))) {
             continue;
         }
         if (n >= 128) {
@@ -45219,13 +45510,13 @@ void BOTC_SummonerSummon (int p, int target, int role) {
     }
     if (!BOTC_SummonerCanUseRole(role)) {
         if (g_nightNum == 2) {
-            BOTC_Notice(g_who[p], "召唤师在第二个夜晚只能召唤普卡。");
+            BOTC_Notice(g_who[p], "召唤师在第二个夜晚只能召唤普卡；若典狱长在剧本中，也可以召唤典狱长。");
         }
         else if (g_nightNum == 3) {
             BOTC_Notice(g_who[p], "请选择一个恶魔角色。");
         }
         else {
-            BOTC_Notice(g_who[p], "召唤师只能在第二个夜晚召唤普卡，或在第三个夜晚创造恶魔。");
+            BOTC_Notice(g_who[p], "召唤师只能在第二个夜晚召唤普卡或剧本中的典狱长，或在第三个夜晚创造恶魔。");
         }
         return;
     }
@@ -45331,7 +45622,7 @@ void BOTC_ComboRoleOpen (int p) {
             DialogControlSetVisible(g_pickName[k], PlayerGroupSingle(cp), false);
         }
         if (g_nightNum == 2) {
-            BOTC_Notice(cp, "第二个夜晚只能召唤普卡。");
+            BOTC_Notice(cp, "第二个夜晚只能召唤普卡或剧本中的典狱长。");
         }
     }
     else {
@@ -45364,7 +45655,7 @@ void BOTC_ComboResolve (int p) {
     if (r == 150) {
         if (!BOTC_SummonerCanUseRole(role)) {
             if (g_nightNum == 2) {
-                BOTC_Notice(g_who[p], "召唤师在第二个夜晚只能召唤普卡。");
+                BOTC_Notice(g_who[p], "召唤师在第二个夜晚只能召唤普卡；若典狱长在剧本中，也可以召唤典狱长。");
             }
             else {
                 BOTC_Notice(g_who[p], "请选择一个恶魔角色。");
@@ -47631,13 +47922,42 @@ void BOTC_WudChangeOpen (int seat, int by) {
 
 void BOTC_WudChangePick (int role) {
     int t;
+    int i;
+    int farmerN;
+    int drunk;
     t = g_wudSeat;
     if (t < 2 || t > 13 || role < 0 || role > 163) {
         return;
     }
+    // 【相克：悟道者 × 数学家】能力造成角色变化，属于数学家会记录的一次异常。
+    BOTC_MalfNote(t, "悟道者被邪恶能力影响后改变角色");
     BOTC_SetSeatRole(g_teller, t, role);
     BOTC_SetSeatRole(g_who[t], t, role);
     g_tokOn[(((g_teller * 14) + t) * 256) + 140] = false;
+    // 【相克：悟道者 × 村夫】可以变成新的村夫；变成后村夫总数超过 1 时确保有一名醉酒。
+    if (role == 105) {
+        farmerN = 0;
+        drunk = 0;
+        for (i = 2; i <= 13; i += 1) {
+            if (!g_seatOn[i] || BOTC_SeatDead(i) || !BOTC_HasAbility(i, 105)) {
+                continue;
+            }
+            farmerN = farmerN + 1;
+            if (g_tokOn[(((g_teller * 14) + i) * 256) + 126]) {
+                drunk = i;
+            }
+        }
+        if (farmerN > 1 && drunk == 0) {
+            for (i = 2; i <= 13; i += 1) {
+                if (!g_seatOn[i] || BOTC_SeatDead(i) || !BOTC_HasAbility(i, 105)) {
+                    continue;
+                }
+                g_tokOn[(((g_teller * 14) + i) * 256) + 126] = true;
+                BOTC_PmStore(g_teller, "【悟道者×村夫】场上已有复数村夫 → " + BOTC_NameStr(i) + " 获得「醉酒（村夫）」；可在魔典上改放给另一名村夫。");
+                break;
+            }
+        }
+    }
     BOTC_GrimRender(g_teller);
     BOTC_GrimRender(g_who[t]);
     BOTC_ChangeRoleMsg(t, role);
@@ -47716,6 +48036,10 @@ void BOTC_DrossPick (int role) {
     t = BOTC_SeatOfRole(role);
     if (t < 2 || BOTC_SeatDead(t)) {
         BOTC_PmStore(g_teller, "【鸩】" + BOTC_NameStr(p) + " 选择了「" + g_roleName[role] + "」，但他不在场（或已经死亡），无事发生。");
+        return;
+    }
+    if (BOTC_HasAbility(t, 86)) {
+        BOTC_PmStore(g_teller, "【鸩×罂粟种植者】" + BOTC_NameStr(p) + " 选择了罂粟种植者 " + BOTC_NameStr(t) + "：罂粟种植者不会因为鸩的能力中毒。");
         return;
     }
     g_tokOn[(((g_teller * 14) + t) * 256) + 144] = true;
@@ -48119,6 +48443,10 @@ bool BOTC_EnvoyMaybePrompt (int p) {
     if (p < 1 || p > 13 || (p == 1 && !g_testSelfOn)) {
         return false;
     }
+    // 【痢蛭 × 使节】首夜选择的宿主不能被改指。
+    if (BOTC_ActRoleOf(p) == 100 && BOTC_ActingIsFirstNight(p)) {
+        return false;
+    }
     if (BOTC_IsLunatic(p)) {
         return false;                      // 疯子的假能力不触发使节
     }
@@ -48268,6 +48596,10 @@ bool BOTC_HalfImmortalMaybePrompt (int p) {
         return false;
     }
     if (p < 2 || p > 13 || BOTC_IsLunatic(p)) {
+        return false;
+    }
+    // 【痢蛭 × 半仙】首夜选择的宿主不能被改指。
+    if (BOTC_ActRoleOf(p) == 100 && BOTC_ActingIsFirstNight(p)) {
         return false;
     }
     half = 0;
@@ -48487,6 +48819,10 @@ bool BOTC_BrokerRedirect (int p) {
     string fromName;
     string toName;
     if (!BOTC_BrokerActive()) {
+        return false;
+    }
+    // 【痢蛭 × 掮客】首夜选择的宿主不能被改指。
+    if (BOTC_ActRoleOf(p) == 100 && BOTC_ActingIsFirstNight(p)) {
         return false;
     }
     a = g_skillT1[p];
@@ -48862,6 +49198,9 @@ void BOTC_GudiaoOpen (int p) {
     if (p < 2 || p > 13) {
         return;
     }
+    // 这块二选一面板与数学家 / 引路人共用 g_miDlg。先完整清掉上一份状态，
+    // 否则已经改过方向或电脑自动结算时会留下数学家的旧标题或一块空面板。
+    BOTC_GudiaoClose();
     // 已经改过方向、能力当前失效或电脑玩家：不需要再询问方向，直接按既定方向结算。
     if (g_tokOn[(((g_teller * 14) + p) * 256) + 199] || !BOTC_SkillWorks(p) || BOTC_SeatIsComputer(p)) {
         BOTC_GudiaoApply(p, false);
@@ -48870,23 +49209,23 @@ void BOTC_GudiaoOpen (int p) {
     BOTC_MiSeatFieldsReset();
     g_miSeat = p;
     g_miRole = 813;
-    libNtve_gf_SetDialogItemText(g_miTitle, StringToText("【蛊雕】今晚是否改变方向？"), PlayerGroupSingle(g_who[p]));
-    libNtve_gf_SetDialogItemText(g_miNote, StringToText("每局只能成功改变一次；改变后从逆时针方向寻找下一名存活镇民。"), PlayerGroupSingle(g_who[p]));
-    libNtve_gf_SetDialogItemText(g_miYes, StringToText("保持顺时针"), PlayerGroupSingle(g_who[p]));
-    libNtve_gf_SetDialogItemText(g_miNo, StringToText("改变方向"), PlayerGroupSingle(g_who[p]));
-    DialogControlSetVisible(g_miEdit, PlayerGroupSingle(g_who[p]), false);
-    DialogControlSetVisible(g_miEdit2, PlayerGroupSingle(g_who[p]), false);
-    DialogControlSetVisible(g_miEdit3, PlayerGroupSingle(g_who[p]), false);
-    DialogControlSetVisible(g_miEdit4, PlayerGroupSingle(g_who[p]), false);
+    libNtve_gf_SetDialogItemText(g_miTitle, StringToText("【蛊雕】" + BOTC_NameStr(p) + " 今晚是否改变方向？"), PlayerGroupSingle(g_teller));
+    libNtve_gf_SetDialogItemText(g_miNote, StringToText("每局只能成功改变一次；改变后从逆时针方向寻找下一名存活镇民。"), PlayerGroupSingle(g_teller));
+    libNtve_gf_SetDialogItemText(g_miYes, StringToText("保持顺时针"), PlayerGroupSingle(g_teller));
+    libNtve_gf_SetDialogItemText(g_miNo, StringToText("改变方向"), PlayerGroupSingle(g_teller));
+    DialogControlSetVisible(g_miEdit, PlayerGroupSingle(g_teller), false);
+    DialogControlSetVisible(g_miEdit2, PlayerGroupSingle(g_teller), false);
+    DialogControlSetVisible(g_miEdit3, PlayerGroupSingle(g_teller), false);
+    DialogControlSetVisible(g_miEdit4, PlayerGroupSingle(g_teller), false);
     DialogControlSetVisible(g_miOk, PlayerGroupAll(), false);
     DialogControlSetVisible(g_miCancel, PlayerGroupAll(), false);
     DialogControlSetVisible(g_miX, PlayerGroupAll(), false);
     DialogControlSetVisible(g_miX, PlayerGroupSingle(g_teller), true);
-    DialogControlSetVisible(g_miNote, PlayerGroupSingle(g_who[p]), true);
-    DialogControlSetVisible(g_miYes, PlayerGroupSingle(g_who[p]), true);
-    DialogControlSetVisible(g_miNo, PlayerGroupSingle(g_who[p]), true);
+    DialogControlSetVisible(g_miNote, PlayerGroupSingle(g_teller), true);
+    DialogControlSetVisible(g_miYes, PlayerGroupSingle(g_teller), true);
+    DialogControlSetVisible(g_miNo, PlayerGroupSingle(g_teller), true);
     DialogSetVisible(g_miDlg, PlayerGroupAll(), false);
-    DialogSetVisible(g_miDlg, PlayerGroupSingle(g_who[p]), true);
+    DialogSetVisible(g_miDlg, PlayerGroupSingle(g_teller), true);
 }
 
 void BOTC_GudiaoAnswer (int p, bool change) {
@@ -50019,7 +50358,7 @@ void BOTC_SkillConfirm (int p) {
         g_skillT3[p] = 0;
         g_skillRoleSel[p] = 0;
         DialogSetVisible(g_skillDlg[p], PlayerGroupSingle(g_who[p]), false);
-        BOTC_ManInfoOpen(p, 156, s);
+        BOTC_GuideOpen(p, s);
         return;
     }
     if (r == 155) {
@@ -50977,6 +51316,9 @@ if (r == 49) {
                 g_exoFrom = p;
                 BOTC_GrimRender(g_teller);
                 BOTC_PmInfo(g_who[t], "【信息】你被驱魔人选中了。");
+                if (BOTC_SeatTrueRole(t) == 44) {
+                    BOTC_PukkaExorcistResolve(t);
+                }
             }
             else {
                 BOTC_PmStore(g_teller, "【驱魔人】" + BOTC_NameStr(p) + " 点名了 " + BOTC_NameStr(t) + "（" + BOTC_RoleNameSafe(BOTC_RegRoleOf(t)) + "）---- 不是恶魔，没有效果。");
@@ -51541,13 +51883,19 @@ void BOTC_PukkaPoisonClear (string why) {
 }
 
 // ■ 普卡（44）：「每个夜晚选择一名玩家：他中毒。上一个被选中的玩家会死亡，然后恢复健康。」
-//   · 首夜也会行动（首夜顺序 5）；毒**不跟黄昏清**，一直挂到普卡下一次行动
-//   · 他自己中毒 / 酒鬼 → 整条能力失效：不毒新人、上一次那个也不会死
+//   · 首夜也会行动（首夜顺序 5）；毒**不跟黄昏清**，一直挂到普卡下一次正常生效的行动
+//   · 普卡在本次选择时能力不生效（中毒 / 醉酒 / 活尸 / 提线木偶等）：
+//     新目标不中毒，g_pukkaSeat 保持上一次正常生效时的目标；下一次正常行动再结算他。
 void BOTC_PukkaResolve (int p, int t) {
     int old;
     old = g_pukkaSeat;
-    if (BOTC_SeatImpaired(p)) {
-        BOTC_PmStore(g_teller, "【普卡】" + BOTC_NameStr(p) + " 中毒/酒鬼，这一次能力失效。");
+    if (!BOTC_SkillWorks(p)) {
+        if (old >= 2) {
+            BOTC_PmStore(g_teller, "【普卡】" + BOTC_NameStr(p) + " 本次选择时能力不生效：" + BOTC_NameStr(t) + " 不会中毒；上一次正常生效时选择的 " + BOTC_NameStr(old) + " 仍保持中毒，下一次正常行动时才会毒发。");
+        }
+        else {
+            BOTC_PmStore(g_teller, "【普卡】" + BOTC_NameStr(p) + " 本次选择时能力不生效：" + BOTC_NameStr(t) + " 不会中毒，也没有需要保留的上一目标。");
+        }
         return;
     }
     // ① 先给新目标挂毒（用户 2026-09-20：普卡的刀是**先挂毒，然后再结算死亡**）
@@ -51572,6 +51920,39 @@ void BOTC_PukkaResolve (int p, int t) {
             g_pukkaSeat = 0;
         }
     }
+}
+
+// 【驱魔人 × 普卡】：普卡今晚不能选新目标，但上一名由普卡正常选中的玩家仍会毒发。
+// 死亡统一走恶魔击杀通道，因此会使用普卡的专属死因 token 21；毒发后撤掉中毒（普卡）。
+// 普卡自身能力不生效时，旧目标不死亡，且继续保持普卡之毒。
+void BOTC_PukkaExorcistResolve (int p) {
+    int old;
+    if (p < 2 || p > 13) {
+        return;
+    }
+    old = g_pukkaSeat;
+    if (!BOTC_SkillWorks(p)) {
+        if (old >= 2) {
+            BOTC_PmStore(g_teller, "【驱魔人 × 普卡】" + BOTC_NameStr(p) + " 当前能力不生效；上一目标 " + BOTC_NameStr(old) + " 不会死亡，并继续保持普卡之毒。");
+        }
+        else {
+            BOTC_PmStore(g_teller, "【驱魔人 × 普卡】" + BOTC_NameStr(p) + " 当前能力不生效，也没有需要结算的上一目标。");
+        }
+        return;
+    }
+    if (old < 2) {
+        BOTC_PmStore(g_teller, "【驱魔人 × 普卡】" + BOTC_NameStr(p) + " 今晚被驱魔，无法选择新目标；目前没有上一目标需要毒发。");
+        return;
+    }
+    if (!BOTC_SeatDead(old)) {
+        BOTC_DemonStrike(p, 44, old, false);
+    }
+    if (g_tokOn[(((g_teller * 14) + old) * 256) + 63]) {
+        g_tokOn[(((g_teller * 14) + old) * 256) + 63] = false;
+        BOTC_GrimRender(g_teller);
+    }
+    g_pukkaSeat = 0;
+    BOTC_PmStore(g_teller, "【驱魔人 × 普卡】" + BOTC_NameStr(p) + " 今晚不选择新目标；上一目标 " + BOTC_NameStr(old) + " 毒发（死亡标记：普卡），随后撤掉中毒（普卡）。");
 }
 
 // ■ 沙巴洛斯（45）：反刍（复活一名上一夜吃掉、现在还死着的玩家）
@@ -56727,7 +57108,10 @@ void BOTC_HideAllUI () {
     DialogSetVisible(g_logDlg, PlayerGroupAll(), false);
     DialogSetVisible(g_logPickDlg, PlayerGroupAll(), false);
     DialogSetVisible(g_abDlg, PlayerGroupAll(), false);
-    DialogSetVisible(g_noDlg, PlayerGroupAll(), false);
+    for (p = 1; p <= 13; p += 1) {
+        DialogSetVisible(g_noDlg[p], PlayerGroupAll(), false);
+        DialogSetVisible(g_abNewDlg[p], PlayerGroupAll(), false);
+    }
     DialogSetVisible(g_tipDlg, PlayerGroupAll(), false);
     DialogSetVisible(g_bluffDlg, PlayerGroupAll(), false);
     DialogSetVisible(g_cdDlg, PlayerGroupAll(), false);
@@ -56741,7 +57125,6 @@ void BOTC_HideAllUI () {
     //   靠黑布盖住的；黑布降到最低层之后就露出来了 → 选板子期间显式收掉，选完由 BOTC_ShowAllUI 放回初始状态。
     DialogSetVisible(g_tmDlg, PlayerGroupAll(), false);
     DialogSetVisible(g_tmMiniDlg, PlayerGroupAll(), false);
-    DialogSetVisible(g_abNewDlg, PlayerGroupAll(), false);   // 剧本角色表（用户 2026-11-04）
     for (p = 1; p <= 13; p += 1) {
         DialogSetVisible(g_noteDlg[p], PlayerGroupAll(), false);   // 【笔记】记事板一起收掉
         g_noteOn[p] = false;
@@ -56772,6 +57155,7 @@ void BOTC_ShowAllUI () {
             DialogSetVisible(g_panelDlg[p], PlayerGroupSingle(p), true);
             DialogSetVisible(g_miniDlg[p], PlayerGroupSingle(p), false);
         }
+        BOTC_SessNavRender(p);     // 选板/换界面后重新放出私聊左右翻看按钮
     }
     // 右上角三个按钮、发牌按钮的显隐交给 NomUI 统一处理
     BOTC_NomUI();
@@ -63692,6 +64076,11 @@ bool BOTC_LegionPendBlock () {
 // 真人说书答题框点「取消」：只有军团那一步需要收尾（不屏蔽，疯子看到所有队友）
 void BOTC_MiCancelApply () {
     int seat;
+    if (g_miRole == 156) {
+        g_miRole = -1;
+        g_miSeat = 0;
+        return;
+    }
     if (g_miRole == 815) {
         g_halfPick = false;
         g_halfBy = 0;
@@ -66403,6 +66792,16 @@ void BOTC_Init () {
     // 【一键切换公聊 / 私聊】按 Tab ＝ 触发「选择英雄 1」这个槽（用户 2026-09-30）
     g_tHotKey = TriggerCreate("BOTC_HotKey_Func");
     TriggerAddEventHotkeyPressed(g_tHotKey, c_playerAny, c_hotkeySubgroupNext, true);
+    // 私聊成员栏：鼠标滚轮左右查看
+    g_tWheel = TriggerCreate("BOTC_Wheel_Func");
+    TriggerAddEventMouseWheel(g_tWheel, c_playerAny);
+    // 【私聊横向滚动条】按下 / 拖动 / 松开；与左右按钮并存。
+    g_tSessBarDown = TriggerCreate("BOTC_SessBarDown_Func");
+    TriggerAddEventMouseClicked(g_tSessBarDown, c_playerAny, c_mouseButtonLeft, true);
+    g_tSessBarUp = TriggerCreate("BOTC_SessBarUp_Func");
+    TriggerAddEventMouseClicked(g_tSessBarUp, c_playerAny, c_mouseButtonLeft, false);
+    g_tSessBarMove = TriggerCreate("BOTC_SessBarMove_Func");
+    TriggerAddEventMouseMoved(g_tSessBarMove, c_playerAny);
     // 【面板拖动 · 位置记忆】（用户 2026-11-04）：笔记 / 剧本角色表 / 夜间顺序按住顶部拖动
     g_tDlgDragDown = TriggerCreate("BOTC_DlgDragDown_Func");
     TriggerAddEventMouseClicked(g_tDlgDragDown, c_playerAny, c_mouseButtonLeft, true);
