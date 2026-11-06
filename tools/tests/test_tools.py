@@ -743,6 +743,222 @@ class BluffPanelRegressionTests(unittest.TestCase):
         )
         self.assertNotIn("g_specBluffBtn = BOTC_NewButton", source)
         self.assertNotIn("if (c == g_specBluffBtn)", source)
+
+
+class MergeRegressionTests(unittest.TestCase):
+    def test_guide_and_gudiao_prompts_reset_shared_answer_panel(self) -> None:
+        source = (PROJECT_ROOT / "scripts" / "BOTC.galaxy").read_text(
+            encoding="utf-8-sig"
+        )
+        self.assertIn("BOTC_GuideOpen(p, s);", source)
+        self.assertIn("void BOTC_GuideOpen (int seat, string extra) {", source)
+        self.assertIn("g_miRole = 156;", source)
+
+        gudiao_start = source.index("void BOTC_GudiaoOpen (int p) {")
+        gudiao_end = source.index("void BOTC_GudiaoAnswer (int p, bool change) {", gudiao_start)
+        gudiao_open = source[gudiao_start:gudiao_end]
+        self.assertIn("BOTC_GudiaoClose();", gudiao_open)
+        self.assertIn(
+            'libNtve_gf_SetDialogItemText(g_miTitle, StringToText("【蛊雕】" + BOTC_NameStr(p) + " 今晚是否改变方向？"), PlayerGroupSingle(g_teller));',
+            gudiao_open,
+        )
+        self.assertIn(
+            "DialogSetVisible(g_miDlg, PlayerGroupSingle(g_teller), true);",
+            gudiao_open,
+        )
+
+    def test_private_chat_navigation_is_not_hidden_by_length_guess(self) -> None:
+        source = (PROJECT_ROOT / "scripts" / "BOTC.galaxy").read_text(
+            encoding="utf-8-sig"
+        )
+        self.assertIn("need = (g_sessMaxSkip[p] > 0);", source)
+        self.assertIn(
+            "maxSkip = g_sessMaxSkip[p];\n    if (maxSkip <= 0) {",
+            source,
+        )
+        for marker in (
+            "int[14]     g_sessBar;",
+            "int[14]     g_sessKnob;",
+            "trigger     g_tSessBarDown;",
+            "trigger     g_tWheel;",
+            "void BOTC_SessBarRender (int p) {",
+            "bool BOTC_SessBarDown_Func (bool testConds, bool runActions) {",
+            'g_sessBar[p] = BOTC_NewImageItem(DialogLastCreated(), 480, 8, 10, 82, "ui_sess_track.dds");',
+            'g_sessKnob[p] = BOTC_NewImageItem(DialogLastCreated(), 44, 12, 10, 81, "ui_sess_knob.dds");',
+            'g_tSessBarDown = TriggerCreate("BOTC_SessBarDown_Func");',
+            'g_tWheel = TriggerCreate("BOTC_Wheel_Func");',
+            "TriggerAddEventMouseWheel(g_tWheel, c_playerAny);",
+            "spin = FixedToInt(EventMouseWheelSpin());",
+            "g_sessXOff[p] = g_sessXOff[p] - spin;",
+            "g_sessKnobX[p] = v;",
+            "DialogControlSetPosition(g_sessKnob[p], PlayerGroupSingle(p), c_anchorTopLeft, 10 + v, 81);",
+        ):
+            self.assertIn(marker, source)
+        for name in ("ui_sess_track", "ui_sess_knob"):
+            self.assertTrue((PROJECT_ROOT / "assets" / "source" / f"{name}.png").is_file())
+            raw = (PROJECT_ROOT / "assets" / "game" / f"{name}.dds").read_bytes()
+            self.assertEqual(raw[:4], b"DDS ")
+            self.assertEqual(struct.unpack_from("<I", raw, 12)[0], 64)
+            self.assertEqual(struct.unpack_from("<I", raw, 16)[0], 16)
+        self.assertNotIn(
+            "need = (g_sessXOff[p] > 0 || (g_sessMaxSkip[p] > 0 && g_sessLong[p] > 60));",
+            source,
+        )
+
+    def test_role_and_night_order_dialogs_are_per_player(self) -> None:
+        source = (PROJECT_ROOT / "scripts" / "BOTC.galaxy").read_text(
+            encoding="utf-8-sig"
+        )
+        for marker in (
+            "int[14]     g_abNewDlg;",
+            "int[14]     g_noDlg;",
+            "int[364]    g_abNewHit;",
+            "int[336]    g_noIcon;",
+            "DialogSetPosition(g_abNewDlg[p], c_anchorCenter, nx, ny);",
+            "DialogSetPosition(g_noDlg[p], c_anchorCenter, nx, ny);",
+            "for (p = 1; p <= 13; p += 1) {\n        base = p * 24;",
+            "for (p = 1; p <= 13; p += 1) {\n        base = p * 26;",
+        ):
+            self.assertIn(marker, source)
+        self.assertNotIn("DialogSetPosition(g_abNewDlg, c_anchorCenter", source)
+        self.assertNotIn("DialogSetPosition(g_noDlg, c_anchorCenter", source)
+
+    def test_pukka_bad_action_keeps_last_effective_target(self) -> None:
+        source = (PROJECT_ROOT / "scripts" / "BOTC.galaxy").read_text(
+            encoding="utf-8-sig"
+        )
+        start = source.index("void BOTC_PukkaResolve (int p, int t) {")
+        end = source.index("// ■ 沙巴洛斯（45）：反刍", start)
+        pukka = source[start:end]
+        guard = pukka.index("if (!BOTC_SkillWorks(p)) {")
+        assign = pukka.index("g_pukkaSeat = t;")
+        self.assertLess(guard, assign)
+        self.assertIn("上一次正常生效时选择的", pukka)
+        self.assertIn("仍保持中毒", pukka)
+
+        confirm = source.index("void BOTC_SkillConfirm (int p) {")
+        pukka_branch = source.index("if (r == 44) {", confirm)
+        goon_touch = source.index("BOTC_GoonTouch(p, g_skillT1[p]);", confirm)
+        self.assertLess(goon_touch, pukka_branch)
+
+    def test_exorcist_triggers_pukka_pending_death(self) -> None:
+        source = (PROJECT_ROOT / "scripts" / "BOTC.galaxy").read_text(
+            encoding="utf-8-sig"
+        )
+        self.assertIn("BOTC_PukkaExorcistResolve (int p);", source)
+        self.assertIn(
+            "if (BOTC_SeatTrueRole(t) == 44) {\n                    BOTC_PukkaExorcistResolve(t);",
+            source,
+        )
+        start = source.index("void BOTC_PukkaExorcistResolve (int p) {")
+        end = source.index("// ■ 沙巴洛斯（45）：反刍", start)
+        helper = source[start:end]
+        for marker in (
+            "if (!BOTC_SkillWorks(p)) {",
+            "BOTC_DemonStrike(p, 44, old, false);",
+            "+ 63] = false;",
+            "g_pukkaSeat = 0;",
+            "死亡标记：普卡",
+            "撤掉中毒（普卡）",
+        ):
+            self.assertIn(marker, helper)
+
+    def test_recent_custom_role_jinxes_are_listed(self) -> None:
+        source = (PROJECT_ROOT / "scripts" / "BOTC.galaxy").read_text(
+            encoding="utf-8-sig"
+        )
+        self.assertIn("string[140] g_jinxText;", source)
+        self.assertIn("g_jinxCount = 139;", source)
+        pairs = {
+            (int(a), int(b))
+            for a, b in re.findall(
+                r"g_jinxA\[\d+\]\s*=\s*(\d+);\s*g_jinxB\[\d+\]\s*=\s*(\d+);",
+                source,
+            )
+        }
+        normalized = {frozenset(pair) for pair in pairs}
+        for pair in (
+            (156, 24),
+            (156, 50),
+            (124, 86),
+            (124, 158),
+            (118, 105),
+            (118, 50),
+            (137, 126),
+            (162, 95),
+            (162, 136),
+            (162, 148),
+            (162, 137),
+            (127, 161),
+            (163, 150),
+            (100, 158),
+            (100, 157),
+            (100, 159),
+        ):
+            self.assertIn(frozenset(pair), normalized)
+
+    def test_recent_custom_role_jinx_runtime_hooks(self) -> None:
+        source = (PROJECT_ROOT / "scripts" / "BOTC.galaxy").read_text(
+            encoding="utf-8-sig"
+        )
+        for marker in (
+            "BOTC_HasAbility(g_skillT1[seat], 156)",
+            "BOTC_HasAbility(g_skillT2[seat], 156)",
+            'if (BOTC_HasAbility(t, 86)) {',
+            "BOTC_MalfNote(t, \"悟道者被邪恶能力影响后改变角色\");",
+            "role == 163 && BOTC_BoardHasRole(163)",
+            "if (mode == 21 && r == 162) {",
+            "if (BOTC_ActRoleOf(p) == 100 && BOTC_ActingIsFirstNight(p)) {",
+        ):
+            self.assertIn(marker, source)
+
+    def test_newer_role_descriptions_use_full_card_format(self) -> None:
+        source = (PROJECT_ROOT / "scripts" / "BOTC.galaxy").read_text(
+            encoding="utf-8-sig"
+        )
+        lines = {
+            int(index): value
+            for index, value in re.findall(
+                r'g_tipLine\[(\d+)\]\s*=\s*StringToText\("([^"]*)"\);',
+                source,
+            )
+        }
+        ranges = {
+            role: (at, count)
+            for role, at, count in re.findall(
+                r"g_tipRoleAt\[(\d+)\]\s*=\s*(\d+);\s*g_tipRoleN\[\1\]\s*=\s*(\d+);",
+                source,
+            )
+        }
+        expected_headers = {
+            147: "限（爪牙）",
+            148: "食人魔（外来者）",
+            149: "戏法师（镇民）",
+            150: "召唤师（爪牙）",
+            151: "熊孩子（镇民）",
+            152: "书生（外来者）",
+            153: "狐媚娘（爪牙）",
+            154: "饕餮（恶魔）",
+            155: "画皮（爪牙）",
+            156: "引路人（镇民）",
+            157: "使节（外来者）",
+            158: "半仙（镇民）",
+            159: "掮客（镇民）",
+            160: "酒保（外来者）",
+            161: "和尚（镇民）",
+            162: "蛊雕（爪牙）",
+            163: "典狱长（恶魔）",
+        }
+        for role, header in expected_headers.items():
+            self.assertIn(str(role), ranges)
+            at, count = ranges[str(role)]
+            at = int(at)
+            count = int(count)
+            block = [lines[at + offset] for offset in range(count)]
+            self.assertEqual(block[0], header)
+            self.assertIn("【角色能力】", block)
+            self.assertIn("【角色简介】", block)
+            self.assertIn("【规则细节】", block)
         self.assertNotIn("BOTC_BluffAskStart();", source)
         self.assertIn(
             "DialogSetVisible(g_bluffDlg, PlayerGroupSingle(g_teller), true);",
