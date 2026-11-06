@@ -1315,10 +1315,11 @@ int         g_vigA;            // 亡骨魔：顺时针侧的候选镇民
 int         g_vigB;            // 亡骨魔：逆时针侧的候选镇民
 
 // 【二选一醉酒】（用户 2026-10-16）：水手（23）/ 旅店老板（26）/ 店小二（115）共用「点左边 / 右边，谁醉」那个面板
-int         g_dkKind;          // 0 = 水手 / 1 = 旅店老板 / 2 = 店小二
+int         g_dkKind;          // 0 = 水手 / 1 = 旅店老板 / 2 = 店小二 / 3 = 店小二移醉酒标记
 int         g_dkFrom;          // 正在给谁判
 int         g_dkA;             // 左边候选
 int         g_dkB;             // 右边候选
+int         g_dxeMode;         // 店小二首夜：0 = 直接告知熟客/醉酒两人 / 1 = 说书人手动填两名 / 2 = 中毒·酒鬼·信息错误时手动填两名并移醉酒
 int         g_tcSeat;          // 【逆臣（119）】他自己坐在哪一格（0 = 本局没有；他首夜选的那个人看 token 139）
 int         g_tcPending;       // 【逆臣（119）】今晚要在他的夜间行动里被告知「转变为邪恶阵营」的那个人（0 = 今晚什么都不用说）
 int         g_wudSeat;         // 【悟道者（118）】他坐在哪一格（0 = 本局没有 / 已经换完人了）
@@ -1632,6 +1633,8 @@ int         g_boardTime;
 int         g_boardLastSec;
 int[13]     g_boardBtn;
 int[13]     g_boardPic;
+int[13]     g_boardDiffP;       // 【剧本难度】玩家难度（红色，显示在板子按钮下方）
+int[13]     g_boardDiffS;       // 【剧本难度】说书人难度（红色，显示在板子按钮下方）
 bool        g_boardOpen;
 bool        g_countsAnnounced;    // 【全员场次播报】（用户 2026-11-04）：只在首次进入游戏时发一次
 int         g_boardCount;
@@ -1710,6 +1713,12 @@ int[14]     g_grimTokBtn;
 int         g_grimClose;
 int         g_grimShare;       // 玩家魔典右下角：一键发送自己这份魔典的标注
 int[14]     g_grimShareCd;    // 一键发送魔典的独立冷却：每拍 0.5 秒，30 拍 = 15 秒
+int[14]     g_declareCd;      // 【声称冷却】（用户 2026-11-06）：30 拍 = 15 秒，猜测不占
+int[14]     g_skipCd;         // 【快进到提名】按钮冷却：10 拍 = 5 秒
+int[14]     g_blockCd;        // 【屏蔽 / 解除屏蔽】按钮冷却：10 拍 = 5 秒
+int[14]     g_spamMute;       // 【公聊刷屏禁言】剩余拍数：30 拍 = 15 秒
+int[14]     g_spamWin;        // 刷屏计数窗口剩余拍数：10 拍 = 5 秒
+int[14]     g_spamCnt;        // 当前窗口内已发出的公聊条数
 int         g_grimDeal;
 int         g_grimConfirm;
 int[12]     g_seatX;
@@ -2061,6 +2070,10 @@ void   BOTC_VigPickOpen (int minion, int a, int b);        // 亡骨魔：让说
 void   BOTC_VigPoison (int who);                           // 亡骨魔：真的给这个镇民打中毒
 void   BOTC_DrunkPickOpen (int kind, int who, int a, int b);   // 【二选一醉酒】水手 / 旅店 / 店小二（用户 2026-10-16）
 void   BOTC_DrunkPickApply (int side);                        // 点了左边（1）/ 右边（0）
+void   BOTC_DxeSetup ();                                      // 【店小二（115）】配板阶段先放好熟客 135 / 醉酒 136（用户 2026-11-06）
+bool   BOTC_DxeHasDrunkTok ();                                 // 【店小二（115）】场上是否已有「醉酒（店小二）」标记
+void   BOTC_DxeNightOpen (int q);                              // 【店小二（115）】首夜唤醒：告知两人 / 失效时手动重选
+void   BOTC_DxeManualOpen (int seat);                          // 【店小二（115）】说书人手动填两名玩家
 void   BOTC_HunDunCheck (int demon, int target);               // 【混沌（121）】这一刀要不要触发「全体善良中毒」
 void   BOTC_HunDunPoisonAll (int demon);                       // 【混沌（121）】给所有善良玩家打「善良中毒」
 void   BOTC_HunDunClear ();                                    // 【混沌（121）】到黄昏清掉那一份
@@ -2482,6 +2495,10 @@ bool   BOTC_CanDeathClaimRole (int r, int p);  // 加「带亡骨魔保留能力
 void   BOTC_DClaimOpen (int p);
 void   BOTC_DClaimClick (int p);
 void   BOTC_DeclareClick (int p);
+bool   BOTC_DeclareIsGuess (int idx);          // 【防刷屏】这个入口算「猜测」（不占声称冷却）
+bool   BOTC_DeclareCdBlocked (int p);          // 【防刷屏】声称冷却中则提示并返回 true
+void   BOTC_DeclareCdSet (int p);              // 【防刷屏】开始 15 秒声称冷却
+bool   BOTC_SpamAllow (int p);                 // 【防刷屏】公聊刷屏检测，返回 false = 本条不发
 void   BOTC_DeclareSlay (int p, int q);
 void   BOTC_BuildSlayAsk ();
 void   BOTC_SlayAsk (int p, int q);
@@ -2843,6 +2860,9 @@ int    BOTC_WakeSeconds (int r);
 int    BOTC_BoardCount ();
 string BOTC_BoardName (int b);
 string BOTC_BoardPic (int b);
+int    BOTC_BoardPlayerDiff (int b);
+int    BOTC_BoardTellerDiff (int b);
+string BOTC_BoardStar (int n);
 string BOTC_BoardLightName ();
 void   BOTC_BuildBoard ();
 void   BOTC_PmVisRender ();
@@ -6493,6 +6513,13 @@ void BOTC_BlockToggle (int a, int b) {
         BOTC_Notice(a, "说书人不能参与屏蔽。");
         return;
     }
+    // 【防刷屏 · 屏蔽冷却】（用户 2026-11-06）：同一名玩家 5 秒内只能屏蔽 / 解除一次，
+    //   换目标也算；先屏蔽再解除同样要等 5 秒。
+    if (g_blockCd[a] > 0) {
+        BOTC_Notice(a, "【屏蔽】冷却中：还需 " + IntToString((g_blockCd[a] + 1) / 2) + " 秒。");
+        return;
+    }
+    g_blockCd[a] = 10;
     if (g_block[(a * 14) + b]) {
         g_block[(a * 14) + b] = false;
         // 【屏蔽 token】（用户 2026-11-06）：解除屏蔽时，从 a 的魔典上 b 的位置摘掉 token 182。
@@ -10104,6 +10131,11 @@ if (p == g_teller) {
     else {
         tag = "";                      // 玩家：真实号已经写在名字里了（[2]玩家1），这里不再重复
     }
+    // 【防刷屏 · 公聊禁言】（用户 2026-11-06）：只在公聊频道检测（私聊前面已经返回），
+    //   提名阶段不检测；5 秒内连发 5 条即禁言 15 秒，禁言期间这条不发。
+    if (p != g_teller && g_phase == 0 && !BOTC_SpamAllow(p)) {
+        return true;
+    }
     BOTC_PubSay(p, tag, msg);
     return true;
 }
@@ -10387,6 +10419,12 @@ void BOTC_SkipClick (int p) {
     if (!g_seatOn[p] || BOTC_SeatDead(p)) {
         return;
     }
+    // 【防刷屏 · 快进冷却】（用户 2026-11-06）：投票和取消共用 5 秒冷却。
+    if (g_skipCd[p] > 0) {
+        BOTC_Notice(g_who[p], "【快进】按钮冷却中：还需 " + IntToString((g_skipCd[p] + 1) / 2) + " 秒。");
+        return;
+    }
+    g_skipCd[p] = 10;
     g_skipVote[p] = !g_skipVote[p];
     n = BOTC_SkipCount();
     need = BOTC_SkipNeed();
@@ -16141,15 +16179,15 @@ void BOTC_InitRoleTexts () {
     g_tipLine[2296] = StringToText("在你的首个夜晚，你会得知两名善良玩家。他们之中会有一人醉酒，即使你已死亡。");
     g_tipLine[2297] = StringToText("【角色简介】");
     g_tipLine[2298] = StringToText("店小二对他店里的顾客非常熟悉，但也为某些酒量不高的顾客感到焦虑。");
-    g_tipLine[2299] = StringToText("· 他得知的两名玩家都属于善良阵营，其中一人会一直醉酒，直到店小二离场。");
+    g_tipLine[2299] = StringToText("· 他得知的两名玩家都属于善良阵营，其中一人会一直醉酒直到本局结束，店小二死亡也不会解除。");
     g_tipLine[2300] = StringToText("· 如果店小二在游戏中途被创造，他会在当晚得知两名玩家，其中一人醉酒。");
     g_tipLine[2301] = StringToText("· 已经死亡的玩家变成店小二时不会得知信息，但仍然会让一名善良玩家醉酒。");
     g_tipLine[2302] = StringToText("【规则细节】");
-    g_tipLine[2303] = StringToText("首个夜晚做准备时，把「熟客」和「醉酒」两枚提示标记分别放在两名善良玩家的");
-    g_tipLine[2304] = StringToText("角色标记旁；醉酒的那名玩家会一直醉酒，直到游戏结束或店小二离场。");
-    g_tipLine[2305] = StringToText("首个夜晚唤醒店小二，分别指向这两名玩家。");
-    g_tipLine[2306] = StringToText("挑谁醉酒时优先选获取信息类的角色；即使店小二自己中毒或醉酒，也照旧让其中");
-    g_tipLine[2307] = StringToText("一名（尽量挑善良玩家）醉酒。");
+    g_tipLine[2303] = StringToText("配置版型阶段就把「熟客」和「醉酒」两枚提示标记分别放在两名善良玩家的");
+    g_tipLine[2304] = StringToText("角色标记旁；醉酒的那名玩家会一直醉酒到本局结束，店小二死亡后依然醉酒。");
+    g_tipLine[2305] = StringToText("首个夜晚唤醒店小二：清醒时可直接告诉他这两名玩家，也可改成手动填两名。");
+    g_tipLine[2306] = StringToText("挑谁醉酒时优先一次性能力者，其次夜间能力者，最后持续信息位；即使店小二");
+    g_tipLine[2307] = StringToText("自己中毒或醉酒，也照旧让其中一名（尽量挑善良玩家）醉酒。");
     g_tipLine[2308] = StringToText("【角色能力】");
     g_tipLine[2309] = StringToText("每个夜晚，你要选择除你以外的一名玩家：你会得知一个与他能力相关的词语。");
     g_tipLine[2310] = StringToText("【角色简介】");
@@ -20446,6 +20484,12 @@ g_noAllOther[102] = 28;     // 恐惧之灵（其他夜第 28）
         g_ftChkSeat[i] = false;
         g_deadType[i] = -1;            // 死因一律先清成「没记」（不然 0 会被当成表里第 1 条 = 小恶魔那一刀）
         g_grimShareCd[i] = 0;           // 换局清空一键发送魔典冷却
+        g_declareCd[i] = 0;             // 换局清空声称冷却
+        g_skipCd[i] = 0;                // 换局清空快进按钮冷却
+        g_blockCd[i] = 0;               // 换局清空屏蔽冷却
+        g_spamMute[i] = 0;              // 换局清空公聊禁言
+        g_spamWin[i] = 0;
+        g_spamCnt[i] = 0;
     }
     // 「查身份」用过的身份（酒鬼 / 中毒的送葬者）：换局清空（表已扩到 128）
     for (i = 0; i < 164; i += 1) {
@@ -23314,6 +23358,7 @@ void BOTC_RsApply (int p) {
     BOTC_FoolSync();           // 弄臣（34）：顺便把「首次未死」也打上
     BOTC_MarionetteSync();
     BOTC_BartenderSetup();     // 手动配板完成后同样立即结算酒保
+    BOTC_DxeSetup();           // 店小二（115）：配板完成后放好熟客 / 醉酒（用户 2026-11-06）
     // 【随机配板最后统一清空】（用户 2026-10-20）：SetSeatRole / 提线木偶同步都不能提前下发玩家副本。
     BOTC_GrimResetPerPlayer();
     for (i = 1; i <= 13; i += 1) {
@@ -24271,7 +24316,7 @@ void BOTC_PickChoose (int ob, int idx) {
         }
         if (idx == 109) {
             if (g_puzzleGuessUsed[ob]) {
-                BOTC_Notice(ob, "你这一局已经用过「猜解谜大师」了。");
+                BOTC_Notice(ob, "你这一局已经用过「猜醉酒」了。");
                 return;
             }
             g_declarePick[ob] = true;
@@ -24279,6 +24324,13 @@ void BOTC_PickChoose (int ob, int idx) {
             BOTC_DeclareRender();
             BOTC_Notice(ob, "点一个玩家头像：你对他说出你的猜想。再点一次【声称/猜测】可以取消。");
             return;
+        }
+        // 【防刷屏 · 声称冷却】（用户 2026-11-06）：真正的「声称」两次之间至少 15 秒；
+        //   上面的猜测入口不占冷却，所以这里只拦非猜测入口。
+        if (!BOTC_DeclareIsGuess(idx)) {
+            if (BOTC_DeclareCdBlocked(ob)) {
+                return;
+            }
         }
         // 维齐尔：只做公开声称，能力结算由说书人手工完成。
         if (idx == 141) {
@@ -24317,6 +24369,7 @@ void BOTC_PickChoose (int ob, int idx) {
             g_goblinClaimDay[gobSeat] = g_nightNum;
             g_goblinClaim[gobSeat] = true;
             BOTC_PubAnnounce(BOTC_NameStr(gobSeat) + " 公开声明自己是【哥布林】。");
+            BOTC_DeclareCdSet(ob);
             // 【只有真哥布林能力才生效】（用户 2026-11-04）：任何人都能声称，但假声称 / 借不到能力的人
             //   不能给说书人「被处决就获胜」的错误提示；结算层在 BOTC_CheckWin 里另有 BOTC_AbilityWorks 兜底。
             //   假声称不再给说书人私聊提醒（用户 2026-11-04）。
@@ -24355,6 +24408,7 @@ void BOTC_PickChoose (int ob, int idx) {
             //   全员同意才算他阵营获胜 —— 没这个能力的那个，投票走完什么都不发生（见 BOTC_CultEnd）。
             g_cultDeclDone[BOTC_PosOf(ob)] = true;   // 【今天这一次用掉了】（用户 2026-10-11）
             BOTC_PubAnnounce(BOTC_NameStr(BOTC_PosOf(ob)) + " 公开声称自己是【异教领袖】，提议所有人加入他的教派。");
+            BOTC_DeclareCdSet(ob);
             BOTC_CultStart(BOTC_PosOf(ob));
             return;
         }
@@ -24557,22 +24611,27 @@ int BOTC_AmnesiaMaskRole (int roleIdx) {
     return roleIdx;
 }
 
-// 【全员追忆】玩家自己那份魔典永远只显示四类占位身份；身份怎么变也只换占位卡，不揭示真身。
+// 【全员追忆】玩家自己那份魔典只在"正式开始前"按阵营映射为四类占位身份；
+//   正式开始之后，说书人手动改标记或角色能力触发的身份转变都会让玩家魔典
+//   直接显示真实角色。真值行、夜间唤醒和全部角色能力始终按说书人魔典结算。
 int BOTC_PlayerRoleView (int seat, int roleIdx) {
-    if (g_board == 13 && seat >= 2 && seat <= 13) {
+    if (g_board == 13 && g_nightNum == 0 && seat >= 2 && seat <= 13) {
         return BOTC_AmnesiaMaskRole(roleIdx);
     }
     return roleIdx;
 }
 
-// 【全员追忆 · 换身份同步】按说书人魔典此刻的真实角色类别重算占位卡
-//   （镇民→143、外来者→144、爪牙→145、恶魔→146），只写玩家自己那一格。
-//   真值行、夜间唤醒和全部角色能力仍读说书人魔典，不受影响。
+// 【全员追忆 · 换身份同步】正式开始前按新类别重算占位卡；
+//   正式开始之后直接写真实角色，让玩家魔典立刻反映身份变化。
 void BOTC_AmnesiaSyncSeat (int seat, int roleIdx) {
     if (g_board != 13 || seat < 2 || seat > 13 || roleIdx < 0 || roleIdx > 163) {
         return;
     }
-    g_mark[(g_who[seat] * 14) + seat] = BOTC_AmnesiaMaskRole(roleIdx) + 1;
+    if (g_nightNum == 0) {
+        g_mark[(g_who[seat] * 14) + seat] = BOTC_AmnesiaMaskRole(roleIdx) + 1;
+    } else {
+        g_mark[(g_who[seat] * 14) + seat] = roleIdx + 1;
+    }
 }
 
 void BOTC_SetSeatRole (int ob, int seat, int roleIdx) {
@@ -24707,6 +24766,13 @@ void BOTC_SetSeatRole (int ob, int seat, int roleIdx) {
     }
     if (!g_started && oldR != roleIdx && BOTC_RoleInPlay(160)) {
         BOTC_BartenderSetup();
+    }
+    // 【店小二（115）】（用户 2026-11-06）：开局前离场清掉旧标记；中途被创造时立即放好熟客 / 醉酒。
+    if (oldR != roleIdx && oldR == 115 && !g_started) {
+        BOTC_DxeSetup();
+    }
+    if (oldR != roleIdx && roleIdx == 115 && g_started) {
+        BOTC_DxeSetup();
     }
     // 【落难少女入场 → 通知所有爪牙】（用户 2026-10-03）：游戏开始后任何时候变成落难少女，都通知一次
     if (g_started && ob == g_teller && seat >= 2 && seat <= 13 && roleIdx == 82 && oldR != 82) {
@@ -26034,7 +26100,7 @@ bool BOTC_TokGoneWithSource (int t) {
     //   失足标记也要留到本局结束（他死了也不解除被标记玩家的「登记为邪恶」）。
     if (t == 128) { return true; }                          // 死亡（半兽人）
     if (t == 133) { return true; }                          // 免死（暴风捕手）
-    if (t == 135) { return true; }                          // 熟客是店小二的记录；醉酒 136 保留到黄昏
+    if (t == 135) { return true; }                          // 熟客是店小二的记录；醉酒 136 不随店小二死亡 / 离场清除，本局永久保留
     if (t == 138) { return true; }                          // 善良中毒（混沌）（用户 2026-10-16：混沌死亡 / 离场就收）
     if (t == 147) { return true; }                          // 守夜人的「失去能力」随角色离场
     if (t == 156) { return true; }                          // 杂技演员的「被选择」随角色离场
@@ -28425,6 +28491,7 @@ void BOTC_VizierClaim (int p) {
     g_vizierClaimed[p] = true;
     seat = BOTC_PosOf(p);
     BOTC_PubAnnounce(BOTC_NameStr(seat) + " 宣布使用维齐尔能力");
+    BOTC_DeclareCdSet(p);
     // 【只有真有能力的人才提醒】（用户 2026-11-04）：任何人都能公开声称维齐尔，假声称不写私聊；
     //   真身 / 借到该能力的人按是否中毒醉酒区分提醒。
     if (BOTC_HasAbility(seat, 141)) {
@@ -31574,6 +31641,7 @@ void BOTC_DeclareOpen (int p) {
     }
     // 【声称/猜测】（用户 2026-11-04）：第二行两个公开猜测入口。
     //   正常剧本里板子上没有书生(152) / 解谜大师(109) 就不显示；板子上有失忆者(73) 时两个都显示。
+    //   其中只有猜书生、猜醉酒、全员追忆的猜角色算「猜测」，不占 15 秒声称冷却。
     //   每人每局各一次，用过的入口直接藏掉。
     q = 0;
     if (amne || BOTC_BoardHasRole(152)) {
@@ -31586,9 +31654,9 @@ void BOTC_DeclareOpen (int p) {
     }
     if (amne || BOTC_BoardHasRole(109)) {
         if (!g_puzzleGuessUsed[p]) {
-            BOTC_DeclareGuessSlot(p, 53, 109, q, "猜解谜");
+            BOTC_DeclareGuessSlot(p, 53, 109, q, "猜醉酒");
             if (StringLength(s) > 0) { s = s + " / "; }
-            s = s + "猜解谜";
+            s = s + "猜醉酒";
             q = q + 1;
         }
     }
@@ -31881,6 +31949,7 @@ void BOTC_DeclareSlay (int p, int q) {
     g_declareUsed[g_who[p]] = true;           // 猎手这次声称用掉（不管后面判成什么样，当天只有这一次）
     // 所有人都看得到：谁声称自己是猎手、要猎杀谁
     BOTC_PubAnnounce(BOTC_NameStr(p) + " 声称自己是【猎手】，并选择猎杀 " + BOTC_NameStr(q) + "。");
+    BOTC_DeclareCdSet(g_who[p]);
     // 【真人说书】**所有人声称都弹这个提示**（用户 2026-09-16 定稿：统一处理，方便恶魔伪装）----
     //   不管他是真猎手、中毒的猎手、以为自己是猎手的酒鬼，还是纯粹的假声称，看到的都是
     //   「等说书人拍板」这一套；真正的答案只写给说书人（弹窗上的按钮组合 + 他私聊日志里那行
@@ -32112,6 +32181,7 @@ void BOTC_PsyPick (int p, int q) {
     g_psyDay[p] = g_dayNum;
     BOTC_DeclareRender();
     BOTC_PubAnnounce(BOTC_NameStr(p) + " 声称自己是【精神病患者】，并公开选择 " + BOTC_NameStr(q) + "。");
+    BOTC_DeclareCdSet(g_who[p]);
     BOTC_PsyAsk(p, q);
     return;
     if (BOTC_AbilityWorks(p, 84)) {
@@ -32250,6 +32320,7 @@ void BOTC_DamselGuess (int p, int q) {
     }
     BOTC_DeclareRender();
     BOTC_PubAnnounce("【落难少女】" + BOTC_NameStr(p) + " 公开猜测 " + BOTC_NameStr(q) + " 是落难少女。");
+    BOTC_DeclareCdSet(g_who[p]);
     if (g_damselFailed) {
         BOTC_PmStore(g_teller, "【落难少女】已经有爪牙猜错过 → 这一次猜测按规则无效。");
         return;
@@ -33552,6 +33623,7 @@ void BOTC_JugglerOk (int p) {
     g_juggDone[BOTC_PosOf(p)] = true;
     if (ln > 0) {
         BOTC_PubAnnounce(line);          // 最后一行没凑满 2 组也要发出去（用户 2026-09-21）
+        BOTC_DeclareCdSet(p);
     }
         BOTC_GrimRender(g_teller);
         BOTC_PmStore(g_teller, "【杂耍艺人】" + BOTC_NameStr(BOTC_PosOf(p)) + " 公开猜测：" + s);
@@ -33836,6 +33908,7 @@ void BOTC_AlsaahirSubmit (int p) {
     g_alsaDay[p] = g_dayNum;
     BOTC_PubAnnounce("【戏法师】" + BOTC_NameStr(seat) + " 公开猜测。爪牙：" + sm + "。");
     BOTC_PubAnnounce("恶魔：" + sd + "。");
+    BOTC_DeclareCdSet(g_who[seat]);
     if (!BOTC_HasAbility(seat, 149)) {
         return;                        // 假声称：不给说书人私聊提醒（用户 2026-11-04）
     }
@@ -34133,6 +34206,7 @@ void BOTC_GossipSubmit (int p) {
     g_gossipDay[BOTC_PosOf(p)] = g_dayNum;
     // 【公聊换行】（用户 2026-11-03）：文字较长时按标点断成多行，避免固定行高裁成省略号。
     BOTC_PubAnnounceWrap("【造谣者】" + BOTC_NameStr(BOTC_PosOf(p)) + " 公开声明：", msg);
+    BOTC_DeclareCdSet(p);
     BOTC_PmStore(g_teller, "【造谣者】" + BOTC_NameStr(BOTC_PosOf(p)) + " 公开声明：" + msg);
     if (BOTC_AbilityWorks(BOTC_PosOf(p), 28)) {
         BOTC_PmStore(g_teller, "【造谣者】这条声明只算今晚：如果它是真的，今晚一名玩家死亡。");
@@ -36447,7 +36521,33 @@ void BOTC_ManInfoOk () {
         BOTC_PmStore(g_teller, "【骑士】已告诉 " + BOTC_NameStr(seat) + "：" + BOTC_NameStr(g_evilA) + " 和 " + BOTC_NameStr(g_evilB) + "。");
         return;
     }
-    // 【风雅集（板子 10）· 店小二（115）】（用户 2026-10-16）：两个框 = 他要得知的两名善良玩家 → 私聊告诉他
+    // 【店小二（115）】（用户 2026-11-06）：清醒时先问要不要把当前熟客 / 醉酒的两名玩家告诉他
+    if (g_miRole == 41 && g_miKind == 22) {
+        seat = g_miSeat;
+        g_evilA = 0;
+        g_evilB = 0;
+        for (i = 2; i <= 13; i += 1) {
+            if (g_tokOn[(((g_teller * 14) + i) * 256) + 135]) {
+                g_evilA = i;
+            }
+            if (g_tokOn[(((g_teller * 14) + i) * 256) + 136]) {
+                g_evilB = i;
+            }
+        }
+        DialogSetVisible(g_miDlg, PlayerGroupSingle(g_teller), false);
+        g_miSeat = 0;
+        g_miRole = -1;
+        g_dxeMode = 0;
+        if (g_evilA < 2 || g_evilB < 2 || g_evilA == g_evilB) {
+            BOTC_DxeManualOpen(seat);
+            return;
+        }
+        BOTC_PmInfo(g_who[seat], "【信息】你得知[" + IntToString(g_lab[g_evilA] + g_nameNumShift) + "],[" + IntToString(g_lab[g_evilB] + g_nameNumShift) + "]。");
+        BOTC_PmStore(g_teller, "【店小二】已告诉 " + BOTC_NameStr(seat) + "：" + BOTC_NameStr(g_evilA) + " 和 " + BOTC_NameStr(g_evilB) + "（当前熟客 / 醉酒）。");
+        return;
+    }
+    // 【风雅集（板子 10）· 店小二（115）】：两个框 = 他要得知的两名玩家 → 私聊告诉他
+    //   配板阶段已经放好熟客 / 醉酒（用户 2026-11-06）；这里只在失效 / 手动时补发信息。
     if (g_miRole == 41 && g_miKind == 12) {
         seat = g_miSeat;
         g_evilA = 0;
@@ -36474,11 +36574,11 @@ void BOTC_ManInfoOk () {
         g_miSeat = 0;
         g_miRole = -1;
         BOTC_PmInfo(g_who[seat], "【信息】你得知[" + IntToString(g_lab[g_evilA] + g_nameNumShift) + "],[" + IntToString(g_lab[g_evilB] + g_nameNumShift) + "]。");
-        g_tokOn[(((g_teller * 14) + g_evilA) * 256) + 135] = true;
-        g_tokOn[(((g_teller * 14) + g_evilB) * 256) + 135] = true;
-        BOTC_GrimRender(g_teller);
-        BOTC_PmStore(g_teller, "【店小二】已告诉 " + BOTC_NameStr(seat) + "：" + BOTC_NameStr(g_evilA) + " 和 " + BOTC_NameStr(g_evilB) + " 是善良玩家（两人已打「熟客」）。");
-        BOTC_DrunkPickOpen(2, seat, g_evilA, g_evilB);   // 【二选一醉酒】（用户 2026-10-16）：说书人再点谁醉
+        BOTC_PmStore(g_teller, "【店小二】已告诉 " + BOTC_NameStr(seat) + "：" + BOTC_NameStr(g_evilA) + " 和 " + BOTC_NameStr(g_evilB) + "。");
+        if (g_dxeMode == 2 || (g_dxeMode == 1 && !BOTC_DxeHasDrunkTok())) {
+            BOTC_DrunkPickOpen(3, seat, g_evilA, g_evilB);   // 把醉酒标记移到这两名之一（可取消）
+        }
+        g_dxeMode = 0;
         return;
     }
 
@@ -38920,6 +39020,7 @@ void BOTC_MoonChildDeclare (int p, int q) {
     BOTC_BigHintHide(g_who[p]);
     BOTC_DeclareRender();
     BOTC_PubAnnounce("【月之子】" + BOTC_NameStr(p) + " 公开声明自己是【月之子】，并选择 " + BOTC_NameStr(q) + "。");
+    BOTC_DeclareCdSet(g_who[p]);
     if (!BOTC_HasAbility(p, 36)) {
         return;                        // 假声称：不给说书人私聊提醒（用户 2026-11-04）
     }
@@ -39131,6 +39232,7 @@ void BOTC_KlutzPick (int p, int q) {
             g_declarePick[g_who[p]] = false;
             BOTC_DeclareRender();
             BOTC_PubAnnounce("【呆瓜】" + BOTC_NameStr(p) + " 声称自己是呆瓜，并公开选择 " + BOTC_NameStr(q) + "。");
+            BOTC_DeclareCdSet(g_who[p]);
             // 假声称：不给说书人私聊提醒（用户 2026-11-04）
         }
         return;
@@ -40128,8 +40230,8 @@ void BOTC_ManInfoOpenSeats (int seat, string title, int kind) {
         DialogControlSetVisible(g_miEdit3, PlayerGroupSingle(g_teller), true);
         DialogControlSetVisible(g_miEdit4, PlayerGroupSingle(g_teller), true);
     }
-    else if (kind == 16 || kind == 18 || kind == 20) {
-        // 书生 × 疯子（16）/ 疯子 × 国王（18）/ 书生假信息（20）：没有输入框，只让说书人按【确认】/【取消】。
+    else if (kind == 16 || kind == 18 || kind == 20 || kind == 22) {
+        // 书生 × 疯子（16）/ 疯子 × 国王（18）/ 书生假信息（20）/ 店小二告知确认（22）：没有输入框，只让说书人按【确认】/【取消】。
         DialogControlSetVisible(g_miEdit, PlayerGroupSingle(g_teller), false);
         DialogControlSetVisible(g_miEdit2, PlayerGroupSingle(g_teller), false);
         DialogControlSetVisible(g_miEdit3, PlayerGroupSingle(g_teller), false);
@@ -40152,7 +40254,7 @@ void BOTC_ManInfoOpenSeats (int seat, string title, int kind) {
     //   疯子提线木偶（15）/ 书生 × 疯子（16）/ 寡妇在场告知（17）/ 疯子 × 国王（18）/
     //   假军团手动善良名单（19）同样允许跳过。
     libNtve_gf_SetDialogItemText(g_miCancel, StringToText("取消"), PlayerGroupSingle(g_teller));
-    if (kind == 0 || kind == 15 || kind == 16 || kind == 17 || kind == 18 || kind == 19 || kind == 20 || kind == 21) {
+    if (kind == 0 || kind == 15 || kind == 16 || kind == 17 || kind == 18 || kind == 19 || kind == 20 || kind == 21 || kind == 22) {
         libNtve_gf_SetDialogItemText(g_miCancel, StringToText("取消"), PlayerGroupSingle(g_teller));
         DialogControlSetVisible(g_miCancel, PlayerGroupSingle(g_teller), true);
     }
@@ -42254,7 +42356,7 @@ void BOTC_WakeApply (int q, bool manual) {
         BOTC_SgOpen(q);
     }
     if (r == 115) {
-        BOTC_ManInfoOpenSeats(q, "【店小二】填他要得知的两名善良玩家（左 / 右各一个座位号 1~12）", 12);
+        BOTC_DxeNightOpen(q);
     }
     // 【数学家】效果类角色（要选人那种）：中毒 / 酒鬼还用了能力 = 能力被挡下 → 记一格「未正常生效」
     //   信息类的几位改成「说书人给的答案和真身对不上才记」，见 BOTC_MalfNote（用户 2026-09-21）
@@ -47592,11 +47694,14 @@ void BOTC_ChangeRoleMsg (int q, int role) {
     // 【阵营没变就省略】（用户 2026-10-21）：比较改身份前 / 后的有效阵营。
     s = BOTC_TransitionRoleName(g_seatPrevAlign[q], BOTC_SeatAlign(q), role);
     shown = s;
-    // 【全员追忆】身份怎么变，本人魔典与帮助页都只重算对应的占位卡，不揭示真实身份；
-    //   告知本人时也只报「失忆的X」，说书人私聊仍记录真实新身份。
+    // 【全员追忆】正式开始前身份怎么变都只在本人魔典上重算占位卡、私聊也只报「失忆的X」；
+    //   正式开始之后，理发师、麻脸巫婆、说书人手动改、方古击杀等一切身份转变都直接让玩家
+    //   看到真实新身份；阵营没变时只报角色名，阵营变了才带「善良的/邪恶的」前缀。
     if (g_board == 13) {
         BOTC_AmnesiaSyncSeat(q, role);
-        shown = g_roleName[BOTC_AmnesiaMaskRole(role)];
+        if (g_nightNum == 0) {
+            shown = g_roleName[BOTC_AmnesiaMaskRole(role)];
+        }
     }
     // 【本人魔典自动刷新】（用户 2026-11-05）：方古 / 理发师 / 麻脸巫婆等身份转变后，
     //   以前只有全员追忆才会刷本人那份魔典，普通板子会一直显示旧身份。
@@ -47832,6 +47937,7 @@ void BOTC_HagBelieve (int role) {
     int who;
     int kind;
     int oldA;
+    string shownRole;
     who = g_hagWho;
     kind = g_cerenRole;
     if (who < 2 || who > 13 || role < 0 || role > 163) {
@@ -47857,8 +47963,12 @@ void BOTC_HagBelieve (int role) {
         else {
             // 【按目标原阵营显示】（用户 2026-10-19）：麻脸巫婆改变阵营不变，
             //   善良玩家熬成疯子并认知某只恶魔时，要显示「善良的恶魔」，不能固定写成邪恶。
-            BOTC_AmnesiaSyncSeat(who, role);
-            BOTC_PmInfo(g_who[who], "【身份转变】你的身份转变：" + g_roleName[BOTC_AmnesiaMaskRole(role)] + "。");
+            // 【全员追忆】正式开始前玩家只看到占位卡名，正式开始后显示他以为自己是的那只恶魔。
+            shownRole = g_roleName[role];
+            if (g_board == 13 && g_nightNum == 0) {
+                shownRole = g_roleName[BOTC_AmnesiaMaskRole(role)];
+            }
+            BOTC_PmInfo(g_who[who], "【身份转变】你的身份转变：" + shownRole + "。");
             BOTC_PmStore(g_teller, "【麻脸巫婆】" + BOTC_NameStr(who) + " 变成疯子（认知自己是" + g_roleName[role] + "）。");
         }
     }
@@ -47867,8 +47977,12 @@ void BOTC_HagBelieve (int role) {
         BOTC_SetSeatRole(g_teller, who, role);
         g_tokOn[(((g_teller * 14) + who) * 256) + 140] = true;
         if (role != g_hagOldRole) {
-            BOTC_AmnesiaSyncSeat(who, role);
-            BOTC_PmInfo(g_who[who], "【身份转变】你的身份转变：" + g_roleName[BOTC_AmnesiaMaskRole(role)] + "。");
+            // 【全员追忆】正式开始前玩家只看到占位卡名，正式开始后显示他以为自己是的那个外来者。
+            shownRole = g_roleName[role];
+            if (g_board == 13 && g_nightNum == 0) {
+                shownRole = g_roleName[BOTC_AmnesiaMaskRole(role)];
+            }
+            BOTC_PmInfo(g_who[who], "【身份转变】你的身份转变：" + shownRole + "。");
             BOTC_PmStore(g_teller, "【麻脸巫婆】" + BOTC_NameStr(who) + " 变成悟道者（认知自己是" + g_roleName[role] + "）。");
         }
         else {
@@ -47880,8 +47994,12 @@ void BOTC_HagBelieve (int role) {
         BOTC_SetSeatRole(g_teller, who, role);
         g_tokOn[(((g_teller * 14) + who) * 256) + 8] = true;
         if (role != g_hagOldRole) {
-            BOTC_AmnesiaSyncSeat(who, role);
-            BOTC_PmInfo(g_who[who], "【身份转变】你的身份转变：" + g_roleName[BOTC_AmnesiaMaskRole(role)] + "。");
+            // 【全员追忆】正式开始前玩家只看到占位卡名，正式开始后显示他以为自己是的那个镇民。
+            shownRole = g_roleName[role];
+            if (g_board == 13 && g_nightNum == 0) {
+                shownRole = g_roleName[BOTC_AmnesiaMaskRole(role)];
+            }
+            BOTC_PmInfo(g_who[who], "【身份转变】你的身份转变：" + shownRole + "。");
             BOTC_PmStore(g_teller, "【麻脸巫婆】" + BOTC_NameStr(who) + " 变成酒鬼（认知自己是" + g_roleName[role] + "）。");
         }
         else {
@@ -48746,8 +48864,160 @@ void BOTC_VigPoison (int who) {
 }
 
 //--------------------------------------------------------------------------------------------------
+// 【风雅集（板子 10）· 店小二（115）】（用户 2026-11-06）
+//   配板阶段就放好「熟客 135」和「醉酒 136」；首夜唤醒只负责把信息发给店小二。
+//   · 清醒：问说书人要不要把当前持有这两枚 token 的两名玩家告诉他；选【取消】改为手动填两名。
+//   · 中毒 / 酒鬼 / 信息错误（涡流 84、熊孩子 170、活尸）：说书人手动填两名发给他，
+//     发完再问要不要把「醉酒」移到这两名里的一个（点【取消】= 不更改）。
+//--------------------------------------------------------------------------------------------------
+bool BOTC_DxeHasDrunkTok () {
+    int i;
+    for (i = 2; i <= 13; i += 1) {
+        if (g_tokOn[(((g_teller * 14) + i) * 256) + 136]) {
+            return true;
+        }
+    }
+    return false;
+}
+
+// 醉酒目标优先级：一次性能力者（信息分类 1）> 夜间能力者（行动 1/2 或分类 3）> 持续信息位（分类 2）
+int BOTC_DxeDrunkTier (int q) {
+    int r;
+    r = BOTC_SeatTrueRole(q);
+    if (r < 0 || r > 163) {
+        return 3;
+    }
+    if (g_roleInfoClass[r] == 1) {
+        return 0;
+    }
+    if (g_roleAct[r] == 1 || g_roleAct[r] == 2 || g_roleInfoClass[r] == 3) {
+        return 1;
+    }
+    if (g_roleInfoClass[r] == 2) {
+        return 2;
+    }
+    return 3;
+}
+
+// 配板阶段（以及中途被创造时）随机放好熟客 / 醉酒：两名目标都必须是善良玩家，且不含店小二自己
+void BOTC_DxeSetup () {
+    int i;
+    int p;
+    int a;
+    int b;
+    int n;
+    int tier;
+    int best;
+    int r;
+    for (i = 2; i <= 13; i += 1) {
+        g_tokOn[(((g_teller * 14) + i) * 256) + 135] = false;
+        g_tokOn[(((g_teller * 14) + i) * 256) + 136] = false;
+    }
+    p = 0;
+    for (i = 2; i <= 13; i += 1) {
+        if (g_seatOn[i] && BOTC_HasAbility(i, 115)) {
+            p = i;
+        }
+    }
+    if (p < 2) {
+        BOTC_GrimRender(g_teller);
+        return;
+    }
+    // 熟客：随机一名善良玩家（不含他自己）
+    a = 0;
+    n = 0;
+    for (i = 2; i <= 13; i += 1) {
+        if (!g_seatOn[i] || i == p || BOTC_SeatDead(i) || BOTC_SeatAlign(i) != 0) {
+            continue;
+        }
+        r = BOTC_SeatTrueRole(i);
+        if (r < 0 || r > 163 || BOTC_RoleTeam(r) > 1) {
+            continue;              // 只从镇民 / 外来者里选
+        }
+        n += 1;
+        if (RandomInt(1, n) == 1) {
+            a = i;
+        }
+    }
+    // 醉酒：按优先级分层，同层随机
+    b = 0;
+    n = 0;
+    best = 9;
+    for (i = 2; i <= 13; i += 1) {
+        if (!g_seatOn[i] || i == p || i == a || BOTC_SeatDead(i) || BOTC_SeatAlign(i) != 0) {
+            continue;
+        }
+        r = BOTC_SeatTrueRole(i);
+        if (r < 0 || r > 163 || BOTC_RoleTeam(r) > 1) {
+            continue;              // 只从镇民 / 外来者里选
+        }
+        tier = BOTC_DxeDrunkTier(i);
+        if (tier < best) {
+            best = tier;
+            b = i;
+            n = 1;
+        }
+        else {
+            if (tier == best) {
+                n += 1;
+                if (RandomInt(1, n) == 1) {
+                    b = i;
+                }
+            }
+        }
+    }
+    if (a >= 2) {
+        g_tokOn[(((g_teller * 14) + a) * 256) + 135] = true;
+    }
+    if (b >= 2) {
+        g_tokOn[(((g_teller * 14) + b) * 256) + 136] = true;
+    }
+    BOTC_GrimRender(g_teller);
+    if (a >= 2 && b >= 2) {
+        BOTC_PmStore(g_teller, "【店小二】配板阶段已放置：熟客 " + BOTC_NameStr(a) + "，醉酒 " + BOTC_NameStr(b) + "。");
+    }
+    else {
+        BOTC_PmStore(g_teller, "【店小二】场上没有足够的善良玩家，本次未能放满熟客 / 醉酒标记。");
+    }
+}
+
+// 首夜唤醒入口：按店小二自己的状态决定走哪条分支
+void BOTC_DxeNightOpen (int q) {
+    int i;
+    int a;
+    int b;
+    a = 0;
+    b = 0;
+    for (i = 2; i <= 13; i += 1) {
+        if (g_tokOn[(((g_teller * 14) + i) * 256) + 135]) {
+            a = i;
+        }
+        if (g_tokOn[(((g_teller * 14) + i) * 256) + 136]) {
+            b = i;
+        }
+    }
+    if (BOTC_SeatImpaired(q) || BOTC_InfoErrorOn(q)) {
+        g_dxeMode = 2;
+        BOTC_ManInfoOpenSeats(q, "【店小二】他中毒 / 酒鬼 / 信息错误：手动填两名玩家（左 / 右各一个座位号 1~12）", 12);
+        return;
+    }
+    if (a >= 2 && b >= 2 && a != b) {
+        g_dxeMode = 0;
+        BOTC_ManInfoOpenSeats(q, "【店小二】把熟客[" + IntToString(g_lab[a] + g_nameNumShift) + "]和醉酒[" + IntToString(g_lab[b] + g_nameNumShift) + "]告诉他？（确认=告诉，取消=自己填两名）", 22);
+        return;
+    }
+    BOTC_DxeManualOpen(q);
+}
+
+void BOTC_DxeManualOpen (int seat) {
+    g_dxeMode = 1;
+    BOTC_ManInfoOpenSeats(seat, "【店小二】填他要得知的两名善良玩家（左 / 右各一个座位号 1~12）", 12);
+}
+
+//--------------------------------------------------------------------------------------------------
 // 【二选一醉酒】（用户 2026-10-16）：水手（23）/ 旅店老板（26）/ 店小二（115）共用亡骨魔那套二选一面板。
 //   kind：0 = 水手（左 = 他自己、右 = 他选的人）　1 = 旅店老板（他选的两名玩家）　2 = 店小二（说书人填的那两个号）
+//         3 = 店小二把醉酒标记移到前面告知的两名之一（始终可取消）
 //   ⚠ 谁醉由说书人点 ---- 原来那套「按概率表自动掷」是智能说书时代的，已经不走了。
 //--------------------------------------------------------------------------------------------------
 void BOTC_DrunkPickOpen (int kind, int who, int a, int b) {
@@ -48776,7 +49046,12 @@ void BOTC_DrunkPickOpen (int kind, int who, int a, int b) {
     if (kind == 2) {
         ttl = "【店小二】" + BOTC_NameStr(who) + " 得知的两个人：谁醉酒？";
     }
-    if (BOTC_SeatImpaired(who)) {
+    if (kind == 3) {
+        ttl = "【店小二】把醉酒标记移到谁身上？";
+        note = "左 = " + ta + "　右 = " + tb + "　（点【取消】= 不更改醉酒标记）";
+        DialogControlSetVisible(g_miCancel, PlayerGroupSingle(g_teller), true);
+    }
+    else if (BOTC_SeatImpaired(who)) {
         note = note + "　（他中毒/酒鬼：点【取消】= 这次谁也不醉）";
         DialogControlSetVisible(g_miCancel, PlayerGroupSingle(g_teller), true);
     }
@@ -48805,6 +49080,7 @@ void BOTC_DrunkPickApply (int side) {
     int k;
     int who;
     int pick;
+    int i;
     k = g_dkKind;
     who = g_dkFrom;
     pick = g_dkB;
@@ -48818,7 +49094,9 @@ void BOTC_DrunkPickApply (int side) {
     if (pick < 2 || pick > 13) {
         return;
     }
-    BOTC_WudTryTrigger(pick, who);
+    if (k != 3) {
+        BOTC_WudTryTrigger(pick, who);
+    }
     if (k == 0) {
         if (g_sailorDrunk >= 2 && g_sailorDrunk != pick) {
             BOTC_SailorDrunkClear("水手换了目标");
@@ -48836,6 +49114,13 @@ void BOTC_DrunkPickApply (int side) {
     }
     if (k == 2) {
         g_tokOn[(((g_teller * 14) + pick) * 256) + 136] = true;     // 醉酒（店小二）
+    }
+    if (k == 3) {
+        for (i = 2; i <= 13; i += 1) {
+            g_tokOn[(((g_teller * 14) + i) * 256) + 136] = false;
+        }
+        g_tokOn[(((g_teller * 14) + pick) * 256) + 136] = true;     // 醉酒（店小二）移到新目标
+        BOTC_PmStore(g_teller, "【店小二】醉酒标记已移到 " + BOTC_NameStr(pick) + "。");
     }
     BOTC_BartenderSync();
     BOTC_GrimRender(g_teller);
@@ -51501,6 +51786,52 @@ string BOTC_BoardName (int b) {
     return "未定";                 // ⚠ 兜底 return 必须是这个非 void 函数的**最后一句**，新板子往上面加
 }
 
+// 【剧本难度】（用户 2026-11-06）：玩家难度 / 说书人难度，1..5 星；0 = 不显示（自定义剧本）
+int BOTC_BoardPlayerDiff (int b) {
+    if (b == 1) { return 1; }        // 暗流涌动
+    if (b == 2) { return 3; }        // 黯月初升
+    if (b == 3) { return 4; }        // 梦殒春宵
+    if (b == 4) { return 2; }        // 瓦釜雷鸣
+    if (b == 5) { return 3; }        // 夜半狂欢
+    if (b == 6) { return 3; }        // 罂粟花开
+    if (b == 8) { return 3; }        // 横行霸道
+    if (b == 9) { return 3; }        // 何方教众
+    if (b == 10) { return 4; }       // 风雅集
+    if (b == 11) { return 4; }       // 心理博弈 XI
+    if (b == 12) { return 2; }       // 信口雌黄
+    if (b == 13) { return 5; }       // 全员追忆
+    if (b == 14) { return 2; }       // 成双成对
+    if (b == 15) { return 4; }       // 移花接木
+    return 0;
+}
+
+int BOTC_BoardTellerDiff (int b) {
+    if (b == 1) { return 2; }        // 暗流涌动
+    if (b == 2) { return 4; }        // 黯月初升
+    if (b == 3) { return 5; }        // 梦殒春宵
+    if (b == 4) { return 3; }        // 瓦釜雷鸣
+    if (b == 5) { return 5; }        // 夜半狂欢
+    if (b == 6) { return 4; }        // 罂粟花开
+    if (b == 8) { return 3; }        // 横行霸道
+    if (b == 9) { return 3; }        // 何方教众
+    if (b == 10) { return 5; }       // 风雅集
+    if (b == 11) { return 3; }       // 心理博弈 XI
+    if (b == 12) { return 3; }       // 信口雌黄
+    if (b == 13) { return 5; }       // 全员追忆
+    if (b == 14) { return 3; }       // 成双成对
+    if (b == 15) { return 5; }       // 移花接木
+    return 0;
+}
+
+string BOTC_BoardStar (int n) {
+    if (n <= 0) { return ""; }
+    if (n == 1) { return "★"; }
+    if (n == 2) { return "★★"; }
+    if (n == 3) { return "★★★"; }
+    if (n == 4) { return "★★★★"; }
+    return "★★★★★";
+}
+
 string BOTC_BoardPic (int b) {
     if (b == 1) {
         return "botc_board_tb.dds";
@@ -51718,6 +52049,15 @@ void BOTC_BuildBoard () {
         DialogControlSetVisible(g_boardPic[i], PlayerGroupAll(), false);
         g_boardBtn[i] = BOTC_NewButton(g_boardDlg, 320, 80, x, 630, "板子");
         DialogControlSetVisible(g_boardBtn[i], PlayerGroupAll(), false);
+        // 【剧本难度】（用户 2026-11-06）：板子按钮下方两行红字，自定义剧本不显示
+        g_boardDiffP[i] = BOTC_NewLabelC(g_boardDlg, 320, 22, x, 630, StringToText(""));
+        libNtve_gf_SetDialogItemStyle(g_boardDiffP[i], "ModLeftSize16Bold", PlayerGroupAll());
+        libNtve_gf_SetDialogItemAcceptMouse(g_boardDiffP[i], false, PlayerGroupAll());
+        DialogControlSetVisible(g_boardDiffP[i], PlayerGroupAll(), false);
+        g_boardDiffS[i] = BOTC_NewLabelC(g_boardDlg, 320, 22, x, 630, StringToText(""));
+        libNtve_gf_SetDialogItemStyle(g_boardDiffS[i], "ModLeftSize16Bold", PlayerGroupAll());
+        libNtve_gf_SetDialogItemAcceptMouse(g_boardDiffS[i], false, PlayerGroupAll());
+        DialogControlSetVisible(g_boardDiffS[i], PlayerGroupAll(), false);
     }
     //--------------------------------------------------------------------------------------------
     // 右边那块「本局设置（投票）」（用户 2026-09-17）：只有智能说书模式才显示
@@ -52769,6 +53109,89 @@ void BOTC_ReqTimeout (int p) {
     BOTC_AppendPm(from, BOTC_NameStr(BOTC_PosOf(p)) + " 没有在 15 秒内回应，私聊请求已自动取消。");
 }
 
+// 【防刷屏 · 声称 / 快进 / 屏蔽冷却 + 公聊禁言】（用户 2026-11-06）
+//   1. 同一名玩家两次「声称」之间至少 15 秒，倒计时从这次声称被播报到公聊那一刻开始；
+//      只有猜书生 / 猜醉酒 / 全员追忆（板子 13）专属的猜角色算「猜测」，不占冷却，
+//      其余入口（猜落难、戏法师等）一律按声称处理。
+//   2. 【快进到提名】按钮：同一名玩家 5 秒内只能点一次（投票和取消共用）。
+//   3. 【屏蔽 / 解除屏蔽】：同一名玩家 5 秒内只能操作一次（换目标也算）。
+//   4. 公聊频道 5 秒内连发 5 条即视为刷屏，禁言 15 秒；私聊与提名阶段不检测。
+bool BOTC_DeclareIsGuess (int idx) {
+    if (idx == 0) {
+        // 猜角色只属于全员追忆（板子 13），其他剧本的 0 号占位不算猜测。
+        return (g_board == 13);
+    }
+    return (idx == 109 || idx == 152);
+}
+
+bool BOTC_DeclareCdBlocked (int p) {
+    int sec;
+    if (p < 1 || p > 13) {
+        return true;
+    }
+    if (g_declareCd[p] <= 0) {
+        return false;
+    }
+    sec = (g_declareCd[p] + 1) / 2;
+    BOTC_Notice(p, "【声称】冷却中：还需 " + IntToString(sec) + " 秒才能再声称。");
+    return true;
+}
+
+void BOTC_DeclareCdSet (int p) {
+    if (p >= 1 && p <= 13) {
+        g_declareCd[p] = 30;
+    }
+}
+
+bool BOTC_SpamAllow (int p) {
+    int sec;
+    if (p < 1 || p > 13) {
+        return true;
+    }
+    if (g_spamMute[p] > 0) {
+        sec = (g_spamMute[p] + 1) / 2;
+        BOTC_Notice(p, "【公聊】你因刷屏被禁言：还需 " + IntToString(sec) + " 秒。");
+        return false;
+    }
+    if (g_spamWin[p] > 0) {
+        g_spamCnt[p] = g_spamCnt[p] + 1;
+    }
+    else {
+        g_spamWin[p] = 10;
+        g_spamCnt[p] = 1;
+    }
+    if (g_spamCnt[p] >= 5) {
+        g_spamCnt[p] = 0;
+        g_spamWin[p] = 0;
+        g_spamMute[p] = 30;
+        BOTC_Notice(p, "【公聊】检测到刷屏：你被禁言 15 秒。");
+        return false;
+    }
+    return true;
+}
+
+// 这些冷却都挂在 0.5 秒一拍的 BOTC_Tick_Func 上。
+void BOTC_GateCdTick () {
+    int p;
+    for (p = 1; p <= 13; p += 1) {
+        if (g_declareCd[p] > 0) {
+            g_declareCd[p] = g_declareCd[p] - 1;
+        }
+        if (g_skipCd[p] > 0) {
+            g_skipCd[p] = g_skipCd[p] - 1;
+        }
+        if (g_blockCd[p] > 0) {
+            g_blockCd[p] = g_blockCd[p] - 1;
+        }
+        if (g_spamMute[p] > 0) {
+            g_spamMute[p] = g_spamMute[p] - 1;
+        }
+        if (g_spamWin[p] > 0) {
+            g_spamWin[p] = g_spamWin[p] - 1;
+        }
+    }
+}
+
 // 【请求计时】（用户 2026-11-02）：挂在 0.5 秒一拍的 BOTC_Tick_Func 上。
 //   30 拍 = 15 秒；同时递减私聊拒绝冷却。
 void BOTC_ReqTick () {
@@ -53386,12 +53809,16 @@ void BOTC_BoardRender () {
         if (b == 0) {
             DialogControlSetVisible(g_boardBtn[i], PlayerGroupAll(), false);
             DialogControlSetVisible(g_boardPic[i], PlayerGroupAll(), false);
+            DialogControlSetVisible(g_boardDiffP[i], PlayerGroupAll(), false);
+            DialogControlSetVisible(g_boardDiffS[i], PlayerGroupAll(), false);
         }
         else {
             if (b < 0) {
                 // 【自定义剧本】入口：更多剧本的第一个（用户 2026-11-01）
                 libNtve_gf_SetDialogItemText(g_boardBtn[i], StringToText("自定义剧本"), PlayerGroupAll());
                 libNtve_gf_SetDialogItemImage(g_boardPic[i], "botc_board_custom.dds", PlayerGroupAll());
+                DialogControlSetVisible(g_boardDiffP[i], PlayerGroupAll(), false);
+                DialogControlSetVisible(g_boardDiffS[i], PlayerGroupAll(), false);
             }
             else {
                 v = 0;
@@ -53403,6 +53830,11 @@ void BOTC_BoardRender () {
                 s = BOTC_BoardName(b);
                 libNtve_gf_SetDialogItemText(g_boardBtn[i], StringToText(s), PlayerGroupAll());
                 libNtve_gf_SetDialogItemImage(g_boardPic[i], BOTC_BoardPic(b), PlayerGroupAll());
+                // 【剧本难度】（用户 2026-11-06）：两行红字显示在板子按钮下方
+                libNtve_gf_SetDialogItemText(g_boardDiffP[i], StringToText("<c val=\"FF0000\">玩家难度：" + BOTC_BoardStar(BOTC_BoardPlayerDiff(b)) + "</c>"), PlayerGroupAll());
+                libNtve_gf_SetDialogItemText(g_boardDiffS[i], StringToText("<c val=\"FF0000\">说书人难度：" + BOTC_BoardStar(BOTC_BoardTellerDiff(b)) + "</c>"), PlayerGroupAll());
+                DialogControlSetVisible(g_boardDiffP[i], PlayerGroupAll(), true);
+                DialogControlSetVisible(g_boardDiffS[i], PlayerGroupAll(), true);
             }
             DialogControlSetVisible(g_boardBtn[i], PlayerGroupAll(), true);
             DialogControlSetVisible(g_boardPic[i], PlayerGroupAll(), true);
@@ -53413,10 +53845,14 @@ void BOTC_BoardRender () {
         if (i < 6) {
             DialogControlSetPosition(g_boardPic[i], PlayerGroupAll(), c_anchorTopLeft, 72 + (i * 310), 90);
             DialogControlSetPosition(g_boardBtn[i], PlayerGroupAll(), c_anchorTopLeft, 40 + (i * 310), 370);
+            DialogControlSetPosition(g_boardDiffP[i], PlayerGroupAll(), c_anchorTopLeft, 40 + (i * 310), 452);
+            DialogControlSetPosition(g_boardDiffS[i], PlayerGroupAll(), c_anchorTopLeft, 40 + (i * 310), 474);
         }
         else {
             DialogControlSetPosition(g_boardPic[i], PlayerGroupAll(), c_anchorTopLeft, 72 + ((i - 6) * 310), 500);
             DialogControlSetPosition(g_boardBtn[i], PlayerGroupAll(), c_anchorTopLeft, 40 + ((i - 6) * 310), 780);
+            DialogControlSetPosition(g_boardDiffP[i], PlayerGroupAll(), c_anchorTopLeft, 40 + ((i - 6) * 310), 862);
+            DialogControlSetPosition(g_boardDiffS[i], PlayerGroupAll(), c_anchorTopLeft, 40 + ((i - 6) * 310), 884);
         }
     }
     // 分类按钮：当前所在分类用【】标出来
@@ -54016,6 +54452,7 @@ void BOTC_AlchemistGuess (int p, int role) {
     g_alcBy = p;
     g_alcClaimDay[p] = g_nightNum;   // 公开说出猜测即算声称用掉（真身/假声称都一样，每人每天一次）
     BOTC_PubAnnounce("【炼金术士】" + BOTC_NameStr(p) + " 公开猜测 " + BOTC_NameStr(g_alcSeat) + " 是" + g_roleName[role] + "。");
+    BOTC_DeclareCdSet(p);
     // 谁都可以公开声称炼金术士；只有真正拥有这项能力且当前清醒的人产生效果。
     // 伪造声称不能覆盖真炼金术士已经记下的结果。
     if (!BOTC_HasAbility(p, 95)) {
@@ -54219,6 +54656,8 @@ void BOTC_CustomShowEditor () {
     for (i = 0; i < 13; i += 1) {
         DialogControlSetVisible(g_boardBtn[i], PlayerGroupAll(), false);
         DialogControlSetVisible(g_boardPic[i], PlayerGroupAll(), false);
+        DialogControlSetVisible(g_boardDiffP[i], PlayerGroupAll(), false);
+        DialogControlSetVisible(g_boardDiffS[i], PlayerGroupAll(), false);
     }
     DialogSetVisible(g_cDlg, PlayerGroupAll(), true);
 }
@@ -57410,6 +57849,7 @@ void BOTC_Deal () {
     // 【暴风捕手（113）】（用户 2026-10-11）：发完牌就给「保护的身份」打上免死标记 + 播报一次
     BOTC_StormSync();
     BOTC_BartenderSetup();         // 酒保：配板完成后随机指定一名合法的邻近善良玩家醉酒
+    BOTC_DxeSetup();               // 店小二（115）：随机发牌后放好熟客 / 醉酒（用户 2026-11-06）
     // 重新发牌后清掉旧的死亡红叉，所有人的魔典都刷新一遍
     for (i = 1; i <= 13; i += 1) {
         BOTC_GrimRender(g_who[i]);
@@ -58332,6 +58772,15 @@ void BOTC_MiCancelApply () {
         BOTC_BrokerAnswer(false);
         return;
     }
+    // 【店小二（115）】（用户 2026-11-06）：确认框点取消 = 不直接告知熟客 / 醉酒，改为手动填两名
+    if (g_miRole == 41 && g_miKind == 22) {
+        seat = g_miSeat;
+        g_miSeat = 0;
+        g_miRole = -1;
+        g_miKind = 0;
+        BOTC_DxeManualOpen(seat);
+        return;
+    }
     // 【疯子附加信息 / 假军团填写】（15 / 16 / 17 / 18 / 19）：点取消 = 这次不发送。
     if (g_miRole == 41 && (g_miKind == 15 || g_miKind == 16 || g_miKind == 17 || g_miKind == 18 || g_miKind == 19)) {
         g_evilA = 0;
@@ -58359,6 +58808,9 @@ void BOTC_MiCancelApply () {
     }
     // 【二选一醉酒】（用户 2026-10-16）：点取消 = 这次谁也不醉（只有中毒/酒鬼那次才给取消键）
     if (g_miRole == 807) {
+        if (g_dkKind == 3) {
+            BOTC_PmStore(g_teller, "【店小二】已取消，不更改醉酒标记。");
+        }
         g_miRole = -1;
         g_dkKind = 0;
         g_dkFrom = 0;
@@ -60468,6 +60920,7 @@ bool BOTC_Tick_Func (bool testConds, bool runActions) {
     BOTC_TimerTick();              // 时段倒计时走表
     BOTC_LaughTick();              // -laugh 公用冷却 + 复活动画（用户 2026-09-22）
     BOTC_GrimShareCdTick();        // 一键发送魔典：每个玩家独立的 15 秒冷却
+    BOTC_GateCdTick();             // 【防刷屏】声称 / 快进 / 屏蔽冷却和公聊禁言倒计时
     BOTC_ReqTick();                // 【私聊 / 换座位请求 15 秒超时 + 拒绝冷却】（用户 2026-11-02）
     BOTC_DeadPickTimeout();        // 月之子 / 呆瓜 的 60 秒兜底（用户 2026-09-21）
     BOTC_LeftCheck();              // 【玩家离开游戏】检测 → 公聊播一句（用户 2026-10-02）
