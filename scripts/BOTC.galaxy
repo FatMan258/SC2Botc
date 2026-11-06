@@ -49048,8 +49048,8 @@ void BOTC_DrunkPickOpen (int kind, int who, int a, int b) {
     }
     if (kind == 3) {
         ttl = "【店小二】把醉酒标记移到谁身上？";
-        note = "左 = " + ta + "　右 = " + tb + "　（点【取消】= 不更改醉酒标记）";
-        DialogControlSetVisible(g_miCancel, PlayerGroupSingle(g_teller), true);
+        note = "左 = " + ta + "　右 = " + tb + "　（必须选其中一人设为醉酒）";
+        DialogControlSetVisible(g_miCancel, PlayerGroupSingle(g_teller), false);
     }
     else if (BOTC_SeatImpaired(who)) {
         note = note + "　（他中毒/酒鬼：点【取消】= 这次谁也不醉）";
@@ -58807,9 +58807,12 @@ void BOTC_MiCancelApply () {
         return;
     }
     // 【二选一醉酒】（用户 2026-10-16）：点取消 = 这次谁也不醉（只有中毒/酒鬼那次才给取消键）
+    //   【店小二移醉酒】（用户 2026-11-06）：必须选两名玩家之一，点取消 / X 不生效，重新弹出面板。
     if (g_miRole == 807) {
         if (g_dkKind == 3) {
-            BOTC_PmStore(g_teller, "【店小二】已取消，不更改醉酒标记。");
+            BOTC_Notice(g_teller, "必须把「醉酒」标记移到这两名玩家之一。");
+            BOTC_DrunkPickOpen(3, g_dkFrom, g_dkA, g_dkB);
+            return;
         }
         g_miRole = -1;
         g_dkKind = 0;
