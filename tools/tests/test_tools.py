@@ -425,6 +425,23 @@ class RoleSpecTests(unittest.TestCase):
             source,
         )
 
+    def test_po_decline_bypasses_demon_target_lock(self) -> None:
+        source = (PROJECT_ROOT / "scripts" / "BOTC.galaxy").read_text(
+            encoding="utf-8-sig"
+        )
+        start = source.index("bool BOTC_DemonTargetLocked (int p) {")
+        end = source.index("\nvoid ", start)
+        body = source[start:end]
+        guard = body.index("if (g_poAsk[p] || g_limitedAsk[p]) {")
+        role = body.index("r = BOTC_ActRoleOf(p);")
+        self.assertLess(guard, role)
+
+        cancel_start = source.index("void BOTC_SkillCancel (int p) {")
+        cancel_end = source.index("\nvoid ", cancel_start)
+        cancel = source[cancel_start:cancel_end]
+        self.assertIn("BOTC_PoAskAnswer(p, false);", cancel)
+        self.assertIn("BOTC_GudiaoAnswer(p, false);", source)
+
     def test_lil_monsta_and_legion_use_target_pickers(self) -> None:
         source = (PROJECT_ROOT / "scripts" / "BOTC.galaxy").read_text(
             encoding="utf-8-sig"

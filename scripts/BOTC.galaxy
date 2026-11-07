@@ -49006,6 +49006,11 @@ bool BOTC_SelfForbidden (int r) {
 //   例外：小怪宝(112) / 军团(94) / 牙噶巴卜(133) 由说书人决定死亡；饕餮(154) 是多选面板需要点掉重选。
 bool BOTC_DemonTargetLocked (int p) {
     int r;
+    // 【珀 / 限次技能的是否发动面板】（用户 2026-11-07）：这时还没进入目标选择，
+    // 【否】必须交给 BOTC_PoAskAnswer / BOTC_LimitedDecline，不能被“恶魔目标不可取消”提前拦截。
+    if (g_poAsk[p] || g_limitedAsk[p]) {
+        return false;
+    }
     r = BOTC_ActRoleOf(p);
     if (r < 0 || BOTC_RoleTeam(r) != 3) {
         return false;
