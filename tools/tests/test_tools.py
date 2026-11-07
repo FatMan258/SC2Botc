@@ -725,6 +725,22 @@ class BluffPanelRegressionTests(unittest.TestCase):
             encoding="utf-8-sig"
         )
 
+        teller_ui_start = source.index("void BOTC_BluffTellerUI () {")
+        teller_ui_end = source.index("\n}\n", teller_ui_start)
+        teller_ui = source[teller_ui_start:teller_ui_end]
+        self.assertIn(
+            "DialogSetVisible(g_bluffDlg, PlayerGroupSingle(g_teller), true);",
+            teller_ui,
+        )
+
+        deal_start = source.index("void BOTC_Deal () {")
+        deal_end = source.index("\nvoid ", deal_start + 1)
+        deal = source[deal_start:deal_end]
+        self.assertIn(
+            "DialogSetVisible(g_bluffDlg, PlayerGroupSingle(g_teller), true);",
+            deal,
+        )
+
         self.assertGreaterEqual(
             source.count(
                 "DialogControlSetVisible(g_bluffSeat[i], PlayerGroupSingle(g_teller), true);"

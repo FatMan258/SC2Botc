@@ -52063,6 +52063,10 @@ void BOTC_ShuffleSeats () {
 //   这里统一"先全场收掉、再单独发给现在的说书人"，并把 3 格的内容按数据重画一遍。
 void BOTC_BluffTellerUI () {
     int i;
+    // 【右下角面板整体兜底】（用户 2026-11-06）：前面的 HideAllUI / 新局清理可能只收回
+    // 父对话框，若这里只重发三个子控件，说书人就会看到“面板不见了”。每次重载说书人
+    // 专属控件时，连带把整块不在场身份面板重新显示给当前说书人。
+    DialogSetVisible(g_bluffDlg, PlayerGroupSingle(g_teller), true);
     for (i = 0; i < 3; i += 1) {
         DialogControlSetVisible(g_bluffSeat[i], PlayerGroupAll(), false);
         DialogControlSetVisible(g_lbluffSeat[i], PlayerGroupAll(), false);
@@ -56086,6 +56090,7 @@ void BOTC_Deal () {
     g_availN = 0;
     BOTC_BluffRender();                                        // 收到过不在场身份的玩家那份：刷成空的 3 格
     // 【保留右下角不在场身份面板】（用户 2026-11-05）：手动发送入口继续使用这块面板。
+    DialogSetVisible(g_bluffDlg, PlayerGroupSingle(g_teller), true);
     // 【气球驾驶员（72）】（用户 2026-09-23）：跟教父一样每局掷一次 50/50（+0 / +1 外来者）
     if (g_balPlusSeeded == false) {
         g_balPlus = (RandomInt(1, 2) == 1);
