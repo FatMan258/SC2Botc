@@ -383,10 +383,14 @@ class RoleSpecTests(unittest.TestCase):
             "int[14]     g_wardenBy;",
             "g_roleName[163]",
             "g_roleTargets[163] = 3;",
-            "g_noAllFirst[163] = 26;",
-            "g_noAllOther[163] = 124;",
+            "g_noAllFirst[163] = 48;",
+            "g_noAllOther[163] = 69;",
             "g_tokName[201]",
             "g_tokName[202]",
+            "g_tokName[204]",
+            "g_deathN = 24;",
+            "g_deathTok[23] = 204;",
+            "g_roleDeathTok[163] = 204;",
             "if (r == 163) {",
             "BOTC_WardenResolve(p, w1, w2, w3)",
             "BOTC_WardenOpenChoice(p)",
@@ -398,6 +402,15 @@ class RoleSpecTests(unittest.TestCase):
             self.assertIn(marker, source)
         self.assertNotIn("典狱长至少要选择一名玩家", source)
         self.assertNotIn("if (!g_wardenAskBy", source)
+        choice_start = source.index("void BOTC_WardenKillChoice (int q) {")
+        choice_end = source.index("\nvoid ", choice_start + 1)
+        choice = source[choice_start:choice_end]
+        self.assertNotIn("g_wardenPick", choice)
+        self.assertIn("BOTC_WardenKillChoice(q);", source)
+        self.assertIn(
+            "BOTC_MiSeatFieldsReset();\n    g_miSeat = p;\n    g_miRole = 814;",
+            source,
+        )
 
     def test_mastermind_overtime_win_is_not_overridden(self) -> None:
         source = (PROJECT_ROOT / "scripts" / "BOTC.galaxy").read_text(
@@ -411,6 +424,44 @@ class RoleSpecTests(unittest.TestCase):
             "if (!g_manualWin && !g_mmExtra && side != 0",
             source,
         )
+
+    def test_po_decline_bypasses_demon_target_lock(self) -> None:
+        source = (PROJECT_ROOT / "scripts" / "BOTC.galaxy").read_text(
+            encoding="utf-8-sig"
+        )
+        start = source.index("bool BOTC_DemonTargetLocked (int p) {")
+        end = source.index("\nvoid ", start)
+        body = source[start:end]
+        guard = body.index("if (g_poAsk[p] || g_limitedAsk[p]) {")
+        role = body.index("r = BOTC_ActRoleOf(p);")
+        self.assertLess(guard, role)
+
+        cancel_start = source.index("void BOTC_SkillCancel (int p) {")
+        cancel_end = source.index("\nvoid ", cancel_start)
+        cancel = source[cancel_start:cancel_end]
+        self.assertIn("BOTC_PoAskAnswer(p, false);", cancel)
+        self.assertIn("BOTC_GudiaoAnswer(p, false);", source)
+
+    def test_lil_monsta_and_legion_use_target_pickers(self) -> None:
+        source = (PROJECT_ROOT / "scripts" / "BOTC.galaxy").read_text(
+            encoding="utf-8-sig"
+        )
+        for marker in (
+            "BOTC_LmDetectNoDemon();\n    if (g_lmOn) {\n        BOTC_LmGroupChat();",
+            "if (g_lmOn && q == g_lmSeat) {\n        r = 112;",
+            "showRole[112] = true;",
+            "if (g_noAllFirst[112] <= 0) {\n            g_noAllFirst[112] = 26;",
+            "if (g_noAllOther[112] <= 0) {\n            g_noAllOther[112] = 59;",
+            "g_lmOn = true;\n        g_lmSeat = seat;",
+            "void BOTC_ManualDeathOpen (int src, int role) {",
+            "g_miRole = 816;",
+            "BOTC_ManualDeathOpen(best, bestRole);",
+            "BOTC_ManualDeathPick(q);",
+            "BOTC_MarkDeathQuietSrc(q, 1, 1, g_mdRole);",
+            "g_roleDeathTok[112] = 132;",
+            "g_roleDeathTok[94] = 115;",
+        ):
+            self.assertIn(marker, source)
 
     def test_half_immortal_redirect_uses_dedicated_prompt(self) -> None:
         source = (PROJECT_ROOT / "scripts" / "BOTC.galaxy").read_text(
@@ -725,6 +776,22 @@ class BluffPanelRegressionTests(unittest.TestCase):
             encoding="utf-8-sig"
         )
 
+        teller_ui_start = source.index("void BOTC_BluffTellerUI () {")
+        teller_ui_end = source.index("\n}\n", teller_ui_start)
+        teller_ui = source[teller_ui_start:teller_ui_end]
+        self.assertIn(
+            "DialogSetVisible(g_bluffDlg, PlayerGroupSingle(g_teller), true);",
+            teller_ui,
+        )
+
+        deal_start = source.index("void BOTC_Deal () {")
+        deal_end = source.index("\nvoid ", deal_start + 1)
+        deal = source[deal_start:deal_end]
+        self.assertIn(
+            "DialogSetVisible(g_bluffDlg, PlayerGroupSingle(g_teller), true);",
+            deal,
+        )
+
         self.assertGreaterEqual(
             source.count(
                 "DialogControlSetVisible(g_bluffSeat[i], PlayerGroupSingle(g_teller), true);"
@@ -757,15 +824,17 @@ class MergeRegressionTests(unittest.TestCase):
         gudiao_start = source.index("void BOTC_GudiaoOpen (int p) {")
         gudiao_end = source.index("void BOTC_GudiaoAnswer (int p, bool change) {", gudiao_start)
         gudiao_open = source[gudiao_start:gudiao_end]
-        self.assertIn("BOTC_GudiaoClose();", gudiao_open)
+        self.assertIn("g_limitedAsk[p] = true;", gudiao_open)
         self.assertIn(
-            'libNtve_gf_SetDialogItemText(g_miTitle, StringToText("【蛊雕】" + BOTC_NameStr(p) + " 今晚是否改变方向？"), PlayerGroupSingle(g_teller));',
+            'libNtve_gf_SetDialogItemText(g_skillTitle[p], StringToText("是否发动技能（改变方向）"), PlayerGroupSingle(g_who[p]));',
             gudiao_open,
         )
         self.assertIn(
-            "DialogSetVisible(g_miDlg, PlayerGroupSingle(g_teller), true);",
+            "DialogSetVisible(g_skillDlg[p], PlayerGroupSingle(g_who[p]), true);",
             gudiao_open,
         )
+        self.assertIn("BOTC_GudiaoAnswer(p, true);", source)
+        self.assertIn("BOTC_GudiaoAnswer(p, false);", source)
 
     def test_private_chat_navigation_is_not_hidden_by_length_guess(self) -> None:
         source = (PROJECT_ROOT / "scripts" / "BOTC.galaxy").read_text(
@@ -822,6 +891,26 @@ class MergeRegressionTests(unittest.TestCase):
             self.assertIn(marker, source)
         self.assertNotIn("DialogSetPosition(g_abNewDlg, c_anchorCenter", source)
         self.assertNotIn("DialogSetPosition(g_noDlg, c_anchorCenter", source)
+
+    def test_role_card_ability_text_has_one_extra_line(self) -> None:
+        source = (PROJECT_ROOT / "scripts" / "BOTC.galaxy").read_text(
+            encoding="utf-8-sig"
+        )
+        self.assertIn(
+            "DialogControlSetPosition(g_abNewName[idx], PlayerGroupSingle(p), c_anchorTopLeft, x + 92, y);",
+            source,
+        )
+        self.assertIn(
+            "DialogControlSetPosition(g_abNewAb[idx], PlayerGroupSingle(p), c_anchorTopLeft, x + 92, y + 26);",
+            source,
+        )
+        self.assertIn(
+            "DialogControlSetSize(g_abNewAb[idx], PlayerGroupSingle(p), w, 96);",
+            source,
+        )
+        self.assertIn("50 + ((i % 7) * 124), 460);", source)
+        self.assertIn("446 + ((i / 3) * 124), 250);", source)
+        self.assertIn("726 + ((i / 3) * 124), 250);", source)
 
     def test_pukka_bad_action_keeps_last_effective_target(self) -> None:
         source = (PROJECT_ROOT / "scripts" / "BOTC.galaxy").read_text(
