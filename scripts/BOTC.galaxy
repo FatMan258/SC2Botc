@@ -1045,6 +1045,10 @@ timer       g_tCult;
 trigger     g_tCultTrig;
 bool[14]    g_autoWoke;      // 自动唤醒：今晚已经轮到他了
 bool[14]    g_manualDeathDone; // 本夜已经提示过「手动打死亡 token」的非唤醒节点
+bool        g_mdOpen;           // 小怪宝 / 军团：说书人正在点选本次死亡目标
+int         g_mdRole;           // 112 = 小怪宝，94 = 军团
+int         g_mdSrc;            // 本次非唤醒行动对应的座位（小怪宝为照看者）
+bool[14]    g_mdPick;           // 已点选的死亡目标（按逻辑座位）
 bool        g_autoOn;        // 自动唤醒：这一夜已经开过
 bool        g_wakeHintSent;  // 本夜已经把「今晚要唤醒谁」发到说书人私聊（避免入夜 + 首次点唤醒重复发）
 int         g_autoLast;      // 自动唤醒：上一个被唤醒的人（0 = 没有）
@@ -2750,6 +2754,11 @@ void   BOTC_LimitedDecline (int p);
 bool   BOTC_MissionaryActive ();              // 传教士（103）：现在有没有「存活且清醒」的传教士
 void   BOTC_HfSetupFirstNight ();             // 首夜设置：村夫醉酒 / 暴风捕手
 void   BOTC_HfWakeAction (int q);             // 唤醒时的附加动作（国王问信息 / 小怪宝提醒）
+void   BOTC_ManualDeathOpen (int src, int role); // 小怪宝 / 军团：说书人点选死亡目标
+void   BOTC_ManualDeathPick (int q);
+void   BOTC_ManualDeathRender ();
+void   BOTC_ManualDeathConfirm ();
+void   BOTC_ManualDeathCancel ();
 bool   BOTC_StormInGame ();                   // 暴风捕手（113）：本局板子上有没有他（含传奇角色那条路）
 void   BOTC_StormSync ();                     // 暴风捕手（113）：算保护座位 + 打「免死（暴风捕手）」+ 正式开局播报
 bool   BOTC_StormEvilStep ();                 // 暴风捕手：首夜在「邪恶互认」之前走的一步（你得知 A 是 B）
@@ -7625,6 +7634,25 @@ bool BOTC_ClickDo (bool testConds, bool runActions) {
             }
         }
     }
+    // 【典狱长·技能目标】（用户 2026-11-07）：无人死于处决时，点场上一名判罚候选
+    // 结算上一批死亡。该点击只读取 g_wardenCand，不会改写本夜新选择的 g_wardenPick。
+    if (p == g_teller && g_wardenAsk) {
+        for (q = 2; q <= 13; q += 1) {
+            if (c == g_grimSeat[q]) {
+                BOTC_WardenKillChoice(q);
+                return true;
+            }
+        }
+    }
+    // 【小怪宝 / 军团·技能目标】（用户 2026-11-07）：在各自非唤醒夜序节点点选死亡目标。
+    if (p == g_teller && g_mdOpen) {
+        for (q = 2; q <= 13; q += 1) {
+            if (c == g_grimSeat[q]) {
+                BOTC_ManualDeathPick(q);
+                return true;
+            }
+        }
+    }
     // 说书人正在标记处决 / 死亡：座位点击优先当作标记，不触发身份选择 / 提名
     if (p == g_teller && (g_execPick || g_deadPick)) {
         // 「说书人」那一格：处决标记 / 死亡标记模式下点它 = 标他自己（无神论者那条路）
@@ -11650,6 +11678,18 @@ void BOTC_NightOrderRender (int p) {
             showRole[r] = true;
         }
     }
+    // 【全员追忆 / 小怪宝】（用户 2026-11-07）：照看者本身的魔典身份是爪牙，
+    // 角色 112 不会发到任何玩家手里；只要本局已识别为小怪宝局，就保证夜序表列出它。
+    if (g_lmOn || b == 13) {
+        showRole[112] = true;
+        // 运行时兜底：即使有旧的板子初始化或读档把这两格清成 0，夜序表也仍能显示小怪宝。
+        if (g_noAllFirst[112] <= 0) {
+            g_noAllFirst[112] = 26;
+        }
+        if (g_noAllOther[112] <= 0) {
+            g_noAllOther[112] = 59;
+        }
+    }
     g_noMaxRows[p] = 0;
     // 左栏第 0 行：固定（跟着翻页平移，翻下去就藏起来）
     libNtve_gf_SetDialogItemText(g_noName[base], StringToText("爪牙与恶魔互相得知"), PlayerGroupSingle(p));
@@ -11842,7 +11882,7 @@ void BOTC_BuildAbNew () {
             g_abNewName[base + i] = BOTC_NewLabel(g_abNewDlg[p], 340, 26, 110, 64, StringToText(""));
             libNtve_gf_SetDialogItemStyle(g_abNewName[base + i], "ModLeftSize20Bold", PlayerGroupAll());
             libNtve_gf_SetDialogItemAcceptMouse(g_abNewName[base + i], false, PlayerGroupAll());
-            g_abNewAb[base + i] = BOTC_NewLabel(g_abNewDlg[p], 460, 78, 110, 92, StringToText(""));
+            g_abNewAb[base + i] = BOTC_NewLabel(g_abNewDlg[p], 460, 96, 110, 92, StringToText(""));
             libNtve_gf_SetDialogItemStyle(g_abNewAb[base + i], "ModLeftSize16Bold", PlayerGroupAll());
             libNtve_gf_SetDialogItemAcceptMouse(g_abNewAb[base + i], false, PlayerGroupAll());
             DialogControlSetVisible(g_abNewHit[base + i], PlayerGroupAll(), false);
@@ -11871,10 +11911,10 @@ void BOTC_BuildAbNew () {
                 DialogControlSetVisible(g_glossBodyCtl[(p * 24) + (i * 3) + f], PlayerGroupAll(), false);
             }
         }
-        g_abNewPrev[p] = BOTC_NewButton(g_abNewDlg[p], 200, 40, 20, 1000, "上一页");
-        g_abNewNext[p] = BOTC_NewButton(g_abNewDlg[p], 200, 40, 240, 1000, "下一页");
-        g_abNewClose[p] = BOTC_NewButton(g_abNewDlg[p], 160, 40, 460, 1000, "关闭");
-        g_abNewStarNote[p] = BOTC_NewLabelC(g_abNewDlg[p], 1140, 26, 20, 952, StringToText("每个夜晚* 代表从第二夜开始"));
+        g_abNewPrev[p] = BOTC_NewButton(g_abNewDlg[p], 200, 40, 20, 1012, "上一页");
+        g_abNewNext[p] = BOTC_NewButton(g_abNewDlg[p], 200, 40, 240, 1012, "下一页");
+        g_abNewClose[p] = BOTC_NewButton(g_abNewDlg[p], 160, 40, 460, 1012, "关闭");
+        g_abNewStarNote[p] = BOTC_NewLabelC(g_abNewDlg[p], 1140, 26, 20, 978, StringToText("每个夜晚* 代表从第二夜开始"));
         libNtve_gf_SetDialogItemStyle(g_abNewStarNote[p], "ModLeftSize20Bold", PlayerGroupAll());
         libNtve_gf_SetDialogItemAcceptMouse(g_abNewStarNote[p], false, PlayerGroupAll());
         DialogControlSetVisible(g_abNewStarNote[p], PlayerGroupAll(), false);
@@ -11898,12 +11938,12 @@ void BOTC_AbNewEntry (int p, int slot, int r, int x, int y, int w) {
     DialogControlSetPosition(g_abNewHit[idx], PlayerGroupSingle(p), c_anchorTopLeft, x, y);
     DialogControlSetPosition(g_abNewIcon[idx], PlayerGroupSingle(p), c_anchorTopLeft, x, y);
     libNtve_gf_SetDialogItemImage(g_abNewIcon[idx], BOTC_NightIconName(r), PlayerGroupSingle(p));
-    DialogControlSetPosition(g_abNewName[idx], PlayerGroupSingle(p), c_anchorTopLeft, x + 92, y + 4);
-    DialogControlSetPosition(g_abNewAb[idx], PlayerGroupSingle(p), c_anchorTopLeft, x + 92, y + 34);
+    DialogControlSetPosition(g_abNewName[idx], PlayerGroupSingle(p), c_anchorTopLeft, x + 92, y);
+    DialogControlSetPosition(g_abNewAb[idx], PlayerGroupSingle(p), c_anchorTopLeft, x + 92, y + 26);
     // 【条目宽度 w】（用户 2026-10-04）：爪牙 / 恶魔 那两段改成**三列**，文字框必须跟着变窄，
     //   否则会压到右边那一列的图标上。镇民 / 外来者 / 传奇仍然用 460（两列）。
     DialogControlSetSize(g_abNewName[idx], PlayerGroupSingle(p), w, 26);
-    DialogControlSetSize(g_abNewAb[idx], PlayerGroupSingle(p), w, 78);
+    DialogControlSetSize(g_abNewAb[idx], PlayerGroupSingle(p), w, 96);
     libNtve_gf_SetDialogItemText(g_abNewName[idx], TextWithColor(StringToText(g_roleName[r]), BOTC_RoleTeamColor(r)), PlayerGroupSingle(p));
     libNtve_gf_SetDialogItemText(g_abNewAb[idx], BOTC_KeyColor(g_tipAbility[r]), PlayerGroupSingle(p));
     DialogControlSetVisible(g_abNewHit[idx], PlayerGroupSingle(p), true);
@@ -12464,7 +12504,7 @@ void BOTC_AbNewRender (int p) {
         shown = g_gridCatN[t] - start;
         if (shown > cap) { shown = cap; }
         for (i = 0; i < shown; i += 1) {
-            BOTC_AbNewEntry(p, i, g_gridCatRole[(t * 128) + start + i], 20 + ((i / 7) * 580), 50 + ((i % 7) * 110), 460);
+            BOTC_AbNewEntry(p, i, g_gridCatRole[(t * 128) + start + i], 20 + ((i / 7) * 580), 50 + ((i % 7) * 124), 460);
         }
         BOTC_AbCatCtrlRender(p, 0);
     }
@@ -12493,7 +12533,7 @@ void BOTC_AbNewRender (int p) {
             }
             if (t == 3) {
                 libNtve_gf_SetDialogItemText(g_abNewSec[sb + t - 1], TextWithColor(StringToText("邪恶阵营·恶魔"), BOTC_RoleTeamColor(t)), PlayerGroupSingle(p));
-                DialogControlSetPosition(g_abNewSec[sb + t - 1], PlayerGroupSingle(p), c_anchorTopLeft, 20, 686);
+                DialogControlSetPosition(g_abNewSec[sb + t - 1], PlayerGroupSingle(p), c_anchorTopLeft, 20, 696);
             }
             DialogControlSetVisible(g_abNewSec[sb + t - 1], PlayerGroupSingle(p), (g_gridCatN[t] > 0));
             for (i = 0; i < shown; i += 1) {
@@ -12502,10 +12542,10 @@ void BOTC_AbNewRender (int p) {
                 }
                 else {
                     if (t == 2) {
-                        BOTC_AbNewEntry(p, base + i, g_gridCatRole[(t * 128) + start + i], 20 + ((i % 3) * 385), 446 + ((i / 3) * 110), 250);
+                        BOTC_AbNewEntry(p, base + i, g_gridCatRole[(t * 128) + start + i], 20 + ((i % 3) * 385), 446 + ((i / 3) * 124), 250);
                     }
                     else {
-                        BOTC_AbNewEntry(p, base + i, g_gridCatRole[(t * 128) + start + i], 20 + ((i % 3) * 385), 716 + ((i / 3) * 110), 250);
+                        BOTC_AbNewEntry(p, base + i, g_gridCatRole[(t * 128) + start + i], 20 + ((i % 3) * 385), 726 + ((i / 3) * 124), 250);
                     }
                 }
             }
@@ -12867,8 +12907,8 @@ void BOTC_NightGo () {
         BOTC_DissolveAllSess(false);
         BOTC_ChatModeSet(2);
         BOTC_PullAllToPublic();
-        // 【小怪宝】（用户 2026-10-22）：第 1 夜不自动打开恶人频道；从第 2 夜起才自动拉群。
-        if (g_lmOn && g_nightNum > 1) {
+        // 【小怪宝】（用户 2026-11-07）：首夜也要自动打开恶人频道，之后每夜入夜继续自动拉群。
+        if (g_lmOn) {
             BOTC_LmGroupChat();
         }
         // 邪恶小窗：入夜自动关掉（用户 2026-09-17）
@@ -13412,7 +13452,7 @@ bool BOTC_LmHasDemon () {
 // 【小怪宝开局检测】（用户 2026-10-22）：
 //   正式开始后按**真实身份**扫描。场上没有任何恶魔、但至少有一名爪牙 → 默认这是小怪宝局。
 //   不能看玩家眼前的认知身份（酒鬼 / 疯子 / 提线木偶），所以必须统一走 BOTC_SeatTrueRole。
-//   检测只负责设局，不会在这里拉私聊；第 1 夜由说书人按正常流程指定照看者。
+//   检测只负责设局；正式开始流程随后会调用 BOTC_LmGroupChat() 自动拉群。
 void BOTC_LmDetectNoDemon () {
     int q;
     int r;
@@ -13441,7 +13481,7 @@ void BOTC_LmDetectNoDemon () {
     // 召唤师局在前两夜会故意处于“无恶魔、有爪牙”状态，不能误认成小怪宝局。
     if (demonN == 0 && minionN > 0 && !BOTC_SummonerWaiting()) {
         g_lmOn = true;
-        BOTC_PmStore(g_teller, "【小怪宝】开局检测：场上没有恶魔、共有 " + IntToString(minionN) + " 名爪牙 → 本局按小怪宝局处理。第 1 夜不会自动打开恶人频道。");
+        BOTC_PmStore(g_teller, "【小怪宝】开局检测：场上没有恶魔、共有 " + IntToString(minionN) + " 名爪牙 → 本局按小怪宝局处理。首夜会自动打开恶人频道。");
     }
 }
 
@@ -13683,9 +13723,12 @@ void BOTC_GameStartGo () {
     // BOTC_AutoWakeEvilStep()，严格按官网当前夜序，在对应位次逐次发出。
     BOTC_DamselPoisonSync();       // 只先结算落难少女相克中毒，不提前告诉爪牙
     BOTC_HfSetupFirstNight();      // 【何方教众（板子 9）】：村夫醉酒 / 暴风捕手
-    // 【小怪宝】（用户 2026-10-22）：正式开始只做「无恶魔、有爪牙」检测；
-    //   第 1 夜不自动拉私聊，恶人频道从第 2 夜起由入夜流程打开。
+    // 【小怪宝】（用户 2026-11-07）：正式开始先识别小怪宝局，并立刻自动打开恶人频道。
+    //   之后每次入夜也会继续自动拉群。
     BOTC_LmDetectNoDemon();
+    if (g_lmOn) {
+        BOTC_LmGroupChat();
+    }
     // 智能说书：占卜师要是开局就中毒 / 是酒鬼，先把「假干扰项」打上（日志里有【诊断占卜师】那行）
     BOTC_FtFakeSync();
     BOTC_BootleggerAnnounce();     // 【私货商人】自定义规则：正式开局公屏播报
@@ -18509,7 +18552,7 @@ void BOTC_InitRoleTexts () {
     g_tipLine[3791] = StringToText("典狱长对“有罪之人”做出判罚，以连坐或择其一的方式。");
     g_tipLine[3792] = StringToText("【规则细节】");
     g_tipLine[3793] = StringToText("· 上一批中有人白天死于处决时，除该死者外的其他上一批玩家当晚死亡。");
-    g_tipLine[3794] = StringToText("· 若上一批无人死于处决，则由说书人在上一批仍能死亡的玩家中选择一人，在典狱长行动轮次死亡。");
+    g_tipLine[3794] = StringToText("· 若上一批无人死于处决，说书人在技能目标面板中选择一名上一批仍能死亡的玩家；该玩家死亡并打上「死亡（典狱长）」，这不是本夜新选择的判罚目标。");
     g_tipLine[3795] = StringToText("· 相克：召唤师可以在第二个夜晚召唤典狱长来替代第三个夜晚的召唤。");
     g_tipRoleAt[163] = 3787; g_tipRoleN[163] = 9;
     g_tipAbility[126] = StringToText("与你邻近的两名镇民玩家会在其首次死亡时被当作仍然存活。[-1 外来者]");
@@ -24267,7 +24310,7 @@ g_jinxCount = 139;
     // 死亡类型表：**大类** = kind（1 夜间 / 2 白天 / 3 处决）+ byDemon（是不是恶魔造成）；
     //   **小类** = 每条自己的 token 槽（面板上那一格）。大类决定判定（守鸦人 / 贤者看 kind + byDemon），
     //   小类决定「具体是哪一种死」（自刀传位只认 g_deathImp 的那一条）。
-g_deathN = 23;    // 道士的专属死因走角色专属 token 143，不塞进大类表；牙噶巴卜 / 奥赫 / 卡扎力 / 书生 / 饕餮见末几条
+    g_deathN = 24;    // 道士的专属死因走角色专属 token 143，不塞进大类表；牙噶巴卜 / 奥赫 / 卡扎力 / 书生 / 饕餮 / 典狱长见末几条
     // 大类：死亡[夜间/恶魔]
     g_deathTok[0] = 16;   g_deathKind[0] = 1;   g_deathByDemon[0] = 1;   g_deathImp[0] = 1;   // 死亡（小恶魔）---- 自刀传位只认这一条
     g_deathTok[1] = 21;   g_deathKind[1] = 1;   g_deathByDemon[1] = 1;   g_deathImp[1] = 0;   // 死亡（普卡）---- 同样夜间 / 恶魔杀，但不传位
@@ -24300,6 +24343,7 @@ g_deathTok[9] = 67;   g_deathKind[9] = 1;   g_deathByDemon[9] = 1;   g_deathImp[
     g_deathTok[20] = 160; g_deathKind[20] = 1; g_deathByDemon[20] = 1; g_deathImp[20] = 0;  // 死亡（卡扎力）：夜间、恶魔杀
     g_deathTok[21] = 172; g_deathKind[21] = 1; g_deathByDemon[21] = 0; g_deathImp[21] = 0;  // 死亡（书生）：夜间、非恶魔攻击
     g_deathTok[22] = 175; g_deathKind[22] = 1; g_deathByDemon[22] = 1; g_deathImp[22] = 0;  // 死亡（饕餮）：夜间、恶魔攻击
+    g_deathTok[23] = 204; g_deathKind[23] = 1; g_deathByDemon[23] = 1; g_deathImp[23] = 0;  // 死亡（典狱长）：夜间、恶魔能力
     // 【角色 → 它专属的死亡 token】（用户 2026-09-20）：有专属死因的角色，死亡时打自己那一格；
     //   没有的（例如镇长替死）继续用大类 token（死亡（夜间·其他）这种）。
     for (i = 0; i <= 163; i += 1) {
@@ -24339,6 +24383,7 @@ g_deathTok[9] = 67;   g_deathKind[9] = 1;   g_deathByDemon[9] = 1;   g_deathImp[
     g_roleDeathTok[134] = 159;  // 奥赫
     g_roleDeathTok[135] = 160;  // 卡扎力
     g_roleDeathTok[154] = 175;  // 饕餮
+    g_roleDeathTok[163] = 204;  // 典狱长
 
     // 21..31 先留空：以后新板子要加 token 就从这里往后填（名字空着 = 面板里不出现这一格）
     for (i = 21; i <= 31; i += 1) {
@@ -24556,6 +24601,7 @@ g_tokName[119] = "即将被处决（军团）"; g_tokShort[119] = "即将被处�
     g_tokName[200] = "盘璇（蛊雕）";             g_tokShort[200] = "盘璇";     g_tokIcon[200] = "botc_tk162.dds"; g_tokRole[200] = 162;
     g_tokName[201] = "判罚（典狱长）";           g_tokShort[201] = "判罚";     g_tokIcon[201] = "botc_tk163.dds"; g_tokRole[201] = 163;
     g_tokName[202] = "死于今日（典狱长）";       g_tokShort[202] = "死于今日"; g_tokIcon[202] = "botc_tk163.dds"; g_tokRole[202] = 163;
+    g_tokName[204] = "死亡（典狱长）";           g_tokShort[204] = "典狱长死亡"; g_tokIcon[204] = "botc_tk163.dds"; g_tokRole[204] = 163;
     // 【全员追忆 · 猜角色】（用户 2026-11-06）：猜对后放在说书人魔典上
     g_tokName[203] = "猜对了";                  g_tokShort[203] = "猜对了";   g_tokIcon[203] = "botc_tk_good.dds"; g_tokRole[203] = -1;
     g_tokName[148] = "活尸（赶尸人）";        g_tokShort[148] = "活尸";        g_tokIcon[148] = "botc_tk126.dds"; g_tokRole[148] = 126;
@@ -25423,8 +25469,8 @@ g_noAllOther[102] = 28;     // 恐惧之灵（其他夜第 28）
     g_noAllOther[159] = 4;    // 掮客：水手之前
     g_noAllFirst[162] = 26;   // 蛊雕：投毒者之后，先于多数镇民信息位
     g_noAllOther[162] = 1;    // 蛊雕：先施加蛊毒，再让目标使用能力
-    g_noAllFirst[163] = 26;   // 典狱长：首夜只登记第一批判罚
-    g_noAllOther[163] = 124;  // 典狱长：夜间较后结算上一批判罚
+    g_noAllFirst[163] = 48;   // 典狱长：牙噶巴卜之后、熊孩子之前
+    g_noAllOther[163] = 69;   // 典狱长：所有恶魔之后、书生之前
     g_noAllOther[137] = 0;    // 瘟疫医生已改为白板：不占夜序
     // 赶尸人（126）是纯被动，不占夜序。
     // 变脸师（117）/ 悟道者（118）：官方表里没有他们自己的夜序 → 不占位次（拿到的能力按那个角色排）
@@ -36585,8 +36631,11 @@ int BOTC_NightOrderOf (int q) {
     if (BOTC_IsLunatic(q)) {
         r = 38;
     }
-    if (BOTC_SeatTrueRole(q) == 112 && g_tokOn[(((g_teller * 14) + q) * 256) + 134]) {
-        r = 112;                                // 照看小怪宝的爪牙：按「小怪宝」那一格行动
+    // 【小怪宝】（用户 2026-11-07）：真正行动的是 g_lmSeat 指向的照看者。
+    // 照看者自己的真实角色是爪牙，不能再用「真身 == 112」判断，否则全员追忆等
+    // 没有玩家实际持有角色 112 的局里，会整段漏掉小怪宝的夜序。
+    if (g_lmOn && q == g_lmSeat) {
+        r = 112;
     }
     if (r < 0 || r > 163) {
         return 0;
@@ -42124,6 +42173,11 @@ void BOTC_ManInfoOk () {
     int tru;                      // 数学家核对用的正确答案
     int i;
 
+    if (g_miRole == 816) {
+        BOTC_ManualDeathConfirm();
+        return;
+    }
+
     // 【半仙（158）】不占用技能三目标面板，避免与典狱长等多选角色互相覆盖。
     if (g_miRole == 815) {
         seat = g_miSeat;
@@ -46319,6 +46373,16 @@ void BOTC_LimitedAccept (int p) {
         return;
     }
     r = BOTC_ActRoleOf(p);
+    if (g_limitedAsk[p] && r == 162) {
+        g_limitedAsk[p] = false;
+        g_skillPicking[p] = false;
+        g_skillT1[p] = 0;
+        g_skillT2[p] = 0;
+        g_skillT3[p] = 0;
+        DialogSetVisible(g_skillDlg[p], PlayerGroupSingle(g_who[p]), false);
+        BOTC_GudiaoAnswer(p, true);
+        return;
+    }
     if (!g_limitedAsk[p] || !BOTC_NightLimitRole(r)) {
         return;
     }
@@ -46359,15 +46423,21 @@ void BOTC_LimitedAccept (int p) {
 }
 
 void BOTC_LimitedDecline (int p) {
+    int r;
     if (!g_limitedAsk[p]) {
         return;
     }
+    r = BOTC_ActRoleOf(p);
     g_limitedAsk[p] = false;
     g_skillPicking[p] = false;
     g_skillT1[p] = 0;
     g_skillT2[p] = 0;
     g_skillT3[p] = 0;
     DialogSetVisible(g_skillDlg[p], PlayerGroupSingle(g_who[p]), false);
+    if (r == 162) {
+        BOTC_GudiaoAnswer(p, false);
+        return;
+    }
     BOTC_Notice(g_who[p], "这次不发动技能。");
     BOTC_PmStore(g_teller, "【限次技能】" + BOTC_NameStr(p) + " 选择这次不发动，本局机会仍然保留。");
 }
@@ -47084,6 +47154,156 @@ bool BOTC_ManualDeathTokenRole (int r) {
     return (r == 94 || r == 112 || r == 133 || r == 28 || r == 36 || r == 22 || r == 35);
 }
 
+string BOTC_ManualDeathSelectedText () {
+    int q;
+    string s;
+    s = "";
+    for (q = 2; q <= 13; q += 1) {
+        if (!g_mdPick[q]) {
+            continue;
+        }
+        if (StringLength(s) > 0) {
+            s = s + "、";
+        }
+        s = s + BOTC_NameStr(q);
+    }
+    if (s == "") {
+        return "尚未选择";
+    }
+    return s;
+}
+
+void BOTC_ManualDeathRender () {
+    string title;
+    string note;
+    if (!g_mdOpen) {
+        return;
+    }
+    if (g_mdRole == 112) {
+        title = "【小怪宝·技能目标】点击一名存活玩家死亡";
+        note = "再次点击同一玩家可取消；确认后打「死亡（小怪宝）」。已选：" + BOTC_ManualDeathSelectedText();
+    }
+    else {
+        title = "【军团·技能目标】点击任意数量的存活玩家死亡";
+        note = "再次点击可取消该目标；确认后逐个打「死亡（军团）」。已选：" + BOTC_ManualDeathSelectedText();
+    }
+    libNtve_gf_SetDialogItemText(g_miTitle, StringToText(title), PlayerGroupSingle(g_teller));
+    libNtve_gf_SetDialogItemText(g_miNote, StringToText(note), PlayerGroupSingle(g_teller));
+}
+
+void BOTC_ManualDeathOpen (int src, int role) {
+    int q;
+    if (src < 2 || src > 13 || (role != 112 && role != 94)) {
+        return;
+    }
+    BOTC_MiSeatFieldsReset();
+    g_miSeat = src;
+    g_miRole = 816;
+    g_miKind = role;
+    g_mdOpen = true;
+    g_mdRole = role;
+    g_mdSrc = src;
+    for (q = 0; q <= 13; q += 1) {
+        g_mdPick[q] = false;
+    }
+    DialogControlSetVisible(g_miEdit, PlayerGroupSingle(g_teller), false);
+    DialogControlSetVisible(g_miEdit2, PlayerGroupSingle(g_teller), false);
+    DialogControlSetVisible(g_miEdit3, PlayerGroupSingle(g_teller), false);
+    DialogControlSetVisible(g_miEdit4, PlayerGroupSingle(g_teller), false);
+    DialogControlSetVisible(g_miYes, PlayerGroupSingle(g_teller), false);
+    DialogControlSetVisible(g_miNo, PlayerGroupSingle(g_teller), false);
+    libNtve_gf_SetDialogItemText(g_miOk, StringToText("确认死亡"), PlayerGroupSingle(g_teller));
+    libNtve_gf_SetDialogItemText(g_miCancel, StringToText("取消"), PlayerGroupSingle(g_teller));
+    DialogControlSetVisible(g_miOk, PlayerGroupSingle(g_teller), true);
+    DialogControlSetVisible(g_miCancel, PlayerGroupSingle(g_teller), true);
+    DialogControlSetVisible(g_miNote, PlayerGroupSingle(g_teller), true);
+    BOTC_ManualDeathRender();
+    DialogSetVisible(g_miDlg, PlayerGroupSingle(g_teller), true);
+}
+
+void BOTC_ManualDeathPick (int q) {
+    int j;
+    if (!g_mdOpen || q < 2 || q > 13) {
+        return;
+    }
+    if (!g_seatOn[q] || BOTC_SeatDead(q)) {
+        BOTC_Notice(g_teller, "只能选择仍然存活的玩家。");
+        return;
+    }
+    if (g_mdRole == 112) {
+        if (g_mdPick[q]) {
+            g_mdPick[q] = false;
+        }
+        else {
+            g_mdPick[q] = true;
+            for (j = 2; j <= 13; j += 1) {
+                if (j != q) {
+                    g_mdPick[j] = false;
+                }
+            }
+        }
+    }
+    else {
+        g_mdPick[q] = !g_mdPick[q];
+    }
+    BOTC_ManualDeathRender();
+}
+
+void BOTC_ManualDeathConfirm () {
+    int q;
+    int n;
+    string picked;
+    if (!g_mdOpen) {
+        return;
+    }
+    picked = BOTC_ManualDeathSelectedText();
+    n = 0;
+    DialogSetVisible(g_miDlg, PlayerGroupAll(), false);
+    for (q = 2; q <= 13; q += 1) {
+        if (!g_mdPick[q] || !g_seatOn[q] || BOTC_SeatDead(q)) {
+            continue;
+        }
+        BOTC_MarkDeathQuietSrc(q, 1, 1, g_mdRole);
+        if (BOTC_SeatDead(q)) {
+            n = n + 1;
+        }
+    }
+    if (n > 0) {
+        BOTC_PmStore(g_teller, "【" + g_roleName[g_mdRole] + "】说书人选择 " + picked + " → 已结算死亡并打上「死亡（" + g_roleName[g_mdRole] + "）」。");
+    }
+    else {
+        BOTC_PmStore(g_teller, "【" + g_roleName[g_mdRole] + "】本次没有玩家实际死亡。");
+    }
+    g_mdOpen = false;
+    g_mdRole = 0;
+    g_mdSrc = 0;
+    g_miRole = -1;
+    g_miSeat = 0;
+    for (q = 0; q <= 13; q += 1) {
+        g_mdPick[q] = false;
+    }
+    if (n > 0) {
+        BOTC_CheckWin();
+    }
+}
+
+void BOTC_ManualDeathCancel () {
+    int q;
+    if (!g_mdOpen) {
+        return;
+    }
+    DialogSetVisible(g_miDlg, PlayerGroupAll(), false);
+    g_mdOpen = false;
+    g_mdRole = 0;
+    g_mdSrc = 0;
+    g_miRole = -1;
+    g_miSeat = 0;
+    for (q = 0; q <= 13; q += 1) {
+        g_mdPick[q] = false;
+    }
+    BOTC_PmStore(g_teller, "【夜序·非唤醒】本次死亡目标选择已取消，没有玩家死亡。");
+}
+
 // 在普通行动之间插入“非唤醒夜序节点”：手动死亡 token 提示 / 农夫延迟选人。
 bool BOTC_NonWakeOrderStep (int beforeOrd) {
     int i;
@@ -47175,8 +47395,24 @@ bool BOTC_NonWakeOrderStep (int beforeOrd) {
     }
     else {
         g_manualDeathDone[best] = true;
-        BOTC_Notice(g_teller, "【" + g_roleName[bestRole] + "】座位 " + IntToString(best - 1) + "：请手动打上死亡token。");
-        BOTC_PmStore(g_teller, "【夜序·非唤醒】" + BOTC_NameStr(best) + "（" + g_roleName[bestRole] + "）到达行动位次，请按规则手动打上死亡 token。");
+        if (bestRole == 94) {
+            // 军团是一个整体行动：一次弹窗处理所有军团座位，不在后续同夜序位置重复弹。
+            for (q = 2; q <= 13; q += 1) {
+                if (BOTC_HasAbility(q, 94)) {
+                    g_manualDeathDone[q] = true;
+                }
+            }
+        }
+        if (bestRole == 112 && g_nightNum <= 1) {
+            BOTC_PmStore(g_teller, "【小怪宝】首夜只确认照看者，不结算死亡。");
+        }
+        else if (bestRole == 94 || bestRole == 112) {
+            BOTC_ManualDeathOpen(best, bestRole);
+        }
+        else {
+            BOTC_Notice(g_teller, "【" + g_roleName[bestRole] + "】座位 " + IntToString(best - 1) + "：请手动打上死亡token。");
+            BOTC_PmStore(g_teller, "【夜序·非唤醒】" + BOTC_NameStr(best) + "（" + g_roleName[bestRole] + "）到达行动位次，请按规则手动打上死亡 token。");
+        }
     }
     return true;
 }
@@ -47235,6 +47471,10 @@ void BOTC_AutoWakeNext () {
     int bs;
     if (!g_isNight) {
         BOTC_Notice(g_teller, "白天不能唤醒：先点【进入夜晚】，夜里才唤醒。");
+        return;
+    }
+    if (g_mdOpen) {
+        BOTC_Notice(g_teller, "先在小怪宝 / 军团的技能目标窗口里确认或取消，再继续唤醒。");
         return;
     }
     // 【军团】疯子的「屏蔽两个」框还没答完：先别往下唤醒别人（用户 2026-09-30 实测会被顺带唤醒）
@@ -50332,41 +50572,47 @@ void BOTC_GudiaoOpen (int p) {
     if (p < 2 || p > 13) {
         return;
     }
-    // 这块二选一面板与数学家 / 引路人共用 g_miDlg。先完整清掉上一份状态，
-    // 否则已经改过方向或电脑自动结算时会留下数学家的旧标题或一块空面板。
-    BOTC_GudiaoClose();
     // 已经改过方向、能力当前失效或电脑玩家：不需要再询问方向，直接按既定方向结算。
     if (g_tokOn[(((g_teller * 14) + p) * 256) + 199] || !BOTC_SkillWorks(p) || BOTC_SeatIsComputer(p)) {
         BOTC_GudiaoApply(p, false);
         return;
     }
-    BOTC_MiSeatFieldsReset();
-    g_miSeat = p;
-    g_miRole = 813;
-    libNtve_gf_SetDialogItemText(g_miTitle, StringToText("【蛊雕】" + BOTC_NameStr(p) + " 今晚是否改变方向？"), PlayerGroupSingle(g_teller));
-    libNtve_gf_SetDialogItemText(g_miNote, StringToText("每局只能成功改变一次；改变后从逆时针方向寻找下一名存活镇民。"), PlayerGroupSingle(g_teller));
-    libNtve_gf_SetDialogItemText(g_miYes, StringToText("保持顺时针"), PlayerGroupSingle(g_teller));
-    libNtve_gf_SetDialogItemText(g_miNo, StringToText("改变方向"), PlayerGroupSingle(g_teller));
-    DialogControlSetVisible(g_miEdit, PlayerGroupSingle(g_teller), false);
-    DialogControlSetVisible(g_miEdit2, PlayerGroupSingle(g_teller), false);
-    DialogControlSetVisible(g_miEdit3, PlayerGroupSingle(g_teller), false);
-    DialogControlSetVisible(g_miEdit4, PlayerGroupSingle(g_teller), false);
-    DialogControlSetVisible(g_miOk, PlayerGroupAll(), false);
-    DialogControlSetVisible(g_miCancel, PlayerGroupAll(), false);
-    DialogControlSetVisible(g_miX, PlayerGroupAll(), false);
-    DialogControlSetVisible(g_miX, PlayerGroupSingle(g_teller), true);
-    DialogControlSetVisible(g_miNote, PlayerGroupSingle(g_teller), true);
-    DialogControlSetVisible(g_miYes, PlayerGroupSingle(g_teller), true);
-    DialogControlSetVisible(g_miNo, PlayerGroupSingle(g_teller), true);
-    DialogSetVisible(g_miDlg, PlayerGroupAll(), false);
-    DialogSetVisible(g_miDlg, PlayerGroupSingle(g_teller), true);
+    BOTC_GudiaoClose();
+    // 【是否发动技能的玩家模板】（用户 2026-11-07）：改向由蛊雕玩家本人决定。
+    g_limitedAsk[p] = true;
+    g_skillPicking[p] = false;
+    g_skillT1[p] = 0;
+    g_skillT2[p] = 0;
+    g_skillT3[p] = 0;
+    libNtve_gf_SetDialogItemText(g_skillTitle[p], StringToText("是否发动技能（改变方向）"), PlayerGroupSingle(g_who[p]));
+    DialogControlSetVisible(g_skillSlotA[p], PlayerGroupSingle(g_who[p]), false);
+    DialogControlSetVisible(g_skillSlotB[p], PlayerGroupSingle(g_who[p]), false);
+    DialogControlSetVisible(g_skillSlotC[p], PlayerGroupSingle(g_who[p]), false);
+    DialogControlSetVisible(g_skillNoPick[p], PlayerGroupSingle(g_who[p]), false);
+    DialogControlSetPosition(g_skillOk[p], PlayerGroupSingle(g_who[p]), c_anchorTopLeft, 36, 144);
+    DialogControlSetPosition(g_skillCancel[p], PlayerGroupSingle(g_who[p]), c_anchorTopLeft, 252, 144);
+    libNtve_gf_SetDialogItemText(g_skillOk[p], StringToText("是"), PlayerGroupSingle(g_who[p]));
+    libNtve_gf_SetDialogItemText(g_skillCancel[p], StringToText("否"), PlayerGroupSingle(g_who[p]));
+    DialogControlSetVisible(g_skillOk[p], PlayerGroupSingle(g_who[p]), true);
+    DialogControlSetVisible(g_skillCancel[p], PlayerGroupSingle(g_who[p]), true);
+    DialogSetVisible(g_skillDlg[p], PlayerGroupSingle(g_who[p]), true);
 }
 
 void BOTC_GudiaoAnswer (int p, bool change) {
-    if (p < 2 || p > 13 || g_miRole != 813 || g_miSeat != p) {
+    if (p < 2 || p > 13) {
         return;
     }
-    BOTC_GudiaoClose();
+    if (g_miRole == 813 && g_miSeat == p) {
+        BOTC_GudiaoClose();
+    }
+    if (g_limitedAsk[p]) {
+        g_limitedAsk[p] = false;
+        g_skillPicking[p] = false;
+        g_skillT1[p] = 0;
+        g_skillT2[p] = 0;
+        g_skillT3[p] = 0;
+        DialogSetVisible(g_skillDlg[p], PlayerGroupSingle(g_who[p]), false);
+    }
     BOTC_GudiaoApply(p, change);
 }
 
@@ -50546,16 +50792,25 @@ void BOTC_WardenOpenChoice (int p) {
     }
     g_wardenAsk = true;
     g_wardenAskBy = p;
-    BOTC_ManInfoOpenSeats(p, "【典狱长】上一批无人死于处决：从 " + s + " 中输入一名仍能死亡的玩家座位号，确认后他在本轮死亡", 12);
+    BOTC_MiSeatFieldsReset();
+    g_miSeat = p;
     g_miRole = 814;
     g_miKind = 0;
-    DialogControlSetSize(g_miEdit, PlayerGroupSingle(g_teller), 240, 41);
-    DialogControlSetPosition(g_miEdit, PlayerGroupSingle(g_teller), c_anchorTopLeft, 222, 83);
-    DialogControlSetVisible(g_miEdit, PlayerGroupSingle(g_teller), true);
+    g_miText = "只结算上一批判罚；不会改变本夜新选择的判罚目标。";
+    libNtve_gf_SetDialogItemText(g_miTitle, StringToText("【典狱长·技能目标】点击场上的判罚玩家：" + s), PlayerGroupSingle(g_teller));
+    libNtve_gf_SetDialogItemText(g_miNote, StringToText(g_miText), PlayerGroupSingle(g_teller));
+    DialogControlSetVisible(g_miNote, PlayerGroupSingle(g_teller), true);
+    DialogControlSetVisible(g_miEdit, PlayerGroupSingle(g_teller), false);
     DialogControlSetVisible(g_miEdit2, PlayerGroupSingle(g_teller), false);
     DialogControlSetVisible(g_miEdit3, PlayerGroupSingle(g_teller), false);
     DialogControlSetVisible(g_miEdit4, PlayerGroupSingle(g_teller), false);
-    BOTC_Notice(g_teller, "【典狱长】请选择上一批中的一名玩家死亡：" + s + "。");
+    DialogControlSetVisible(g_miYes, PlayerGroupSingle(g_teller), false);
+    DialogControlSetVisible(g_miNo, PlayerGroupSingle(g_teller), false);
+    DialogControlSetVisible(g_miOk, PlayerGroupSingle(g_teller), false);
+    libNtve_gf_SetDialogItemText(g_miCancel, StringToText("取消"), PlayerGroupSingle(g_teller));
+    DialogControlSetVisible(g_miCancel, PlayerGroupSingle(g_teller), true);
+    DialogSetVisible(g_miDlg, PlayerGroupSingle(g_teller), true);
+    BOTC_Notice(g_teller, "【典狱长·技能目标】点击场上的判罚玩家：" + s + "。");
 }
 
 void BOTC_WardenKillChoice (int q) {
@@ -50582,6 +50837,9 @@ void BOTC_WardenKillChoice (int q) {
     DialogSetVisible(g_miDlg, PlayerGroupAll(), false);
     BOTC_PmStore(g_teller, "【典狱长】上一批无人死于处决 → 说书人选择 " + BOTC_NameStr(q) + " 在本轮死亡。");
     BOTC_DemonStrike(p, 163, q, false);
+    if (BOTC_SeatDead(q)) {
+        BOTC_PmStore(g_teller, "【典狱长】已为 " + BOTC_NameStr(q) + " 打上「死亡（典狱长）」。");
+    }
 }
 
 void BOTC_WardenResolve (int p, int a, int b, int c) {
@@ -52764,6 +53022,20 @@ void BOTC_NightSkillReset () {
     g_lunSeat = 0;
     g_lunActed = false;
     g_demonTar = 0;
+    // 【小怪宝 / 军团·死亡目标】跨夜必须彻底清空，避免上一夜的已选座位残留。
+    if ((g_mdOpen || g_miRole == 816) && g_miDlg > 0) {
+        DialogSetVisible(g_miDlg, PlayerGroupAll(), false);
+        if (g_miRole == 816) {
+            g_miRole = -1;
+            g_miSeat = 0;
+        }
+    }
+    g_mdOpen = false;
+    g_mdRole = 0;
+    g_mdSrc = 0;
+    for (i = 0; i <= 13; i += 1) {
+        g_mdPick[i] = false;
+    }
 }
 
 //==================================================================================================
@@ -62823,6 +63095,9 @@ void BOTC_TokToggleAt (int ob, int seat, int t) {
     // 【是恶魔（小怪宝）134】（用户 2026-10-10）：谁被打上这枚 token，谁就是「现在的恶魔」---- 记住座位。
     //   ⚠ 撤掉 token 时**不清** g_lmSeat：照看人死了 token 会被离场清理自动收掉，那时候还要靠它判胜负。
     if (ob == g_teller && t == 134 && g_tokOn[((((g_teller * 14) + seat) * 256) + t)]) {
+        // 【全员追忆】（用户 2026-11-07）：全员追忆可能仍发了一张恶魔牌，无恶魔自动检测不会
+        // 把小怪宝局标起来；说书人手动指定照看者时，以这枚 token 为准切入小怪宝夜序与结算。
+        g_lmOn = true;
         g_lmSeat = seat;
         // 【告诉他今晚照看小怪宝】（用户 2026-10-10）：打上这枚 token 的那一刻私聊他
         BOTC_PmInfo(g_who[seat], "【小怪宝】今晚由你来照看小怪宝。");
@@ -65528,6 +65803,10 @@ void BOTC_MiCancelApply () {
         g_wardenCandN = 0;
         g_miRole = -1;
         g_miSeat = 0;
+        return;
+    }
+    if (g_miRole == 816) {
+        BOTC_ManualDeathCancel();
         return;
     }
     if (g_miRole == 813) {

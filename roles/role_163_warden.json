@@ -10,8 +10,8 @@
   "frequency": "always",
   "action": "every_night",
   "target_count": 3,
-  "first_night_order": 26,
-  "other_night_order": 124,
+  "first_night_order": 48,
+  "other_night_order": 69,
   "role_keywords": "每个夜晚|额外死亡",
   "effect_categories": [
     "active_selection",
@@ -40,8 +40,8 @@
     "section": "kill",
     "anchor_role": "普卡",
     "relation": "after",
-    "first": 26,
-    "other": 124
+    "first": 48,
+    "other": 69
   },
   "tokens": [
     {
@@ -66,6 +66,19 @@
       "effect": "表示带判罚标记的玩家今天死于处决，下一轮典狱长结算时其他上一批目标会一起死亡。",
       "place": "白天带判罚标记的玩家因处决死亡时放置。",
       "remove": "下一轮判罚结算、典狱长死亡或离场、开始新一局时移除。",
+      "visibility": "storyteller",
+      "icon": "botc_tk163.dds",
+      "duration": "game"
+    },
+    {
+      "id": "warden_death",
+      "index": 204,
+      "slot": 204,
+      "name": "死亡（典狱长）",
+      "short": "典狱长死亡",
+      "effect": "表示该玩家因典狱长的判罚结算死亡。",
+      "place": "判罚目标因典狱长能力死亡时放置；包括有判罚目标死于处决后的连坐死亡，以及无人死于处决时说书人点选的一名判罚玩家。",
+      "remove": "该玩家的死亡记录被新死亡覆盖、典狱长死亡或离场、开始新一局时移除。",
       "visibility": "storyteller",
       "icon": "botc_tk163.dds",
       "duration": "game"
@@ -126,7 +139,8 @@
       "g_wardenAsk",
       "g_roleName[163]",
       "g_tokName[201]",
-      "g_tokName[202]"
+      "g_tokName[202]",
+      "g_tokName[204]"
     ]
   }
 }
