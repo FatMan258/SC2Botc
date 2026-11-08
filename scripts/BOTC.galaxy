@@ -866,7 +866,7 @@ bool[14]    g_cultDeclDone;    // 今天已经声称过【异教领袖】了（�
 bool[14]    g_damselPick;      // 他正在「点头像猜落难」
 bool[14]    g_damselDone;      // 这个玩家已经公开猜过一次了
 bool        g_damselUsed;      // 本局爪牙已经用掉那一次公开猜测机会
-bool        g_damselFailed;    // 已经有真爪牙猜错过 → 后面的猜测都无效
+bool        g_damselFailed;    // 本局已有真爪牙猜错过 → 之后任何爪牙猜中都不能靠落难少女获胜
 bool        g_damselSpySeen;   // 间谍真实进场过（落难少女相克）
 bool        g_damselWidowSeen; // 寡妇真实进场过（落难少女相克）
 // 【夜半狂欢 · 第 7 批】87 哈迪寂亚（用户 2026-09-26）：三个目标依次选活着 / 死亡
@@ -1169,7 +1169,7 @@ int         g_juggDlg;        // 杂耍艺人（58）的公开猜测面板：5 �
 int         g_juggTitle;
 int[6]      g_juggSeatEdit;   // 5 个座位号输入框
 int[6]      g_juggRoleBtn;    // 5 个「选身份」小按钮
-int[6]      g_juggRole;       // 每格选到的身份（0 = 还没选）
+int[70]     g_juggRole;       // 每位客户端 5 格草稿：(客户端 * 5) + 行；0 = 还没选
 int         g_juggRow;        // 正在给第几格选身份（1~5）
 int         g_juggOk;
 int         g_juggCancel;
@@ -2389,6 +2389,7 @@ void   BOTC_JugglerRowRender (int p);
 void   BOTC_JugglerPickRow (int p, int row);
 void   BOTC_JugglerOk (int p);
 void   BOTC_JugglerCancel (int p);
+void   BOTC_JugglerHide (int p);
 int    BOTC_JugglerCorrect (int seat);        // 杂耍艺人：按白天记账算猜对几个
 void   BOTC_GuessPedant (int p, int q);       // 声称/猜测：恶魔猜书生
 void   BOTC_GuessPuzzle (int p, int q);       // 声称/猜测：解谜大师
@@ -14810,6 +14811,7 @@ void BOTC_ResetGameVars () {
         g_gossipDay[i] = -1;           // 新局：每日日期戳也归零
         g_juggDone[i] = false;         // 杂耍艺人（58）
         g_juggUsed[i] = false;         // 杂耍艺人（58）：这一局还没得过信息
+        BOTC_JugglerCancel(i);         // 新局不带入上一局未提交的公开猜测草稿
         g_alsaOpen[i] = false;         // 戏法师（149）
         g_alsaDay[i] = -1;
         g_rascalActive[i] = false;     // 熊孩子（151）
@@ -26218,12 +26220,11 @@ g_noAllOther[102] = 28;     // 恐惧之灵（其他夜第 28）
     g_musicNomSmallName = "timing2";               // 在场 ≤ 4 人：提名阶段的曲子
     g_sfxDayName = "baitian";                      // 天亮那声（音效；放 4 秒后淡出）
     // 入夜那声提示音（数据编辑器「音效」里的 ID）。
-    //   原来用 "Ping"，但地图里的 SoundData.xml 为了屏蔽星际自带的发送标记把 Ping 调成静音了，
-    //   这里改用一个同样确定存在的任务完成音。
+    //   使用 Ping2；不要改回已被 SoundData.xml 静音的 Ping。
     //   ⚠ 大小写敏感：写错大小写会报「请求的声音文件未知」。
     //     想换成自己的提示音：数据编辑器 → 音效 → 新建一个指向你导入的音频，把 ID 填这里；
     //     或者在游戏里用聊天指令 sfx <名字> 现场试。
-    g_sfxPingName = "UI_ObjectiveComplete";
+    g_sfxPingName = "Ping2";
     // 大提示的字体样式（聊天里 style <名字> 能现场换）。
     //   ObjectiveDisplay = 星际剧情里那种「任务目标」大字，比原来的 UnitWireframeVitalLarge 大得多
     g_bigStyle = "ObjectiveDisplay";
@@ -26571,7 +26572,7 @@ void BOTC_PhaseUiForceClose () {
         if (g_gambleWait[q]) {
             BOTC_GambleCancel(q);
         }
-        BOTC_JugglerCancel(q);
+        BOTC_JugglerHide(q);           // 阶段切换只收面板，保留已填的公开猜测草稿
         if (g_alsaOpen[q]) {
             BOTC_AlsaahirCancel(q);
         }
@@ -30833,7 +30834,7 @@ void BOTC_PickChoose (int ob, int idx) {
     //   ⚠ 这一段以前被多出来的一个花括号嵌在别的模式里面，结果模式 15 / 16 / 14 全变成死代码（用户 2026-09-21 报）
     if (g_pickMode[ob] == 13) {
         if (idx >= 0 && g_juggRow >= 1 && g_juggRow <= 5) {
-            g_juggRole[g_juggRow - 1] = idx;
+            g_juggRole[(ob * 5) + g_juggRow - 1] = idx;
         }
         DialogSetVisible(g_pickDlg, PlayerGroupSingle(ob), false);
         libNtve_gf_SetDialogItemText(g_pickClear, StringToText("清除身份"), PlayerGroupSingle(ob));
@@ -40413,7 +40414,6 @@ void BOTC_BuildJuggler () {
         g_juggSeatEdit[i] = BOTC_NewEdit(g_juggDlg, 86, 32, 27, y);
         g_juggRoleBtn[i] = BOTC_NewButton(g_juggDlg, 378, 32, 126, y, "选身份");
         libNtve_gf_SetDialogItemStyle(g_juggRoleBtn[i], "ModLeftSize16Bold", PlayerGroupAll());
-        g_juggRole[i] = 0;
     }
     g_juggRow = 0;
     g_juggOk = BOTC_NewButton(g_juggDlg, 216, 40, 126, 241, "确定（公开猜测）");
@@ -40429,8 +40429,8 @@ void BOTC_JugglerRowRender (int p) {
     }
     for (i = 0; i < 5; i += 1) {
         s = "第 " + IntToString(i + 1) + " 个：";
-        if (g_juggRole[i] > 0) {
-            s = s + g_roleName[g_juggRole[i]];
+        if (g_juggRole[(p * 5) + i] > 0) {
+            s = s + g_roleName[g_juggRole[(p * 5) + i]];
         }
         else {
             s = s + "选身份";
@@ -40441,7 +40441,6 @@ void BOTC_JugglerRowRender (int p) {
 
 // 打开面板（白天一次）
 void BOTC_JugglerOpen (int p) {
-    int i;
     if (p < 1 || p > 13) {
         return;
     }
@@ -40452,10 +40451,6 @@ void BOTC_JugglerOpen (int p) {
     if (g_juggDone[BOTC_PosOf(p)]) {
         BOTC_Notice(p, "你今天已经猜过了：杂耍艺人一天只能公开猜一次。");
         return;
-    }
-    for (i = 0; i < 5; i += 1) {
-        g_juggRole[i] = 0;
-        libNtve_gf_SetDialogItemText(g_juggSeatEdit[i], StringToText(""), PlayerGroupSingle(p));
     }
     BOTC_JugglerRowRender(p);
     DialogSetVisible(g_juggDlg, PlayerGroupSingle(p), true);
@@ -40505,7 +40500,7 @@ void BOTC_JugglerOk (int p) {
         g_juggBookN[p] = 0;
     }
     for (i = 0; i < 5; i += 1) {
-        if (g_juggRole[i] <= 0) {
+        if (g_juggRole[(p * 5) + i] <= 0) {
             continue;
         }
         seat = 0;
@@ -40516,11 +40511,11 @@ void BOTC_JugglerOk (int p) {
         if (seat < 2) {
             continue;                     // 身份选了但座位号没填 / 填错：这一组不算
         }
-        one = BOTC_NameStr(seat) + " 是 " + g_roleName[g_juggRole[i]];
+        one = BOTC_NameStr(seat) + " 是 " + g_roleName[g_juggRole[(p * 5) + i]];
         // 【记账】（用户 2026-11-04）：真能力生效的公开猜测记下来，夜间脚本据此算「猜对几个」。
         if (works && bi < 5) {
             g_juggBookSeat[(p * 5) + bi] = g_who[seat];
-            g_juggBookRole[(p * 5) + bi] = g_juggRole[i];
+            g_juggBookRole[(p * 5) + bi] = g_juggRole[(p * 5) + i];
             g_juggBookN[p] = g_juggBookN[p] + 1;
             bi = bi + 1;
         }
@@ -40528,11 +40523,11 @@ void BOTC_JugglerOk (int p) {
         //   猜对几个已改由说书人自行判断（用户 2026-11-04），不再自动计数或打「猜测正确」。
         // 假声称只公聊播报，不记「干扰」，免得污染真杂耍艺人当晚的提示。
         if (works) {
-            if (BOTC_SeatTrueRole(seat) != g_juggRole[i] && BOTC_RoleDisguiseStr(BOTC_SeatTrueRole(seat)) != "") {
+            if (BOTC_SeatTrueRole(seat) != g_juggRole[(p * 5) + i] && BOTC_RoleDisguiseStr(BOTC_SeatTrueRole(seat)) != "") {
                 g_tokOn[(((g_teller * 14) + seat) * 256) + 91] = true;
-                BOTC_PmStore(g_teller, "【杂耍艺人】" + BOTC_NameStr(seat) + " 其实是" + BOTC_RoleNameSafe(BOTC_SeatTrueRole(seat)) + "（互动干扰）：他猜的是" + g_roleName[g_juggRole[i]] + "，算不算对你自己判。");
-                if (BOTC_RegRoleOf(seat) == g_juggRole[i]) {
-                    BOTC_PmStore(g_teller, "【杂耍艺人】按登记层看，" + BOTC_NameStr(seat) + " 正好被看成" + g_roleName[g_juggRole[i]] + "（这种情况一般算猜对）。");
+                BOTC_PmStore(g_teller, "【杂耍艺人】" + BOTC_NameStr(seat) + " 其实是" + BOTC_RoleNameSafe(BOTC_SeatTrueRole(seat)) + "（互动干扰）：他猜的是" + g_roleName[g_juggRole[(p * 5) + i]] + "，算不算对你自己判。");
+                if (BOTC_RegRoleOf(seat) == g_juggRole[(p * 5) + i]) {
+                    BOTC_PmStore(g_teller, "【杂耍艺人】按登记层看，" + BOTC_NameStr(seat) + " 正好被看成" + g_roleName[g_juggRole[(p * 5) + i]] + "（这种情况一般算猜对）。");
                 }
             }
         }
@@ -40579,7 +40574,8 @@ void BOTC_JugglerOk (int p) {
         BOTC_PmStore(g_teller, "【杂耍艺人】唤醒他时脚本已按白天的猜测把「猜对几个」预填在数字框里，可直接确定或改掉。");
     }
     for (i = 0; i < 5; i += 1) {
-        g_juggRole[i] = 0;
+        g_juggRole[(p * 5) + i] = 0;
+        libNtve_gf_SetDialogItemText(g_juggSeatEdit[i], StringToText(""), PlayerGroupSingle(p));
     }
 }
 
@@ -40638,8 +40634,17 @@ void BOTC_JugglerCancel (int p) {
     }
     DialogSetVisible(g_juggDlg, PlayerGroupSingle(p), false);
     for (i = 0; i < 5; i += 1) {
-        g_juggRole[i] = 0;
+        g_juggRole[(p * 5) + i] = 0;
+        libNtve_gf_SetDialogItemText(g_juggSeatEdit[i], StringToText(""), PlayerGroupSingle(p));
     }
+}
+
+// 阶段切换时只收起面板，不丢玩家已经填好的公开猜测草稿。
+void BOTC_JugglerHide (int p) {
+    if (p < 1 || p > 13) {
+        return;
+    }
+    DialogSetVisible(g_juggDlg, PlayerGroupSingle(p), false);
 }
 
 // 【戏法师（149）】白天公开猜测：输入座位号，再选择该玩家是爪牙或恶魔。
@@ -57655,6 +57660,7 @@ void BOTC_DawnResolve () {
         g_gossipDone[q] = false;
         g_gossipTextBy[q] = "";
         g_juggDone[q] = false;         // 杂耍艺人（58）：新的一天，又能公开猜一次（用户 2026-09-21）
+        BOTC_JugglerCancel(g_who[q]);  // 未提交的公开猜测不带进新的一天
         g_alsaOpen[g_who[q]] = false;  // 戏法师（149）：新的一天，重新开放猜测
         g_alsaDay[g_who[q]] = -1;
         for (ob = 0; ob <= 13; ob += 1) {
@@ -57668,7 +57674,6 @@ void BOTC_DawnResolve () {
         g_damselPick[g_who[q]] = false;
     }
     g_damselUsed = false;              // 猜落难：爪牙的公开猜测机会每天刷新
-    g_damselFailed = false;
     DialogSetVisible(g_alsaDlg, PlayerGroupAll(), false);
 
     BOTC_HdHide();

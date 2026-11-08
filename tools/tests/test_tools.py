@@ -808,6 +808,43 @@ class BluffPanelRegressionTests(unittest.TestCase):
 
 
 class MergeRegressionTests(unittest.TestCase):
+    @staticmethod
+    def _function_text(source: str, signature: str) -> str:
+        start = source.index(signature)
+        end = source.find("\nvoid ", start + len(signature))
+        return source[start:] if end < 0 else source[start:end]
+
+    def test_juggler_claim_draft_survives_phase_cleanup(self) -> None:
+        source = (PROJECT_ROOT / "scripts" / "BOTC.galaxy").read_text(
+            encoding="utf-8-sig"
+        )
+        phase_close = self._function_text(source, "void BOTC_PhaseUiForceClose () {")
+        juggler_open = self._function_text(source, "void BOTC_JugglerOpen (int p) {")
+
+        self.assertIn("int[70]     g_juggRole;", source)
+        self.assertIn("BOTC_JugglerHide(q);", phase_close)
+        self.assertNotIn("BOTC_JugglerCancel(q);", phase_close)
+        self.assertNotIn("g_juggRole[(p * 5) + i] = 0;", juggler_open)
+        self.assertIn(
+            "g_juggRole[(ob * 5) + g_juggRow - 1] = idx;",
+            source,
+        )
+
+    def test_wrong_damsel_guess_blocks_later_wins_for_rest_of_game(self) -> None:
+        source = (PROJECT_ROOT / "scripts" / "BOTC.galaxy").read_text(
+            encoding="utf-8-sig"
+        )
+        dawn = self._function_text(source, "void BOTC_DawnResolve () {")
+        deal = self._function_text(source, "void BOTC_Deal () {")
+        guess = self._function_text(source, "void BOTC_DamselGuess (int p, int q) {")
+
+        self.assertNotIn("g_damselFailed = false;", dawn)
+        self.assertIn("g_damselFailed = false;", deal)
+        self.assertLess(
+            guess.index("if (g_damselFailed)"),
+            guess.index("BOTC_ShowWin("),
+        )
+
     def test_guide_and_gudiao_prompts_reset_shared_answer_panel(self) -> None:
         source = (PROJECT_ROOT / "scripts" / "BOTC.galaxy").read_text(
             encoding="utf-8-sig"

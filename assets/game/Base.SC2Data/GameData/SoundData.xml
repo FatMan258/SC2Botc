@@ -17,6 +17,11 @@
         <AssetArray File="LocalizedData\Sounds\ProtossUnitVO\HighTemplar\HighTemplar_Death4.wav" FacialGroup=""/>
         <Pitch value="-8.000000,8.000000"/>
     </CSound>
+    <CSound id="Ping2" parent="UI">
+        <EditorCategories value="Race:Neutral"/>
+        <AssetArray File="Assets\Sounds\Uni\UI\UI_Ping.wav"/>
+        <Volume value="1.000000,1.000000"/>
+    </CSound>
     <CSound id="UI_ChatMessageReceived">
         <Volume value="-96.000000,-96.000000"/>
     </CSound>
