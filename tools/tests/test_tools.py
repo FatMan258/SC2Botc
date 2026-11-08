@@ -798,12 +798,7 @@ class BluffPanelRegressionTests(unittest.TestCase):
             ),
             2,
         )
-        self.assertGreaterEqual(
-            source.count(
-                "DialogControlSetVisible(g_lbluffSeat[i], PlayerGroupSingle(g_teller), true);"
-            ),
-            2,
-        )
+        self.assertNotIn("g_lbluff", source)
         self.assertIn(
             "DialogControlSetVisible(g_specBtn, PlayerGroupSingle(g_teller), g_started || g_isNight);",
             source,
