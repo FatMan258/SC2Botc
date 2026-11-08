@@ -519,6 +519,7 @@ int[2400]   g_pubWho;          // 公聊记录里每一行「是谁说的」（0
 int[2400]   g_pubSeq;          // 公聊记录每行的写入序号（用户 2026-11-08）：屏蔽只隐藏屏蔽之后的新发言，历史发言保留可回看
 int         g_pubSeqN;         // 下一条公聊记录的序号（单调递增，回绕滚动时随行一起搬家）
 int[196]    g_blockSeq;        // 屏蔽起点：索引 (屏蔽者 * 14) + 被屏蔽者，值为屏蔽发生时的 g_pubSeqN
+int[196]    g_blockHideTo;     // 屏蔽终点（用户 2026-11-08）：解除屏蔽时的 g_pubSeqN；屏蔽期间的公聊行永久隐藏
 string[8400] g_pmLog;         // 私聊记录：每人 600 条（14 × 600 = 8400）
 int[14]     g_pmLogCount;
 int[8400]   g_pmWho;           // 私聊记录同上（下标和 g_pmLog 一一对应，步长 600）
@@ -3372,12 +3373,26 @@ bool BOTC_Blocked (int a, int b) {
     return g_block[(a * 14) + b];
 }
 
-// 【屏蔽只隐藏屏蔽之后的发言】（用户 2026-11-08）：屏蔽之前对方发过的公聊记录继续保留，日志里可以回看。
+// 【屏蔽只隐藏屏蔽期间的发言】（用户 2026-11-08）：屏蔽之前发过的公聊记录继续保留可回看；
+//   屏蔽期间的发言即使用户后来解除屏蔽，也仍然不在日志里显示。
 bool BOTC_PubHideByBlock (int p, int w, int seq) {
-    if (!BOTC_Blocked(p, w)) {
+    int idx;
+    if (p < 1 || p > 13 || w < 1 || w > 13) {
         return false;
     }
-    return seq >= g_blockSeq[(p * 14) + w];
+    idx = (p * 14) + w;
+    // 仍在屏蔽中：屏蔽起点之后的新发言全部隐藏。
+    if (g_block[idx]) {
+        return seq >= g_blockSeq[idx];
+    }
+    // 已解除屏蔽：只隐藏「屏蔽起点 ~ 解除时点」这一段，解除之后的新发言照常显示。
+    if (g_blockHideTo[idx] <= 0) {
+        return false;
+    }
+    if (seq < g_blockSeq[idx]) {
+        return false;
+    }
+    return seq < g_blockHideTo[idx];
 }
 
 // 【双向屏蔽】：任意一方屏蔽了另一方，都算不能私聊 / 邀请 / 加入。
@@ -3413,6 +3428,7 @@ void BOTC_BlockClearAll () {
         for (j = 1; j <= 13; j += 1) {
             g_block[(i * 14) + j] = false;
             g_blockSeq[(i * 14) + j] = 0;
+            g_blockHideTo[(i * 14) + j] = 0;
             g_tokOn[(((i * 14) + j) * 256) + 182] = false;
         }
     }
@@ -7283,7 +7299,9 @@ void BOTC_BlockToggle (int a, int b) {
     g_blockCd[a] = 10;
     if (g_block[(a * 14) + b]) {
         g_block[(a * 14) + b] = false;
-        g_blockSeq[(a * 14) + b] = 0;
+        // 【解除屏蔽不恢复旧发言】（用户 2026-11-08）：记下这次屏蔽的结束点，
+        //   屏蔽期间的公聊行之后继续隐藏；屏蔽起点保留，供渲染时判定区间。
+        g_blockHideTo[(a * 14) + b] = g_pubSeqN;
         // 【屏蔽 token】（用户 2026-11-06）：解除屏蔽时，从 a 的魔典上 b 的位置摘掉 token 182。
         g_tokOn[(((a * 14) + b) * 256) + 182] = false;
         BOTC_Notice(a, "已解除对 " + BOTC_NameStr(BOTC_PosOf(b)) + " 的屏蔽。");
@@ -7292,8 +7310,15 @@ void BOTC_BlockToggle (int a, int b) {
         return;
     }
     g_block[(a * 14) + b] = true;
-    // 【屏蔽起点】（用户 2026-11-08）：只隐藏此后新写的公聊行，之前的发言继续留在日志里可回看。
-    g_blockSeq[(a * 14) + b] = g_pubSeqN;
+    if (g_blockHideTo[(a * 14) + b] > 0) {
+        // 【反复屏蔽】（用户 2026-11-08）：之前解除过 → 保留最早的屏蔽起点，
+        //   避免上一段屏蔽期间的话被放出来；宁可多隐藏，不泄露屏蔽期内容。
+        g_blockHideTo[(a * 14) + b] = 0;
+    }
+    else {
+        // 【屏蔽起点】（用户 2026-11-08）：只隐藏此后新写的公聊行，之前的发言继续留在日志里可回看。
+        g_blockSeq[(a * 14) + b] = g_pubSeqN;
+    }
     // 【屏蔽 token】（用户 2026-11-06）：屏蔽成功时，给 a 的魔典上 b 的位置打 token 182。
     g_tokOn[(((a * 14) + b) * 256) + 182] = true;
     // 【共同私聊当场拆开】（用户 2026-11-06）：两人还在同一条私聊里的话，立刻把两人都移出去。
