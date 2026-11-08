@@ -1,0 +1,147 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Catalog>
+    <CSound id="Ghost_Death">
+        <Pitch value="10.000000,10.000000"/>
+    </CSound>
+    <CSound id="HighTemplar_Death">
+        <Pitch value="-5.000000,6.000000"/>
+    </CSound>
+    <CSound id="Marine_Death">
+        <AssetArray File="LocalizedData\Sounds\TerranUnitVO\Marauder\Marauder_Death03.wav" FacialGroup=""/>
+        <AssetArray File="LocalizedData\Sounds\TerranUnitVO\Marauder\Marauder_Death04.wav" FacialGroup=""/>
+        <AssetArray File="LocalizedData\Sounds\TerranUnitVO\Ghost\Ghost_Death01.wav" FacialGroup=""/>
+        <AssetArray File="LocalizedData\Sounds\TerranUnitVO\Ghost\Ghost_Death02.wav" FacialGroup=""/>
+        <AssetArray File="LocalizedData\Sounds\TerranUnitVO\Ghost\Ghost_Death03.wav" FacialGroup=""/>
+        <AssetArray File="LocalizedData\Sounds\TerranUnitVO\Ghost\Ghost_Death04.wav" FacialGroup=""/>
+        <AssetArray File="LocalizedData\Sounds\TerranUnitVO\Ghost\Ghost_Death05.wav" FacialGroup=""/>
+        <AssetArray File="LocalizedData\Sounds\ProtossUnitVO\HighTemplar\HighTemplar_Death4.wav" FacialGroup=""/>
+        <Pitch value="-8.000000,8.000000"/>
+    </CSound>
+    <CSound id="UI_ChatMessageReceived">
+        <Volume value="-96.000000,-96.000000"/>
+    </CSound>
+    <CSound id="UI_ObjectiveUpdate">
+        <Pitch value="0.000000,0.300000"/>
+        <Volume value="0.000000,0.000000"/>
+    </CSound>
+    <CSound id="UI_PTTStart">
+        <Volume value="5.000000,5.000000"/>
+    </CSound>
+    <CSound id="UI_ReplayDropdownSelect">
+        <Volume value="-4.000000,-4.000000"/>
+    </CSound>
+    <CSound id="UI_TechConsole_Select2" parent="UI">
+        <AssetArray File="Assets\Sounds\Uni\UI\UI_Select_Type02.wav"/>
+        <Volume value="-16.000000,-16.000000"/>
+    </CSound>
+    <CSound id="daojishi" parent="UI">
+        <AssetArray File="Assets\Sounds\UI_AC_Countdown_4MxEnd.ogg"/>
+        <Flags index="Stream" value="1"/>
+        <DupeMuteCount value="2"/>
+    </CSound>
+    <CSound id="laugh" parent="UI">
+        <EditorCategories value="Race:Zerg"/>
+        <AssetArray File="Assets\Sounds\1-奶龙捧腹大笑原版-480P 标清-AVC_01.ogg" FacialGroup=""/>
+        <Flags index="Ignorable" value="0"/>
+        <Flags index="Wait" value="1"/>
+        <Volume value="-2.000000,-2.000000"/>
+    </CSound>
+    <CSound id="jiesuan" parent="Other">
+        <EditorCategories value="Race:Protoss"/>
+        <AssetArray File="Assets\Music\UI_Stinger_Complete06.ogg" FacialGroup=""/>
+        <SpeakerMix index="Center" value="0.000000"/>
+        <SpeakerMix index="SideLeft" value="0.200000"/>
+        <SpeakerMix index="SideRight" value="0.200000"/>
+        <SustainFade index="0" Time="200"/>
+        <SustainFade index="1" Time="2000" Volume="-96.000000"/>
+        <Volume value="-8.000000,-8.000000"/>
+        <VolumeRolloffFadeIn Volume="-96.000000"/>
+        <VolumeRolloffFadeIn Time="2000"/>
+    </CSound>
+    <CSound id="gongliao2" parent="MUSIC">
+        <AssetArray File="Assets\Sounds\yinyue7.ogg" Volume="4.500000,4.500000" FacialGroup=""/>
+        <AssetArray File="Assets\Sounds\LLL.ogg" Volume="-5.000000,-5.000000" FacialGroup=""/>
+        <LoopCount value="-1"/>
+        <Volume value="-2.000000,-2.000000"/>
+    </CSound>
+    <CSound id="fuhuo" parent="UI">
+        <EditorCategories value="Race:Zerg"/>
+        <AssetArray File="Assets\Sounds\11-复活吧我的爱人-360P流畅-AV1_01.ogg_vocals.ogg" FacialGroup=""/>
+        <Flags index="Ignorable" value="0"/>
+        <Flags index="Wait" value="1"/>
+        <Pitch value="0.000000,6.000000"/>
+        <Volume value="1.000000,1.000000"/>
+    </CSound>
+    <CSound id="xieeshengli" parent="MUSIC">
+        <AssetArray File="Assets\Sounds\北川保昌 - バロック・バンジークス ~大法廷の死神.ogg" FacialGroup=""/>
+        <LoopCount value="-1"/>
+        <Volume value="-2.000000,-2.000000"/>
+    </CSound>
+    <CSound id="timing2" parent="MUSIC">
+        <AssetArray File="Assets\Sounds\yinyue5.ogg" FacialGroup=""/>
+        <LoopCount value="-1"/>
+        <Volume value="1.000000,1.000000"/>
+    </CSound>
+    <CSound id="shanliangshengli" parent="MUSIC">
+        <AssetArray File="Assets\Sounds\yinyue6.ogg" FacialGroup=""/>
+        <LoopCount value="-1"/>
+        <Volume value="-2.000000,-2.000000"/>
+    </CSound>
+    <CSound id="timingkaishi" parent="UI">
+        <EditorCategories value="Race:Zerg"/>
+        <AssetArray File="Assets\Sounds\timingkaishi.ogg" FacialGroup=""/>
+        <Flags index="Ignorable" value="0"/>
+        <Flags index="Wait" value="1"/>
+        <Volume value="-4.000000,-4.000000"/>
+    </CSound>
+    <CSound id="night" parent="MUSIC">
+        <AssetArray File="Assets\Sounds\Scott Lloyd Shelly - Overworld Night.ogg"/>
+        <AssetArray File="Assets\Sounds\LLL2.ogg" FacialGroup=""/>
+        <AssetArray File="Assets\Sounds\Nino Rota - The Godfather (Love Theme).ogg" FacialGroup=""/>
+        <LoopCount value="-1"/>
+        <Volume value="-2.000000,-2.000000"/>
+    </CSound>
+    <CSound id="siliao" parent="MUSIC">
+        <AssetArray File="Assets\Sounds\yinyue1.ogg" FacialGroup=""/>
+        <AssetArray File="Assets\Sounds\Nino Rota - Appollonia.ogg" FacialGroup=""/>
+        <LoopCount value="-1"/>
+        <Volume value="-2.000000,-2.000000"/>
+    </CSound>
+    <CSound id="gongliao1" parent="MUSIC">
+        <AssetArray File="Assets\Sounds\yinyue2.ogg" FacialGroup=""/>
+        <AssetArray File="Assets\Sounds\yinyue4.ogg" FacialGroup=""/>
+        <LoopCount value="-1"/>
+        <Volume value="-2.000000,-2.000000"/>
+    </CSound>
+    <CSound id="timing" parent="MUSIC">
+        <AssetArray File="Assets\Sounds\yinyue3.ogg" FacialGroup=""/>
+        <AssetArray File="Assets\Sounds\Mister Karma-尋問 モデラート 2001.ogg" FacialGroup=""/>
+        <LoopCount value="-1"/>
+        <Volume value="-2.000000,-2.000000"/>
+    </CSound>
+    <CSound id="baitian" parent="UI">
+        <EditorCategories value="Race:Zerg"/>
+        <AssetArray File="Assets\Sounds\baitian.ogg" FacialGroup=""/>
+        <Flags index="Ignorable" value="0"/>
+        <Flags index="Wait" value="1"/>
+        <Volume value="-10.000000,-10.000000"/>
+    </CSound>
+    <CSound id="shanliangshengli2" parent="MUSIC">
+        <AssetArray File="Assets\Sounds\yinyue8.ogg" FacialGroup=""/>
+        <LoopCount value="-1"/>
+        <Volume value="-2.000000,-2.000000"/>
+    </CSound>
+    <!-- 【2026-11-08】静音星际自带的「发送标记」：Alt + 左键点地面、或按住拖出方向箭头时，
+         标记本身已经在 BotcChatHide.SC2Layout 里藏掉了，这里把跟着播放的 ping 音效一起调成
+         静音（-96 dB 即无声，写法沿用上面的 UI_ChatMessageReceived）。
+         Attack / AIComm 是星际里带「Ping」标记的告警音，方向箭头拖动走的就是这一路。 -->
+    <CSound id="Ping">
+        <Volume value="-96.000000,-96.000000"/>
+    </CSound>
+    <CSound id="Attack">
+        <Volume value="-96.000000,-96.000000"/>
+    </CSound>
+    <CSound id="AIComm">
+        <Volume value="-96.000000,-96.000000"/>
+    </CSound>
+</Catalog>
