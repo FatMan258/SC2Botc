@@ -321,6 +321,7 @@ bool[14]    g_nomUsed;
 bool[14]    g_nomTargeted;
 int[14]     g_nomPickSec;      // 【发起提名】选人剩余拍数（0.5 秒一拍；20 = 10 秒）
 int[14]     g_nomPickCool;     // 超时取消后该玩家的重新发起冷却（10 拍 = 5 秒）
+int         g_speechLock;      // 【刚进入陈述 / 反驳的锁】剩余拍数（0.5 秒一拍）：防止连点或旧计时事件把下一段发言直接跳掉
 int         g_finalPushDone;   // 「最后一推」提醒阶段：0 未播 / 1 已播 4 人 / 2 已播 3 人
 bool        g_finalRepDone;    // 【决赛圈声望】本局是否已给说书人加过 50 声望（每局仅一次）
 int[14]     g_vote;
@@ -1076,6 +1077,14 @@ int         g_poppyEvilWaitOrd;// 夜间死亡：以当时正在行动的夜序�
 int         g_cannPoisonSeat;  // 被「邪恶处决」自动中毒的食人族座位（0 = 没有）
 int         g_cannFedSeat;     // 「饱餐」当前挂在哪个座位（最后一名死于处决的玩家；0 = 没有）
 int         g_cannFedDay;      // 最近一次处决死亡发生在第几天（用于「今天是否有人死于处决」）
+// 【食人族 × 异教领袖 / 莽夫 · 阵营锁定】（用户 2026-11-10）
+int[14]     g_cannOrigAlign;   // 首次因莽夫 / 异教领袖改变阵营前记录的原阵营（-1 = 未记录）
+bool[14]    g_cannLocked;      // 已锁定：保持当前阵营，不再被改
+// 【食人族 × 疯子】（用户 2026-11-10）
+bool[14]    g_cannLun;         // 食人族持有的疯子能力处于「认知恶魔」状态
+int[14]     g_cannLunDemon;    // 该座位以为自己是哪个恶魔（角色索引；-1 = 未选）
+// 【食人族复活补发】（用户 2026-11-10）
+bool[14]    g_cannRestore;     // 本座位复活后需要在下一夜重新补发最近处决者的能力
 int[14]     g_faceDone;        // 变脸师 / 借用变脸师能力者：今晚的能力选择已经完成
 bool[14]    g_faceFail;        // 取消过（疯狂失败）：本局不再弹窗
 int[14]     g_faceShow;        // 变脸师当前借到的角色（角色索引 + 1；0 = 没有变脸）
@@ -1145,6 +1154,20 @@ int         g_evilB;
 int         g_evilC;
 int         g_evilD;
 int[4]      g_lunMin;        // 疯子假爪牙已发送的爪牙座位（提线木偶不能和它们重复）
+int         g_lunFake;       // 【疯子·假疯子】告诉疯子的那名「疯子」座位（0 = 没告知）
+int         g_lunFakeTo;     // 收到「假疯子」那条信息的疯子座位
+int         g_lunFakeAbil;   // 【疯子·假科学怪人能力】角色索引 + 1（0 = 没有）
+int         g_lunFakeAbilTo; // 拿到假能力的疯子座位
+int         g_lunFakeNight;  // 发假能力的夜号，当作这份假能力的「首夜」
+int         g_lunFakeActed;  // 假能力已经行动过的夜号（同一夜不重复唤醒）
+int         g_lunFakeEditSeat; // 正在为其挑选假能力的疯子座位
+bool[14]    g_lunFakeAct;    // 这个座位正在按假能力唤醒 / 行动（按中毒 / 醉酒处理：面板照常，效果不生效）
+// 【疯子信息合批】（用户 2026-11-10）：爪牙 / 提线木偶 / 假疯子这三条先攒起来，
+//   等整条链填完之后在同一拍里连发，和真恶魔一次性收到多条信息的节奏一致，
+//   避免疯子通过消息到达的间隔察觉异样。
+string[4]   g_lunInfoLine;
+int         g_lunInfoN;
+int         g_lunInfoTo;
 int         g_miKind;         // 41 模式发哪种格式：0 = 爪牙（告诉恶魔 / 疯子），1 = 恶魔（告诉爪牙）
 int[14]     g_skillBtnDlg;   // 每个玩家的【使用技能】按钮（外层对话）
 int[14]     g_skillBtn;
@@ -2416,6 +2439,8 @@ void   BOTC_CannPick (int role);               // 说书人选完 → 食人族�
 void   BOTC_CannRevert ();                     // 变回食人族、摘掉「是食人族 / 是酒鬼 / 是疯子」
 void   BOTC_CannAfterExec (int q);             // 处决结算之后：先变回食人族，再看要不要弹面板
 void   BOTC_CannExecHooks (int q);             // 处决死亡：食人族中毒 / 夜里发能力（用户 2026-11-03）
+bool   BOTC_AlignCanChange (int q);            // 这个座位自己能不能被改阵营（异教领袖 / 莽夫）
+void   BOTC_CannLockCheck (int dead);          // 处决后：食人族阵营锁定判定（用户 2026-11-10）
 void   BOTC_BluffGiveTo (int q, int r1, int r2, int r3);   // 【不在场身份·统一发送】（用户 2026-11-04）：最新一份覆盖旧的，并私聊提醒说书人
 void   BOTC_BluffSendToCannibal ();            // 【发送给食人族】：3 个不在场身份发给带「是食人族」token 的座位
 void   BOTC_BluffSendToMinions ();
@@ -3011,7 +3036,18 @@ void   BOTC_PedantDawnClear ();
 int    BOTC_PedantWakeSeat ();
 bool   BOTC_PedantInPlay ();
 void   BOTC_PedantDealInfo ();
-void   BOTC_LunaticMarionetteAsk (int seat);
+bool   BOTC_LunaticMarionetteAsk (int seat);
+bool   BOTC_LunaticFakeAsk (int seat);        // 【疯子·假疯子】询问是否告知一名假疯子，返回是否弹出
+void   BOTC_LunaticFakeKillAsk ();            // 【疯子·假疯子】每晚询问是否告知「假疯子」杀了谁
+int    BOTC_LunFakeBelievedRole (int q);      // 疯子以为自己是什么恶魔
+int    BOTC_LunFakeNightOrder (int q);        // 【疯子·假能力】假能力的夜序
+void   BOTC_LunFakeAbilAsk (int seat);        // 【疯子·假能力】科学怪人行动后询问是否发给疯子
+void   BOTC_LunFakeAbilPick (int role);       // 【疯子·假能力】选定一个善良角色
+int    BOTC_LunFakeRoleAllowed (int role);
+int    BOTC_LunFakeRoleByName (string s);     // 按中文角色名反查角色索引
+void   BOTC_LunInfoClean ();                  // 【疯子信息合批】丢弃攒下的内容
+void   BOTC_LunInfoAdd (int seat, string line); // 【疯子信息合批】把一条信息攒起来
+void   BOTC_LunInfoFlush ();                  // 【疯子信息合批】一次性发出去
 int    BOTC_LunaticMinionMax ();      // 【疯子假爪牙】当前剧本可填的爪牙上限（默认 2）
 int    BOTC_LunaticMinionFilled ();   // 【疯子假爪牙】已经填进去的爪牙数量
 void   BOTC_VixenChoose (int p, int target);
@@ -8631,16 +8667,18 @@ bool BOTC_ClickDo (bool testConds, bool runActions) {
             return true;
         }
         if (c == g_nomEnd) {
-            if (g_phase == 3 || g_phase == 4) {
-                if (BOTC_PosOf(p) == g_nomFrom || BOTC_PosOf(p) == g_nomTo || p == g_teller) {
-                    BOTC_SpeechAdvance();
-                }
+            // 【只有当前发言人能结束自己这一段】（用户 2026-11-10 报「反驳会被自己跳过」）：
+            //   阶段 3 只认提名者、阶段 4 只认被提名者；不能再让另一个人（尤其是刚点过
+            //   【结束发言】的提名者）的重复点击把下一段发言直接跳掉。
+            if (g_phase == 3 && BOTC_PosOf(p) == g_nomFrom) {
+                BOTC_SpeechAdvance();
             }
-            else {
+            else if (g_phase == 4 && BOTC_PosOf(p) == g_nomTo) {
+                BOTC_SpeechAdvance();
+            }
+            else if (g_phase == 5 && p == g_teller) {
                 // 投票阶段：这个按钮对说书人可见，点它就直接结束投票
-                if (g_phase == 5 && p == g_teller) {
-                    BOTC_SpeechAdvance();
-                }
+                BOTC_SpeechAdvance();
             }
             return true;
         }
@@ -15446,6 +15484,18 @@ void BOTC_ResetGameVars () {
     g_stormSaid = false;           // 【暴风捕手】换局清零：播报过 / 发给过邪恶这两个开关
     g_stormEvilSent = false;
     g_lunaticIdentitySent = false;
+    // 【疯子 · 假疯子 / 假科学怪人能力】（用户 2026-11-10）：换局全部清零。
+    g_lunFake = 0;
+    g_lunFakeTo = 0;
+    g_lunFakeAbil = 0;
+    g_lunFakeAbilTo = 0;
+    g_lunFakeNight = 0;
+    g_lunFakeActed = 0;
+    g_lunFakeEditSeat = 0;
+    for (i = 1; i <= 13; i += 1) {
+        g_lunFakeAct[i] = false;
+    }
+    BOTC_LunInfoClean();           // 【疯子信息合批】丢掉上一局没发完的残留
     g_pdRole = 0;
     g_pdPick = false;
     g_boomPending = false;
@@ -15535,6 +15585,11 @@ void BOTC_ResetGameVars () {
         g_gossipDay[i] = -1;           // 新局：每日日期戳也归零
         g_juggDone[i] = false;         // 杂耍艺人（58）
         g_juggUsed[i] = false;         // 杂耍艺人（58）：这一局还没得过信息
+        g_cannOrigAlign[i] = -1;       // 食人族 × 异教领袖 / 莽夫：未记录原阵营
+        g_cannLocked[i] = false;       // 食人族阵营未锁定
+        g_cannLun[i] = false;          // 食人族 × 疯子：认知状态归零
+        g_cannLunDemon[i] = -1;
+        g_cannRestore[i] = false;      // 食人族复活补发标记归零
         BOTC_JugglerCancel(i);         // 新局不带入上一局未提交的公开猜测草稿
         g_alsaOpen[i] = false;         // 戏法师（149）
         g_alsaDay[i] = -1;
@@ -28657,9 +28712,9 @@ void BOTC_GrantClose () {
 
 // ===== 【获得别人能力】（用户 2026-11-03）=====
 // 失忆者 73 / 食人族 74 / 变脸师 117 / 小精灵 91 / 炼金术士 95 获得能力时，统一走 g_grantRoleBy 这一层附加能力。
-// 所有「获得别人能力」都不替换自身角色标记，也不打「是哲学家 / 是炼金术士」token；
-// 变脸师由说书人每晚弹窗决定，只有真身是变脸师（117）才临时改说书人魔典的角色标记并多放
-// 「是变脸师」标记、下个夜晚还原；玩家本人魔典始终显示变脸师本人，借用变脸师能力的座位只挂当夜能力。
+// 这几位获得能力本身都不改本人魔典（玩家自己那份）的角色标记；只有真身是哲学家(56) / 炼金术士(95) /
+// 变脸师(117) 时，才把说书人魔典真值行的角色标记换成借到的角色，并补「是哲学家 / 是炼金术士 / 是变脸师」token；
+// 二次借用（如变脸师借到哲学家能力后再选一项）只挂能力层，不再改标记、不再追加 token。
 void BOTC_AttachGrant (int q, int role, bool useNow) {
     int i;
     bool real;
@@ -28735,6 +28790,23 @@ void BOTC_AttachGrant (int q, int role, bool useNow) {
         }
         else {
             BOTC_PmStore(g_teller, "【获得能力】" + BOTC_NameStr(q) + " 获得「" + g_roleName[role] + "」能力（不改身份、不打哲学 / 炼金术士 token）。");
+        }
+    }
+    // 【食人族×疯子】（用户 2026-11-10）：吃到疯子能力 → 告知他现在是剧本上的某个恶魔（说书人从恶魔网格里选），
+    //   之后按疯子的夜序唤醒他假刀；换成其他能力时清掉这层认知。
+    if (BOTC_HasAbility(q, 74)) {
+        if (role == 38) {
+            if (!g_cannLun[q]) {
+                g_cannLun[q] = true;
+                g_cannLunDemon[q] = -1;
+                g_cannSeat = q;
+                g_cannSrc = 0;
+                BOTC_CannOpen(38);
+            }
+        }
+        else {
+            g_cannLun[q] = false;
+            g_cannLunDemon[q] = -1;
         }
     }
 }
@@ -29005,14 +29077,16 @@ bool BOTC_PreGrantStep () {
         }
         if (q >= 2 && q <= 13 && BOTC_SeatDead(q) == false) {
             g_cannDoneNight = g_nightNum;
-            if (g_cannFedSeat >= 2 && g_cannFedSeat <= 13 && g_cannFedDay == g_dayNum && BOTC_SeatImpaired(q) == false) {
+            if (g_cannFedSeat >= 2 && g_cannFedSeat <= 13 && (g_cannFedDay == g_dayNum || g_cannRestore[q]) && BOTC_SeatImpaired(q) == false) {
                 role = BOTC_SeatTrueRole(g_cannFedSeat);
                 if (role >= 0 && role <= 163) {
                     BOTC_PmStore(g_teller, "【食人族】" + BOTC_NameStr(q) + " 未中毒，自动获得「饱餐」持有者 " + BOTC_NameStr(g_cannFedSeat) + " 的能力：" + g_roleName[role] + "。");
+                    g_cannRestore[q] = false;
                     BOTC_AttachGrantOrNest(q, role);
                     return true;
                 }
             }
+            g_cannRestore[q] = false;
             BOTC_CannPickOpen(q);
             return true;
         }
@@ -29637,12 +29711,12 @@ void BOTC_BuildGrim () {
     DialogControlSetVisible(g_specBtn, PlayerGroupAll(), false);
     DialogControlSetVisible(g_specBtn, PlayerGroupSingle(g_teller), false);
     // 所有人共用的【声称】按钮（白天才有；目前只有猎手能声称）---- 放在【唤醒】右边
-    g_declareBtn = BOTC_NewButton(g_grimDlg, 300, 36, 207, 54, "声称/猜测");
+    g_declareBtn = BOTC_NewButton(g_grimDlg, 240, 36, 207, 54, "声称/猜测");
     DialogControlSetVisible(g_declareBtn, PlayerGroupAll(), false);
     // 【死后声称】（用户 2026-09-20）：**跟【声称】同一个位置**（两者永远不会同时出现：活着用上面那个，
     //   死了用这个）；面板复刻白天声称那一套，只是里面**只列「死后声称」的角色**（现在只有月之子 36）。
     //   任何玩家都能点（假声称照旧只是声明，真月之子才会真结算）。
-    g_dclaimBtn = BOTC_NewButton(g_grimDlg, 300, 36, 207, 54, "声称/猜测");
+    g_dclaimBtn = BOTC_NewButton(g_grimDlg, 240, 36, 207, 54, "声称/猜测");
     DialogControlSetVisible(g_dclaimBtn, PlayerGroupAll(), false);
 
     // 「说书人」那一格（用户 2026-09-19 晚）：**完全照搬普通玩家座位的样式** ----
@@ -31903,6 +31977,20 @@ void BOTC_PickChoose (int ob, int idx) {
         }
         return;
     }
+    // 【疯子·假科学怪人能力】（用户 2026-11-10）模式 33：说书人给疯子挑一个「假的善良角色」。
+    if (g_pickMode[ob] == 33) {
+        DialogSetVisible(g_pickDlg, PlayerGroupSingle(ob), false);
+        g_pickMode[ob] = 0;
+        g_pickTeam = -1;
+        g_pickAlign = -1;
+        if (idx >= 0) {
+            BOTC_LunFakeAbilPick(idx);
+        }
+        else {
+            BOTC_PmStore(g_teller, "【疯子·假能力】已跳过，这次不给疯子假能力。");
+        }
+        return;
+    }
     // 【奥赫（134）】模式 30：直接选择一个角色；-1 = 今晚不发动
     if (g_pickMode[ob] == 30) {
         DialogSetVisible(g_pickDlg, PlayerGroupSingle(ob), false);
@@ -32024,7 +32112,7 @@ void BOTC_PickChoose (int ob, int idx) {
     // 【杂耍艺人公开猜测选身份】（用户 2026-09-21）：模式 13 ---- 选完回到他那 5 格面板
     // 【麻脸巫婆（67）】（用户 2026-09-21）：选完角色 → 真的把他变成那个角色（在场就无事发生）
     //   她中毒 / 酒鬼时这一次不生效（用户 2026-09-21）
-    // 【炼金术士(95) 本体】（用户 2026-10-03）：选完借到的爪牙 → 两层魔典都改成它 + 打「是炼金术士」token + 私聊告知（**不发身份转变提示**）
+    // 【炼金术士(95) 本体】（用户 2026-11-10）：选完借到的爪牙 → 只说书人真值行改成它 + 打「是炼金术士」token + 私聊告知（**不发身份转变提示**；本人魔典仍显示炼金术士）
     if (g_pickMode[ob] == 21) {
         DialogSetVisible(g_pickDlg, PlayerGroupSingle(ob), false);
         libNtve_gf_SetDialogItemText(g_pickClear, StringToText("清除身份"), PlayerGroupSingle(ob));
@@ -32042,14 +32130,17 @@ void BOTC_PickChoose (int ob, int idx) {
                 return;
             }
             g_alcBorrow = idx;
-            // 【获得能力不改角色标记】（用户 2026-11-10）：炼金术士借到爪牙能力后，
-            //   魔典上仍显示「炼金术士」本人，只靠 token 123 + g_alcBorrow 记账这份能力。
-            g_tokOn[(((g_teller * 14) + alcSeat) * 256) + 123] = true;
+            // 【炼金术士改说书人魔典标记】（用户 2026-11-10）：只有真身炼金术士才改说书人真值行 +
+            //   放「是炼金术士」token；借来的炼金术士能力（变脸师 / 食人族等）只更新能力层，不二次改标记。
+            if (g_faceShow[alcSeat] != 96 && g_grantRoleBy[alcSeat] != 96) {
+                g_mark[(g_teller * 14) + alcSeat] = idx + 1;
+                g_tokOn[(((g_teller * 14) + alcSeat) * 256) + 123] = true;
+            }
             BOTC_SeatStateSync();
             BOTC_GrimRender(g_teller);
             BOTC_GrimRender(g_who[alcSeat]);
             BOTC_PmInfo(g_who[alcSeat], "【信息】你得知" + g_roleName[g_alcBorrow]);
-            BOTC_PmStore(g_teller, "【炼金术士】" + BOTC_NameStr(alcSeat) + " 借到的是【" + g_roleName[g_alcBorrow] + "】（魔典仍显示炼金术士，能力按借到的那只结算）。");
+            BOTC_PmStore(g_teller, "【炼金术士】" + BOTC_NameStr(alcSeat) + " 借到的是【" + g_roleName[g_alcBorrow] + "】（说书人魔典标记已换成该角色并放置「是炼金术士」标记；他本人魔典仍显示炼金术士）。");
         }
         return;
     }
@@ -35406,7 +35497,7 @@ int BOTC_SeatTrueRole (int q) {
         return 74;                                // 是食人族（74）
     }
     // 【是炼金术士(123)】（用户 2026-10-03 / 2026-11-10）：真身判成炼金术士(95) → 算善良（除非身上有「邪恶」token）；
-    //   魔典上仍显示炼金术士本人，借到的爪牙能力由 g_alcBorrow 记账。
+    //   说书人真值行的角色标记显示借到的那只爪牙，借到的能力由 g_alcBorrow 记账。
     if (g_tokOn[(((g_teller * 14) + q) * 256) + 123]) {
         return 95;
     }
@@ -35638,6 +35729,11 @@ bool BOTC_SkillWorks (int q) {
         return false;
     }
     if (g_liveCorpse[q]) {
+        return false;
+    }
+    // 【疯子·假能力】（用户 2026-11-10）：科学怪人发给疯子的那份假能力按中毒 / 醉酒处理 ----
+    //   面板照常打开、说书人照常给信息、流程照走，但这一次的效果不生效。
+    if (g_lunFakeAct[q]) {
         return false;
     }
     // 科学怪人给恶魔的能力：只看科学怪人是否存活且清醒健康，恶魔自身中毒不影响
@@ -38574,6 +38670,10 @@ bool BOTC_PickModeRoleAllowed (int p, int r) {
     if (mode == 32) {
         return BOTC_BoffinRoleAllowed(r);
     }
+    // 【疯子·假能力】（用户 2026-11-10）：只列镇民和外来者。
+    if (mode == 33) {
+        return (BOTC_LunFakeRoleAllowed(r) == 1);
+    }
     if (mode == 35) {
         return (BOTC_RoleAlign(r) == 0 && r != 56 && r != 95);
     }
@@ -39941,7 +40041,7 @@ void BOTC_DeclareRender () {
         else {
             DialogControlSetVisible(g_declareBtn, PlayerGroupSingle(g_who[p]), true);
             if (g_declarePick[g_who[p]] || g_alcChoice[g_who[p]] || g_alcPick[g_who[p]] || g_alsaOpen[g_who[p]]) {
-                libNtve_gf_SetDialogItemText(g_declareBtn, StringToText("声称/猜测中：继续操作"), PlayerGroupSingle(g_who[p]));
+                libNtve_gf_SetDialogItemText(g_declareBtn, StringToText("声称/猜测中"), PlayerGroupSingle(g_who[p]));
             }
             else {
                 libNtve_gf_SetDialogItemText(g_declareBtn, StringToText("声称/猜测"), PlayerGroupSingle(g_who[p]));
@@ -41625,6 +41725,7 @@ void BOTC_SlayAnswer (int ans) {
         if (g_phase == 2) {
             libNtve_gf_StopTimer(g_tSpeech);
             TimerStart(g_tSpeech, 60.0, false, c_timeGame);
+            g_speechLock = 2;          // 刚进陈述：锁 1 秒，避免同一拍连点把反驳跳掉
             BOTC_PhaseSet(3);
         }
         return;
@@ -44563,6 +44664,13 @@ void BOTC_PhiloPick (int p, int role) {
     if (p >= 2) {
         g_philoUsed[p] = true;
     }
+    // 【借来的哲学家能力】（用户 2026-11-10）：食人族 / 失忆者 / 变脸师 / 说书人赋予等借到哲学家能力后
+    //   再选一次，只把能力挂到本座位；说书人魔典上原有的角色标记和「是哲学家 / 是变脸师」等 token 都不再变。
+    if (g_grantRoleBy[p] == 57 || g_faceShow[p] == 57 || g_bnestActing[p] || g_boffinActing[p]) {
+        BOTC_AttachGrantOrNest(p, role);
+        BOTC_PmStore(g_teller, "【哲学家】" + BOTC_NameStr(p) + " 用的是借来的哲学家能力：只获得「" + g_roleName[role] + "」能力，说书人魔典上的角色标记和原有标记都不变。");
+        return;
+    }
     BOTC_TellRoleChoice(p, role);
     g_philoRole = role;                           // 记住他选的是哪个角色（同步醉酒时要用，用户 2026-09-21）
     pick = BOTC_SeatOfRoleNot(role, p);           // 那个角色在不在场：看真身，并排除他自己
@@ -44695,6 +44803,10 @@ bool BOTC_IsLunatic (int q) {
     if (g_tokOn[(((g_teller * 14) + q) * 256) + 49]) {
         return true;
     }
+    // 【食人族（74）吃到疯子】（用户 2026-11-10）：他也算「假装的那个」。
+    if (g_cannLun[q]) {
+        return true;
+    }
     return (BOTC_SeatTrueRole(q) == 38);
 }
 
@@ -44715,7 +44827,7 @@ int BOTC_RealLunaticSeat () {
             continue;
         }
         // 【食人族（74）】吃疯子能力的那个也算「假装的那个」；真疯子死了要让位
-        if (g_tokOn[(((g_teller * 14) + i) * 256) + 70] || g_tokOn[(((g_teller * 14) + i) * 256) + 97]) {
+        if (g_tokOn[(((g_teller * 14) + i) * 256) + 70] || g_tokOn[(((g_teller * 14) + i) * 256) + 97] || g_cannLun[i]) {
             if (!BOTC_SeatDead(i)) {
                 any = i;
             }
@@ -44757,7 +44869,7 @@ int BOTC_LunaticActingSeat () {
             continue;                  // 死人不行动
         }
         // 【食人族（74）】吃疯子能力的那个也算「假装的那个」
-        if (g_tokOn[(((g_teller * 14) + i) * 256) + 70] || g_tokOn[(((g_teller * 14) + i) * 256) + 97]) {
+        if (g_tokOn[(((g_teller * 14) + i) * 256) + 70] || g_tokOn[(((g_teller * 14) + i) * 256) + 97] || g_cannLun[i]) {
             any = i;
             if (!BOTC_SeatImpaired(i)) {
                 anyOk = i;
@@ -45853,8 +45965,64 @@ void BOTC_ManInfoOk () {
             }
             DialogSetVisible(g_miDlg, PlayerGroupSingle(g_teller), false);
             s2 = "【信息】你得知" + BOTC_NameStr(g_evilA) + " 是提线木偶。";
-            BOTC_PmInfo(g_who[seat], s2);
+            // 【疯子信息合批】（用户 2026-11-10）：这条也先攒着，等整条链填完一起发。
+            BOTC_LunInfoAdd(seat, s2);
             BOTC_PmStore(g_teller, "【邪恶信息】已发给 " + BOTC_NameStr(seat) + "：「" + s2 + "」");
+            g_miSeat = 0;
+            g_miRole = -1;
+            g_miKind = 0;
+            if (!BOTC_LunaticFakeAsk(seat)) {
+                BOTC_LunInfoFlush();
+            }
+            return;
+        }
+        // 【疯子 · 假疯子】（用户 2026-11-10）：告诉疯子「某人是疯子」，用来维持他以为自己是恶魔的认知。
+        if (kind == 23) {
+            if (g_evilA < 2) {
+                return;
+            }
+            DialogSetVisible(g_miDlg, PlayerGroupSingle(g_teller), false);
+            s2 = "【信息】你得知" + BOTC_NameStr(g_evilA) + " 是疯子。";
+            // 【疯子信息合批】（用户 2026-11-10）：这是整条链的最后一条，攒完立刻一起发。
+            BOTC_LunInfoAdd(seat, s2);
+            BOTC_PmStore(g_teller, "【疯子·假疯子】已发给 " + BOTC_NameStr(seat) + "：「" + s2 + "」");
+            g_lunFake = g_evilA;
+            g_lunFakeTo = seat;
+            g_miSeat = 0;
+            g_miRole = -1;
+            g_miKind = 0;
+            BOTC_LunInfoFlush();
+            return;
+        }
+        // 【疯子 · 假疯子刀人】（用户 2026-11-10）：每晚可告诉疯子「（那名假）疯子杀了谁」。
+        if (kind == 24) {
+            if (g_evilA < 2) {
+                return;
+            }
+            DialogSetVisible(g_miDlg, PlayerGroupSingle(g_teller), false);
+            // 【疯子·假疯子刀人】（用户 2026-11-10）：格式必须和真恶魔收到的一字不差
+            //   （真恶魔收到的是「【信息】疯子选择了Y。」，见 BOTC_LunaticPickNotify），
+            //   否则疯子一眼就能看出自己不是恶魔。
+            s2 = "【信息】疯子选择了" + BOTC_NameStr(g_evilA) + "。";
+            BOTC_PmInfo(g_who[seat], s2);
+            BOTC_PmStore(g_teller, "【疯子·假疯子】已发给 " + BOTC_NameStr(seat) + "：「" + s2 + "」");
+            g_miSeat = 0;
+            g_miRole = -1;
+            g_miKind = 0;
+            return;
+        }
+        // 【疯子 · 奥赫假刀人】（用户 2026-11-10）：他以为自己是奥赫，这里填的是角色名而不是座位。
+        if (kind == 25) {
+            s = libNtve_gf_DialogItemEditValue(g_miEdit, g_teller);
+            i = BOTC_LunFakeRoleByName(s);
+            if (i < 0) {
+                BOTC_Notice(g_teller, "先填一个正确的角色名。");
+                return;
+            }
+            DialogSetVisible(g_miDlg, PlayerGroupSingle(g_teller), false);
+            s2 = "【信息】疯子选择了" + g_roleName[i] + "。";
+            BOTC_PmInfo(g_who[seat], s2);
+            BOTC_PmStore(g_teller, "【疯子·奥赫】已发给 " + BOTC_NameStr(seat) + "：「" + s2 + "」");
             g_miSeat = 0;
             g_miRole = -1;
             g_miKind = 0;
@@ -45977,7 +46145,13 @@ void BOTC_ManInfoOk () {
                 s2 = s2 + "爪牙：" + BOTC_NameStr(g_evilB) + "。";
             }
         }
-        BOTC_PmInfo(g_who[seat], s2);
+        if (kind == 0) {
+            // 【疯子信息合批】（用户 2026-11-10）：先攒着，等提线木偶 / 假疯子都问完再一起发。
+            BOTC_LunInfoAdd(seat, s2);
+        }
+        else {
+            BOTC_PmInfo(g_who[seat], s2);
+        }
         BOTC_PmStore(g_teller, "【邪恶信息】已发给 " + BOTC_NameStr(seat) + "：「" + s2 + "」");
         // 【提线木偶不能和已发的爪牙重座】（用户 2026-11-06）：先把这次发出去的爪牙座位记下来，
         //   紧接着追问提线木偶时用它拦重复。
@@ -45990,9 +46164,15 @@ void BOTC_ManInfoOk () {
         g_miSeat = 0;
         g_miRole = -1;
         // 【疯子 · 提线木偶】（用户 2026-11-01）：假爪牙信息发完后，追问是否再加一条提线木偶信息。
+        // 【疯子 · 假疯子】（用户 2026-11-10）：提线木偶没弹出（条件不满足）时，接着追问假疯子。
         if (kind == 0) {
             g_miKind = 0;
-            BOTC_LunaticMarionetteAsk(seat);
+            if (!BOTC_LunaticMarionetteAsk(seat)) {
+                if (!BOTC_LunaticFakeAsk(seat)) {
+                    // 整条链问完（两个追问都没弹出）→ 一次性把攒下的信息发给疯子。
+                    BOTC_LunInfoFlush();
+                }
+            }
         }
         return;
     }
@@ -47395,6 +47575,9 @@ void BOTC_BoffinSetRecipient (int q) {
     BOTC_SeatStateSync();
     BOTC_GrimRender(g_teller);
     BOTC_PmStore(g_teller, "【科学怪人】" + BOTC_NameStr(src) + " 选择「" + g_roleName[role - 1] + "」，接收者 " + BOTC_NameStr(q) + "。");
+    // 【疯子·假科学怪人能力】（用户 2026-11-10）：科学怪人这一步走完之后，可以再给疯子一份
+    //   「假的善良能力」——他只是以为自己拿到了，结算不产生任何效果。
+    BOTC_LunFakeAbilAsk(BOTC_RealLunaticSeat());
 }
 
 bool BOTC_BoffinFirstWakeStep () {
@@ -47441,6 +47624,9 @@ int BOTC_ActRoleOf (int p) {
     }
     if (p == 1 && g_pdRole > 0 && g_pdRole <= 163) {
         return g_pdRole - 1;
+    }
+    if (g_lunFakeAct[p] && g_lunFakeAbil > 0 && g_lunFakeAbil <= 164) {
+        return g_lunFakeAbil - 1;
     }
     if (g_boffinActing[p]) {
         src = g_boffinActingSource[p];
@@ -47630,6 +47816,10 @@ int BOTC_GrantWakeOrder (int q) {
     if (role == 109 && g_tokOn[(((g_teller * 14) + q) * 256) + 130]) { return 0; }
     if (role == 128 && g_tokOn[(((g_teller * 14) + q) * 256) + 147]) { return 0; }
     if (role == 147) { return 0; }       // 限只做被动结算，不进入唤醒队列
+    // 【杂耍艺人（58）】（用户 2026-11-10）：这份能力只在「当天公开猜过、且这一局还没拿过结果」
+    //   的那一夜唤醒一次；唯一例外是杂耍艺人本人当天猜测后当天被处决 → 当晚直接替他拿结果。
+    if (role == 58 && g_juggUsed[q]) { return 0; }
+    if (role == 58 && !g_juggDone[q] && !BOTC_JugglerDiedAfterGuess()) { return 0; }
     return BOTC_GrantNightOrder(q);
 }
 
@@ -47796,6 +47986,15 @@ void BOTC_RestoreOneShot (int q) {
         g_seatFirstNight[q] = g_dayNum + 1;        // 下一个夜晚 = 他的新首夜
     }
     BOTC_PmStore(g_teller, "【复活】" + BOTC_NameStr(q) + " 的一次性能力已恢复。");
+    // 【食人族（74）复活补发】（用户 2026-11-10）：食人族经教授 / 沙巴洛斯复活后，
+    //   重新获得「最近一次死于处决的玩家」的能力；跨天也算，不再要求处决发生在当天。
+    if (BOTC_HasAbility(q, 74) && g_cannFedSeat >= 2 && g_cannFedSeat <= 13) {
+        if (BOTC_SeatTrueRole(g_cannFedSeat) >= 0 && BOTC_SeatTrueRole(g_cannFedSeat) <= 163) {
+            g_cannPending = 1;
+            g_cannRestore[q] = true;
+            BOTC_PmStore(g_teller, "【食人族】" + BOTC_NameStr(q) + " 复活 → 下一夜重新获得最近一次处决者「" + BOTC_NameStr(g_cannFedSeat) + "」的能力。");
+        }
+    }
     BOTC_DeclareRender();
     BOTC_SkillBtnRender();
 }
@@ -48756,6 +48955,19 @@ void BOTC_GoonTouch (int chooser, int target) {
         ca = 0;
         BOTC_PmStore(g_teller, "【莽夫×圣洁之魂】邪恶玩家已达上限，" + BOTC_NameStr(g) + " 保持善良阵营。");
     }
+    // 【食人族 × 莽夫 · 阵营锁定】（用户 2026-11-10）：已锁定时保持当前阵营；
+    //   第一次因莽夫改变阵营前，记住他的原阵营。
+    if (BOTC_SeatRegAlign(g) != ca) {
+        if (g_cannLocked[g]) {
+            ca = BOTC_SeatRegAlign(g);
+            BOTC_PmStore(g_teller, "【食人族×莽夫】" + BOTC_NameStr(g) + " 的阵营已锁定为 " + BOTC_AlignName(ca) + "，本次不改变。");
+        }
+        else {
+            if (BOTC_HasAbility(g, 74) && g_cannOrigAlign[g] < 0) {
+                g_cannOrigAlign[g] = BOTC_SeatRegAlign(g);
+            }
+        }
+    }
     if (BOTC_SeatRegAlign(g) == ca) {
         BOTC_PmStore(g_teller, "【莽夫】" + BOTC_NameStr(g) + " 本来就是 " + BOTC_AlignName(ca) + " 阵营 → 阵营没变，不提示他。");
     }
@@ -48842,6 +49054,8 @@ void BOTC_LunaticInfo () {
     // 按剧本决定（默认 2，堤丰之首 / 魔术师各 +1，最多 4），也可以留空 / 掺假。
     // 真正的恶魔要到第 17 位恶魔信息完成之后才得知谁是疯子。
     n = BOTC_LunaticMinionMax();
+    // 【疯子信息合批】（用户 2026-11-10）：开新一条情报链前先清空上次没发完的残留。
+    BOTC_LunInfoClean();
     BOTC_ManInfoOpenSeats(lu, "【疯子】填爪牙1~" + IntToString(n) + "；点【取消】= 不发送（可用于罂粟局）", 0);
     BOTC_PmStore(g_teller, "【疯子】给他最多" + IntToString(n) + "个「爪牙」，可以掺假，也可以留空。");
 }
@@ -48894,7 +49108,13 @@ void BOTC_LunaticPickNotify (int q) {
             BOTC_PmStore(g_teller, "【疯子】疯子（" + BOTC_NameStr(lu) + "）中毒/酒鬼 → 这一次没有发送给恶魔；他实际选择了 " + BOTC_NameStr(q) + "，这条别外传。");
         }
         else {
-            BOTC_PmInfoDemons("【信息】疯子选择了" + BOTC_NameStr(q) + "。");
+            // 【食人族×疯子】（用户 2026-11-10）：恶魔要知道「这名玩家是疯子」以及他攻击了谁。
+            if (lu >= 2 && g_cannLun[lu]) {
+                BOTC_PmInfoDemons("【信息】" + BOTC_NameStr(lu) + " 是疯子，他选择了" + BOTC_NameStr(q) + "。");
+            }
+            else {
+                BOTC_PmInfoDemons("【信息】疯子选择了" + BOTC_NameStr(q) + "。");
+            }
             BOTC_PmStore(g_teller, "【疯子】已直接私聊告诉所有恶魔：疯子选择了" + BOTC_NameStr(q) + "。");
         }
     }
@@ -49459,10 +49679,20 @@ void BOTC_ManInfoOpenSeats (int seat, string title, int kind) {
     libNtve_gf_SetDialogItemText(g_miEdit2, StringToText(""), PlayerGroupSingle(g_teller));
     libNtve_gf_SetDialogItemText(g_miEdit3, StringToText(""), PlayerGroupSingle(g_teller));
     libNtve_gf_SetDialogItemText(g_miEdit4, StringToText(""), PlayerGroupSingle(g_teller));
-    if (kind == 14 || kind == 15 || kind == 17 || kind == 21) {
-        // 事务官（14）/ 疯子提线木偶追问（15）/ 寡妇在场告知（17）/ 国王假信息（21）：只需要填一名玩家的座位号。
+    if (kind == 14 || kind == 15 || kind == 17 || kind == 21 || kind == 23 || kind == 24) {
+        // 事务官（14）/ 疯子提线木偶追问（15）/ 寡妇在场告知（17）/ 国王假信息（21）/
+        // 疯子假疯子（23）/ 疯子假疯子刀人（24）：只需要填一名玩家的座位号。
         DialogControlSetSize(g_miEdit, PlayerGroupSingle(g_teller), 220, 41);
         DialogControlSetPosition(g_miEdit, PlayerGroupSingle(g_teller), c_anchorTopLeft, 232, 83);
+        DialogControlSetVisible(g_miEdit, PlayerGroupSingle(g_teller), true);
+        DialogControlSetVisible(g_miEdit2, PlayerGroupSingle(g_teller), false);
+        DialogControlSetVisible(g_miEdit3, PlayerGroupSingle(g_teller), false);
+        DialogControlSetVisible(g_miEdit4, PlayerGroupSingle(g_teller), false);
+    }
+    else if (kind == 25) {
+        // 疯子以为是奥赫（134）：这里填的是一个角色名，给一个宽一点的输入框。
+        DialogControlSetSize(g_miEdit, PlayerGroupSingle(g_teller), 380, 41);
+        DialogControlSetPosition(g_miEdit, PlayerGroupSingle(g_teller), c_anchorTopLeft, 152, 83);
         DialogControlSetVisible(g_miEdit, PlayerGroupSingle(g_teller), true);
         DialogControlSetVisible(g_miEdit2, PlayerGroupSingle(g_teller), false);
         DialogControlSetVisible(g_miEdit3, PlayerGroupSingle(g_teller), false);
@@ -49524,7 +49754,7 @@ void BOTC_ManInfoOpenSeats (int seat, string title, int kind) {
     //   疯子提线木偶（15）/ 书生 × 疯子（16）/ 寡妇在场告知（17）/ 疯子 × 国王（18）/
     //   假军团手动善良名单（19）同样允许跳过。
     libNtve_gf_SetDialogItemText(g_miCancel, StringToText("取消"), PlayerGroupSingle(g_teller));
-    if (kind == 0 || kind == 15 || kind == 16 || kind == 17 || kind == 18 || kind == 19 || kind == 21 || kind == 22) {
+    if (kind == 0 || kind == 15 || kind == 16 || kind == 17 || kind == 18 || kind == 19 || kind == 21 || kind == 22 || kind == 23 || kind == 24 || kind == 25) {
         libNtve_gf_SetDialogItemText(g_miCancel, StringToText("取消"), PlayerGroupSingle(g_teller));
         DialogControlSetVisible(g_miCancel, PlayerGroupSingle(g_teller), true);
     }
@@ -49532,6 +49762,42 @@ void BOTC_ManInfoOpenSeats (int seat, string title, int kind) {
         DialogControlSetVisible(g_miCancel, PlayerGroupSingle(g_teller), false);
     }
     DialogSetVisible(g_miDlg, PlayerGroupSingle(g_teller), true);
+}
+
+// 【疯子信息合批】（用户 2026-11-10）：真恶魔在首夜是同一拍一次性收到「爪牙 / 提线木偶 /
+//   恶魔」等多条私聊的。疯子这边分三个弹窗依次填写，如果每填完一个就立刻发，疯子能从
+//   消息到达的间隔看出这几条不是一起给的。所以先攒进 g_lunInfoLine，整条链填完再一起发。
+void BOTC_LunInfoClean () {
+    int i;
+    for (i = 0; i < 4; i += 1) {
+        g_lunInfoLine[i] = "";
+    }
+    g_lunInfoN = 0;
+    g_lunInfoTo = 0;
+}
+
+void BOTC_LunInfoAdd (int seat, string line) {
+    if (seat < 2 || seat > 13) {
+        return;
+    }
+    if (g_lunInfoTo != seat) {
+        BOTC_LunInfoClean();
+        g_lunInfoTo = seat;
+    }
+    if (g_lunInfoN >= 0 && g_lunInfoN < 4) {
+        g_lunInfoLine[g_lunInfoN] = line;
+        g_lunInfoN = g_lunInfoN + 1;
+    }
+}
+
+void BOTC_LunInfoFlush () {
+    int i;
+    if (g_lunInfoTo >= 2 && g_lunInfoTo <= 13) {
+        for (i = 0; i < g_lunInfoN; i += 1) {
+            BOTC_PmInfo(g_who[g_lunInfoTo], g_lunInfoLine[i]);
+        }
+    }
+    BOTC_LunInfoClean();
 }
 
 // 【疯子 · 提线木偶】（用户 2026-11-01）：假爪牙信息发完后，再问一次说书人
@@ -49542,20 +49808,190 @@ void BOTC_ManInfoOpenSeats (int seat, string title, int kind) {
 //   才追问，否则直接跳过，不再多弹一次空选择窗。
 //   【爪牙数要差一个】（用户 2026-11-06）：发给疯子的爪牙数量必须正好比当前剧本可填的
 //   上限少一个（例如上限 2 个、实际填了 1 个）才追问，否则直接跳过。
-void BOTC_LunaticMarionetteAsk (int seat) {
+bool BOTC_LunaticMarionetteAsk (int seat) {
+    if (seat < 2 || seat > 13) {
+        return false;
+    }
+    if (!BOTC_IsLunatic(seat)) {
+        return false;
+    }
+    if (!BOTC_RoleOnBoard(93)) {
+        return false;
+    }
+    if (BOTC_LunaticMinionFilled() != BOTC_LunaticMinionMax() - 1) {
+        return false;
+    }
+    BOTC_ManInfoOpenSeats(seat, "【疯子】可选：填一名提线木偶的座位号（1~12）；点【取消】跳过", 15);
+    return true;
+}
+
+// 【疯子 · 假疯子】（用户 2026-11-10）：告诉完疯子爪牙以后，可选再告诉疯子一名「疯子」的座位。
+//   和真恶魔会得知「谁是疯子」一样，用来维持疯子以为自己是恶魔的认知。
+bool BOTC_LunaticFakeAsk (int seat) {
+    if (seat < 2 || seat > 13) {
+        return false;
+    }
+    if (!BOTC_IsLunatic(seat)) {
+        return false;
+    }
+    BOTC_ManInfoOpenSeats(seat, "【疯子】可选：填一名「疯子」的座位号（1~12），让他以为那是疯子；点【取消】跳过", 23);
+    return true;
+}
+
+// 疯子以为自己是什么恶魔：他魔典上写的就是那只恶魔（真身仍是疯子 38）。
+int BOTC_LunFakeBelievedRole (int q) {
+    int r;
+    if (q < 1 || q > 13) {
+        return -1;
+    }
+    r = g_mark[(g_teller * 14) + q] - 1;
+    if (r < 0 || r > 163) {
+        return -1;
+    }
+    return r;
+}
+
+// 【疯子 · 假疯子刀人】（用户 2026-11-10）：只要疯子活着，每晚都可选择是否告诉他
+//   「（那名假）疯子今晚杀了谁」。他以为自己是奥赫（134）时改填并告知一个角色名。
+void BOTC_LunaticFakeKillAsk () {
+    int lu;
+    lu = g_lunFakeTo;
+    if (lu < 2 || lu > 13) {
+        return;
+    }
+    if (g_lunFake < 2) {
+        return;
+    }
+    if (!g_seatOn[lu] || BOTC_SeatDead(lu)) {
+        return;
+    }
+    if (!BOTC_IsLunatic(lu)) {
+        return;
+    }
+    if (BOTC_LunFakeBelievedRole(lu) == 134) {
+        BOTC_ManInfoOpenSeats(lu, "【疯子·奥赫】可选：填「疯子」今晚杀的角色名；点【取消】跳过", 25);
+    }
+    else {
+        BOTC_ManInfoOpenSeats(lu, "【疯子】可选：填「疯子」今晚杀了谁（1~12）；点【取消】跳过", 24);
+    }
+}
+
+// 按中文角色名反查角色索引；找不到返回 -1。
+int BOTC_LunFakeRoleByName (string s) {
+    int i;
+    if (StringLength(s) <= 0) {
+        return -1;
+    }
+    for (i = 0; i <= 163; i += 1) {
+        if (g_roleName[i] == s) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+// 【疯子 · 假科学怪人能力】（用户 2026-11-10）：剧本里有科学怪人时，科学怪人行动结束后
+//   可选给疯子一份「假的善良能力」。他只是以为自己拿到了，面板照常能开，结算什么都不产生。
+int BOTC_LunFakeRoleAllowed (int role) {
+    if (role < 0 || role > 163) {
+        return 0;
+    }
+    if (BOTC_RoleTeam(role) != 0 && BOTC_RoleTeam(role) != 1) {
+        return 0;
+    }
+    return 1;
+}
+
+void BOTC_LunFakeAbilAsk (int seat) {
+    int i;
     if (seat < 2 || seat > 13) {
         return;
     }
-    if (!BOTC_IsLunatic(seat)) {
+    if (!g_seatOn[seat] || BOTC_SeatDead(seat) || !BOTC_IsLunatic(seat)) {
         return;
     }
-    if (!BOTC_RoleOnBoard(93)) {
+    if (!BOTC_RoleOnBoard(132)) {
         return;
     }
-    if (BOTC_LunaticMinionFilled() != BOTC_LunaticMinionMax() - 1) {
+    g_lunFakeEditSeat = seat;
+    g_pickMode[g_teller] = 33;
+    g_pickWho[g_teller] = 1;
+    BOTC_PickFilter(g_teller, false);
+    for (i = 0; i < 64; i += 1) {
+        if (BOTC_LunFakeRoleAllowed(g_gridSlot[i]) != 0) {
+            continue;
+        }
+        DialogControlSetVisible(g_pickBtn[i], PlayerGroupSingle(g_teller), false);
+        DialogControlSetVisible(g_pickIcon[i], PlayerGroupSingle(g_teller), false);
+        DialogControlSetVisible(g_pickName[i], PlayerGroupSingle(g_teller), false);
+    }
+    libNtve_gf_SetDialogItemText(g_pickTitle, StringToText("【疯子·假能力】选一个善良角色"), PlayerGroupSingle(g_teller));
+    DialogControlSetVisible(g_pickClear, PlayerGroupSingle(g_teller), true);
+    libNtve_gf_SetDialogItemText(g_pickClear, StringToText("跳过"), PlayerGroupSingle(g_teller));
+    DialogSetVisible(g_pickDlg, PlayerGroupSingle(g_teller), true);
+}
+
+void BOTC_LunFakeAbilPick (int role) {
+    int lu;
+    lu = g_lunFakeEditSeat;
+    DialogSetVisible(g_pickDlg, PlayerGroupSingle(g_teller), false);
+    g_pickMode[g_teller] = 0;
+    g_pickTeam = -1;
+    g_pickAlign = -1;
+    if (lu < 2 || lu > 13) {
         return;
     }
-    BOTC_ManInfoOpenSeats(seat, "【疯子】可选：填一名提线木偶的座位号（1~12）；点【取消】跳过", 15);
+    if (role < 0 || role > 163 || BOTC_LunFakeRoleAllowed(role) == 0) {
+        BOTC_Notice(g_teller, "只能选一个善良角色。");
+        return;
+    }
+    g_lunFakeAbil = role + 1;
+    g_lunFakeAbilTo = lu;
+    g_lunFakeNight = g_nightNum;
+    g_lunFakeActed = 0;
+    BOTC_PmInfo(g_who[lu], "【信息】你得知" + g_roleName[role]);
+    BOTC_PmStore(g_teller, "【疯子·假能力】已告诉疯子 " + BOTC_NameStr(lu) + "：他获得了「" + g_roleName[role] + "」能力（这次能力按中毒 / 醉酒处理，效果不生效）。");
+}
+
+// 假能力的夜序：和真能力一样按能力表的夜序走，只是同一夜只唤醒一次。
+int BOTC_LunFakeNightOrder (int q) {
+    int act;
+    int o;
+    int role;
+    if (q < 2 || q > 13) {
+        return 0;
+    }
+    if (g_lunFakeAbil <= 0 || g_lunFakeAbilTo != q) {
+        return 0;
+    }
+    if (!g_seatOn[q] || BOTC_SeatDead(q)) {
+        return 0;
+    }
+    if (g_lunFakeActed == g_nightNum) {
+        return 0;
+    }
+    role = g_lunFakeAbil - 1;
+    if (role < 0 || role > 163) {
+        return 0;
+    }
+    if (g_lunFakeNight < 1 || g_nightNum < g_lunFakeNight) {
+        return 0;
+    }
+    act = g_roleAct[role];
+    if (act == 2 && g_nightNum == g_lunFakeNight) {
+        return 0;
+    }
+    if (act != 1 && act != 2 && act != 5 && act != 6) {
+        return 0;
+    }
+    if (g_lunFakeNight == g_nightNum) {
+        o = BOTC_NoFirstOf(role);
+        if (o > 0) {
+            return o;
+        }
+        return BOTC_NoOtherOf(role);
+    }
+    return BOTC_NoOtherOf(role);
 }
 
 // 自动唤醒 + 首夜邪恶情报的进度全部清零（换夜、重新正式开始、取消正式开始都用它）
@@ -49572,6 +50008,7 @@ void BOTC_AutoWakeReset () {
         g_bnestActing[i] = false;
         g_bnestSource[i] = 0;
         g_pedantActing[i] = false;
+        g_lunFakeAct[i] = false;      // 【疯子·假能力】只是「这一夜正在按假能力唤醒」，换夜要清
         for (j = 0; j <= 13; j += 1) {
             g_boffinDoneBy[(i * 14) + j] = false;
             g_bnestDoneBy[(i * 14) + j] = false;
@@ -51321,6 +51758,10 @@ void BOTC_AutoWakeNext () {
     int pedantOrd;
     int pedantBestOrd;
     bool pedantWake;
+    int lunSeat;
+    int lunOrd;
+    int lunBestOrd;
+    bool lunWake;
     int hatOrd2;
     bool hatWake;
     int poppyOrd2;
@@ -51437,6 +51878,10 @@ void BOTC_AutoWakeNext () {
     pedantOrd = 0;
     pedantBestOrd = 0;
     pedantWake = false;
+    lunSeat = 0;
+    lunOrd = 0;
+    lunBestOrd = 0;
+    lunWake = false;
     hatOrd2 = 0;
     hatWake = false;
     poppyOrd2 = 0;
@@ -51609,6 +52054,31 @@ void BOTC_AutoWakeNext () {
             }
         }
     }
+    // 【疯子 · 假科学怪人能力】（用户 2026-11-10）：按那份假能力自己的夜序额外唤醒疯子一次，
+    //   面板照常打开、玩家照常选人，但确认时什么都不结算。
+    lunSeat = 0;
+    lunOrd = 0;
+    for (i = 0; i < g_seatN; i += 1) {
+        q = g_seatList[i];
+        lunOrd = BOTC_LunFakeNightOrder(q);
+        if (lunOrd > 0) {
+            lunSeat = q;
+            break;
+        }
+    }
+    if (lunSeat >= 2) {
+        lunBestOrd = (lunOrd * 10) + 6;
+        if (best < 2 || lunBestOrd < bestOrd) {
+            best = lunSeat;
+            bestOrd = lunBestOrd;
+            lunWake = true;
+            boffinWake = false;
+            bnestWake = false;
+            grantWake = false;
+            pedantWake = false;
+            hatWake = false;
+        }
+    }
     // 【罂粟种植者（86）· 死亡后的邪恶互认】（用户 2026-11-06）：
     //   白天死亡 → 排到罂粟自己的夜序位；夜间死亡 → 紧接当前行动之后插入一步。
     //   这一步不唤醒任何人、不开私聊，直接自动发送互认信息。
@@ -51767,6 +52237,27 @@ void BOTC_AutoWakeNext () {
         BOTC_WakeRender();
         return;
     }
+    if (lunWake) {
+        g_boffinActing[best] = false;
+        g_boffinActingSource[best] = 0;
+        g_grantActing[best] = false;
+        g_bnestActing[best] = false;
+        g_bnestSource[best] = 0;
+        g_lunFakeAct[best] = true;
+        g_autoLast = best;
+        if (!g_awake[best]) {
+            BOTC_WakeToggle(best);
+        }
+        if (!g_awake[best]) {
+            g_lunFakeAct[best] = false;
+            BOTC_WakeRender();
+            return;
+        }
+        g_lunFakeActed = g_nightNum;
+        BOTC_TellerPmTo(best);
+        BOTC_WakeRender();
+        return;
+    }
     if (boffinWake) {
         g_boffinActing[best] = true;
         g_boffinActingSource[best] = boffinSource;
@@ -51856,16 +52347,38 @@ bool BOTC_SeatIsComputer (int q) {
 //   BOTC_WakeActionPanelsClose() 收不到它们，点【唤醒下一个】后会一直盖在屏幕上。
 //   这里按【取消】口径收掉：这次不发送。
 void BOTC_InfoPopupClosePending () {
+    int k;
+    // 【疯子·假能力】角色网格（模式 33）也挂在这里收：点【唤醒下一个】时默认「跳过」，
+    //   否则它会盖在下一位的唤醒面板上（用户 2026-11-10）。
+    if (g_pickDlg > 0 && g_pickMode[g_teller] == 33) {
+        BOTC_PickChoose(g_teller, -1);
+    }
     if (g_miDlg <= 0 || !DialogIsVisible(g_miDlg, g_teller)) {
         return;
     }
     if (g_miRole != 41 || g_miSeat < 2 || g_miSeat > 13) {
         return;
     }
-    if (g_miKind != 0 && g_miKind != 15 && g_miKind != 16 && g_miKind != 18) {
+    if (g_miKind != 0 && g_miKind != 15 && g_miKind != 16 && g_miKind != 18 && g_miKind != 23 && g_miKind != 24 && g_miKind != 25) {
         return;
     }
+    k = g_miKind;
     DialogSetVisible(g_miDlg, PlayerGroupSingle(g_teller), false);
+    // 【疯子 · 假疯子】（用户 2026-11-10）：这里只是「随唤离场」把当前框收掉，
+    //   不能顺带再弹下一条追问（提线木偶取消会接假疯子追问），否则新框会盖到下一位身上。
+    if (k == 15) {
+        BOTC_PmStore(g_teller, "【信息】已取消本次附加信息，不向该玩家发送。");
+        g_evilA = 0;
+        g_evilB = 0;
+        g_evilC = 0;
+        g_evilD = 0;
+        g_miSeat = 0;
+        g_miRole = -1;
+        g_miKind = 0;
+        // 【疯子信息合批】（用户 2026-11-10）：链被这里打断，已经确认的爪牙信息照常一次性发给疯子。
+        BOTC_LunInfoFlush();
+        return;
+    }
     BOTC_MiCancelApply();
     g_miSeat = 0;
 }
@@ -51953,7 +52466,25 @@ void BOTC_WakeActionPanelsClose (int q) {
     }
     else if (g_miDlg > 0 && g_miSeat == q && g_miRole != 801 && g_miRole != 802 && g_miRole != 803 && g_miRole != 808) {
         DialogSetVisible(g_miDlg, PlayerGroupSingle(g_teller), false);
-        BOTC_MiCancelApply();
+        // 【疯子信息合批】（用户 2026-11-10）：疯子首夜那三个框被收回唤醒时只静默收起，
+        //   不再接下去追问（新框会盖到下一位身上），已经确认的部分照常一次性发给疯子。
+        if (g_miRole == 41 && (g_miKind == 0 || g_miKind == 15 || g_miKind == 23)) {
+            if (g_miKind == 0) {
+                BOTC_LunInfoClean();
+            }
+            else {
+                BOTC_LunInfoFlush();
+            }
+            g_evilA = 0;
+            g_evilB = 0;
+            g_evilC = 0;
+            g_evilD = 0;
+            g_miRole = -1;
+            g_miKind = 0;
+        }
+        else {
+            BOTC_MiCancelApply();
+        }
         g_miSeat = 0;
     }
     if (g_nobleDlg > 0 && g_nobleSeat == q) {
@@ -52059,6 +52590,7 @@ void BOTC_WakeApply (int q, bool manual) {
         g_grantActing[q] = false;
         g_bnestActing[q] = false;
         g_bnestSource[q] = 0;
+        g_lunFakeAct[q] = false;
         g_wakeCurrentOrd = 0;
         return;
     }
@@ -52068,6 +52600,28 @@ void BOTC_WakeApply (int q, bool manual) {
     }
     if (q >= 2 && !g_seatOn[q]) {
         BOTC_Notice(g_teller, "这个座位现在没有人，不能唤醒。");
+        return;
+    }
+    // 【疯子·假能力】（用户 2026-11-10）：这一步只把疯子骗过去 ——
+    //   照常唤醒、照常开面板让他选人；确认后走正常结算，但 BOTC_SkillWorks 期间返回 false，
+    //   所以效果按中毒 / 醉酒处理、一律不生效；这里也顺带不碰任何角色专用面板。
+    if (g_lunFakeAct[q] && g_lunFakeAbil > 0 && g_lunFakeAbil <= 164) {
+        g_awake[q] = true;
+        g_wakeCurrentOrd = BOTC_LunFakeNightOrder(q);
+        if (g_wakeCurrentOrd > g_nightCursorOrd) {
+            g_nightCursorOrd = g_wakeCurrentOrd;
+        }
+        g_wokeTonight[q] = true;
+        g_skillT1[q] = 0;
+        g_skillT2[q] = 0;
+        g_skillT3[q] = 0;
+        g_skillPicking[q] = false;
+        BOTC_SkillBtnRender();
+        BOTC_PmInfo(g_who[q], "【夜晚】你被唤醒了。");
+        BOTC_Notice(g_teller, "已唤醒 " + BOTC_NameStr(q) + "（假能力「" + g_roleName[g_lunFakeAbil - 1] + "」，按中毒 / 醉酒处理：效果不生效）。");
+        BOTC_PmStore(g_teller, "【疯子·假能力】唤醒 " + BOTC_NameStr(q) + "：他以为自己在用「" + g_roleName[g_lunFakeAbil - 1] + "」，这次能力按中毒 / 醉酒处理，效果不生效。");
+        BOTC_TellerPmTo(q);
+        BOTC_SkillOpen(q);
         return;
     }
     r = BOTC_ActRoleOf(q);
@@ -52264,6 +52818,12 @@ void BOTC_WakeApply (int q, bool manual) {
     }
     // 【顺序】先唤醒（上面几句），再给信息，最后才是他选目标 / 被收回（收在 BOTC_SkillConfirm 或说书人手里）
     BOTC_PmStore(g_teller, "【夜间】唤醒 " + BOTC_NameStr(q) + " " + BOTC_SeatRoleStr(q) + "。");
+    // 【疯子 · 假疯子刀人】（用户 2026-11-10）：这一步要排在疯子自己「恶魔刀人」**之前**，
+    //   而且只有首夜真的告诉过他「谁是假疯子」（g_lunFake > 0）才会有；
+    //   函数内部还会再按座位 / 存活 / 是否真疯子兜一遍。
+    if (r == 38 && q == g_lunFakeTo) {
+        BOTC_LunaticFakeKillAsk();
+    }
     if (r == 102) {
         BOTC_VizierFearChat(q);
     }
@@ -52671,6 +53231,19 @@ void BOTC_SkillOpen (int p) {
     }
     g_choiceSaid[p] = false;
     r = BOTC_ActRoleOf(p);
+    // 【疯子·假能力】（用户 2026-11-10）：科学怪人给的那份假能力照常打开通用目标面板；
+    //   确认后走正常结算，但 BOTC_SkillWorks 返回 false，效果按中毒 / 醉酒处理、不生效。
+    if (g_lunFakeAct[p]) {
+        g_skillT1[p] = 0;
+        g_skillT2[p] = 0;
+        g_skillT3[p] = 0;
+        g_skillRoleSel[p] = 0;
+        g_skillPicking[p] = true;
+        DialogSetVisible(g_skillDlg[p], PlayerGroupSingle(g_who[p]), true);
+        BOTC_SkillRender(p);
+        BOTC_Notice(g_who[p], BOTC_SkillPickTextFor(p));
+        return;
+    }
     if (r == 162) {
         BOTC_GudiaoOpen(p);
         return;
@@ -55455,6 +56028,19 @@ void BOTC_CultChoiceAnswer (int ans) {
         al = 0;
         BOTC_PmStore(g_teller, "【异教领袖×圣洁之魂】邪恶玩家已达上限，" + BOTC_NameStr(q) + " 保持善良阵营。");
     }
+    // 【食人族 × 异教领袖 · 阵营锁定】（用户 2026-11-10）：已锁定时保持当前阵营；
+    //   第一次因异教领袖改变阵营前，记住他的原阵营。
+    if (BOTC_SeatRegAlign(q) != al) {
+        if (g_cannLocked[q]) {
+            al = BOTC_SeatRegAlign(q);
+            BOTC_PmStore(g_teller, "【食人族×异教领袖】" + BOTC_NameStr(q) + " 的阵营已锁定为 " + BOTC_AlignName(al) + "，今晚不改变。");
+        }
+        else {
+            if (BOTC_HasAbility(q, 74) && g_cannOrigAlign[q] < 0) {
+                g_cannOrigAlign[q] = BOTC_SeatRegAlign(q);
+            }
+        }
+    }
     g_tokOn[(((g_teller * 14) + q) * 256) + 14] = false;
     g_tokOn[(((g_teller * 14) + q) * 256) + 15] = false;
     if (al == 1) {
@@ -55647,7 +56233,19 @@ void BOTC_LeviathanDuskCheck () {
     BOTC_LeviathanTokenWin();
 }
 
+void BOTC_SkillConfirmCore (int p);
+
+// 【疯子·假能力】（用户 2026-11-10）：假能力按中毒 / 醉酒处理 ---- 结算照常走完，
+//   但 BOTC_SkillWorks 在此期间一律返回 false，所以效果不生效；确认完立刻撤掉行动标记。
 void BOTC_SkillConfirm (int p) {
+    BOTC_SkillConfirmCore(p);
+    if (p >= 1 && p <= 13 && g_lunFakeAct[p]) {
+        g_lunFakeAct[p] = false;
+        BOTC_GrimRender(g_teller);
+    }
+}
+
+void BOTC_SkillConfirmCore (int p) {
     int r;
     string s;
     int n;
@@ -56384,7 +56982,14 @@ void BOTC_SkillConfirm (int p) {
             if (BOTC_ProtectTokOn(p, 70) || BOTC_ProtectTokOn(p, 97)) {
                 lus = "（哲学家假装的疯子）";
             }
-            n2 = BOTC_PmInfoDemons("【信息】疯子选择了" + s + "。");
+            n2 = 0;
+            if (g_cannLun[p]) {
+                // 【食人族×疯子】（用户 2026-11-10）：恶魔要知道「这名玩家是疯子」以及他攻击了谁。
+                n2 = BOTC_PmInfoDemons("【信息】" + BOTC_NameStr(p) + " 是疯子，他选择了" + s + "。");
+            }
+            else {
+                n2 = BOTC_PmInfoDemons("【信息】疯子选择了" + s + "。");
+            }
             if (n2 > 0) {
                 BOTC_PmStore(g_teller, "【疯子】已直接私聊告诉 " + IntToString(n2) + " 只恶魔：疯子选择了" + s + "。");
             }
@@ -59097,7 +59702,50 @@ void BOTC_CannExecHooks (int q) {
     if (g_cannPoisonSeat == cs && oldPoison != cs) {
         BOTC_PmStore(g_teller, "【食人族】邪恶角色 " + BOTC_NameStr(q) + " 死于处决 → " + BOTC_NameStr(cs) + " 自动中毒；「饱餐」已转移到 " + BOTC_NameStr(q) + "。");
     }
+    BOTC_CannLockCheck(q);
     BOTC_GrimRender(g_teller);
+}
+
+// 【食人族 × 异教领袖 / 莽夫】（用户 2026-11-10）
+//   这个座位自己能不能被改阵营：异教领袖 / 莽夫能力持有者算「能转变」。
+bool BOTC_AlignCanChange (int q) {
+    if (q < 1 || q > 13) {
+        return false;
+    }
+    return (BOTC_HasAbility(q, 37) || BOTC_HasAbility(q, 106));
+}
+
+// 【食人族 × 异教领袖 / 莽夫】（用户 2026-11-10）：食人族当前不在原阵营时，
+//   另一名无法转变阵营的玩家死于处决 → 锁定他现在的阵营。
+void BOTC_CannLockCheck (int dead) {
+    int i;
+    int al;
+    if (dead < 2 || dead > 13) {
+        return;
+    }
+    if (BOTC_AlignCanChange(dead)) {
+        return;
+    }
+    for (i = 2; i <= 13; i += 1) {
+        if (!g_seatOn[i] || BOTC_SeatDead(i)) {
+            continue;
+        }
+        if (i == dead) {
+            continue;
+        }
+        if (g_cannOrigAlign[i] < 0 || g_cannLocked[i]) {
+            continue;
+        }
+        if (!BOTC_HasAbility(i, 74)) {
+            continue;
+        }
+        al = BOTC_SeatRegAlign(i);
+        if (al == g_cannOrigAlign[i]) {
+            continue;
+        }
+        g_cannLocked[i] = true;
+        BOTC_PmStore(g_teller, "【食人族】" + BOTC_NameStr(i) + " 仍是 " + BOTC_AlignName(al) + " 阵营时，无法转变阵营的 " + BOTC_NameStr(dead) + " 死于处决 → " + BOTC_NameStr(i) + " 的阵营锁定为 " + BOTC_AlignName(al) + "。");
+    }
 }
 
 void BOTC_CannAfterExec (int q) {
@@ -59138,6 +59786,8 @@ void BOTC_CannRevert () {
         BOTC_SetSeatRole(g_teller, cs, 74);
         g_tokOn[(((g_teller * 14) + cs) * 256) + 49] = false;
         g_tokOn[(((g_teller * 14) + cs) * 256) + 97] = false;
+        g_cannLun[cs] = false;
+        g_cannLunDemon[cs] = -1;
         if (g_cannKind > 0) {
             BOTC_ChangeRoleMsg(cs, 74);
             BOTC_PmStore(g_teller, "【食人族】" + BOTC_NameStr(cs) + " 变回食人族。");
@@ -59174,11 +59824,12 @@ void BOTC_CannPick (int role) {
         BOTC_Notice(g_teller, "疯子只能选恶魔。");
         return;
     }
-    // 【食人族吃到疯子】（用户 2026-11-08）：只提醒他「以为自己现在是这只恶魔」。
-    //   不换魔典身份、不打「是疯子」49 / 「是食人族」97、不占夜序、不进入疯子的假刀流程，
-    //   真身与能力仍保持食人族本身。
+    // 【食人族×疯子】（用户 2026-11-10）：记住「他以为自己是哪只恶魔」。他之后会真的按疯子
+    //   的夜序被唤醒、选一名玩家假刀（不产生死亡），再由脚本告诉恶魔：这名食人族是疯子 + 目标。
+    g_cannLun[cs] = true;
+    g_cannLunDemon[cs] = role;
     BOTC_PmInfo(g_who[cs], "你得知你现在把自己当成邪恶阵营的恶魔「" + g_roleName[role] + "」。");
-    BOTC_PmStore(g_teller, "【食人族】" + BOTC_NameStr(cs) + " 吃到了疯子 → 他以为自己现在是邪恶阵营的恶魔 " + g_roleName[role] + "（仅认知提醒，不换身份、不唤醒、不刀人）。");
+    BOTC_PmStore(g_teller, "【食人族】" + BOTC_NameStr(cs) + " 吃到了疯子 → 他以为自己现在是邪恶阵营的恶魔 " + g_roleName[role] + "；疯子夜序会唤醒他假刀（不产生死亡），之后告诉恶魔他是疯子以及目标。");
     g_cannRole = 0;
     g_cannKind = 0;
     g_cannSeat = 0;
@@ -83712,8 +84363,26 @@ void BOTC_MiCancelApply () {
         BOTC_DxeManualOpen(seat);
         return;
     }
-    // 【疯子附加信息 / 假军团填写】（15 / 16 / 17 / 18 / 19）：点取消 = 这次不发送。
-    if (g_miRole == 41 && (g_miKind == 15 || g_miKind == 16 || g_miKind == 17 || g_miKind == 18 || g_miKind == 19)) {
+    // 【疯子 · 提线木偶】（用户 2026-11-01）：点取消 = 这次不告知提线木偶，
+    //   但仍接着追问「要不要告知一名假疯子」（用户 2026-11-10）。
+    if (g_miRole == 41 && g_miKind == 15) {
+        seat = g_miSeat;
+        g_evilA = 0;
+        g_evilB = 0;
+        g_evilC = 0;
+        g_evilD = 0;
+        g_miSeat = 0;
+        g_miRole = -1;
+        g_miKind = 0;
+        BOTC_PmStore(g_teller, "【信息】已取消本次附加信息，不向该玩家发送。");
+        if (!BOTC_LunaticFakeAsk(seat)) {
+            // 【疯子信息合批】（用户 2026-11-10）：后面没有追问了，把攒下的爪牙信息一次性发出去。
+            BOTC_LunInfoFlush();
+        }
+        return;
+    }
+    // 【疯子附加信息 / 假军团填写】（16 / 17 / 18 / 19）：点取消 = 这次不发送。
+    if (g_miRole == 41 && (g_miKind == 16 || g_miKind == 17 || g_miKind == 18 || g_miKind == 19)) {
         g_evilA = 0;
         g_evilB = 0;
         g_evilC = 0;
@@ -83725,6 +84394,33 @@ void BOTC_MiCancelApply () {
         BOTC_PmStore(g_teller, "【信息】已取消本次附加信息，不向该玩家发送。");
         return;
     }
+    // 【疯子 · 假疯子座位】（23）：点取消 = 这次不告知。
+    //   【疯子信息合批】（用户 2026-11-10）：这是整条链的最后一环，跳过也要把前面攒的
+    //   爪牙 / 提线木偶信息一次性发出去，不能因为跳过就一条都不发。
+    if (g_miRole == 41 && g_miKind == 23) {
+        g_evilA = 0;
+        g_evilB = 0;
+        g_evilC = 0;
+        g_evilD = 0;
+        g_miSeat = 0;
+        g_miRole = -1;
+        g_miKind = 0;
+        BOTC_PmStore(g_teller, "【疯子·假疯子】已跳过本条信息。");
+        BOTC_LunInfoFlush();
+        return;
+    }
+    // 【疯子 · 假疯子刀人 / 奥赫角色名】（24 / 25）：点取消 = 这次不告知。
+    if (g_miRole == 41 && (g_miKind == 24 || g_miKind == 25)) {
+        g_evilA = 0;
+        g_evilB = 0;
+        g_evilC = 0;
+        g_evilD = 0;
+        g_miSeat = 0;
+        g_miRole = -1;
+        g_miKind = 0;
+        BOTC_PmStore(g_teller, "【疯子·假疯子】已跳过本条信息。");
+        return;
+    }
     // 【疯子假爪牙】点取消 = 这次什么都不发，可用于罂粟种植者局手动控制疯子是否知情。
     if (g_miRole == 41 && g_miKind == 0) {
         g_evilA = 0;
@@ -83734,6 +84430,7 @@ void BOTC_MiCancelApply () {
         g_miSeat = 0;
         g_miRole = -1;
         g_miKind = 0;
+        BOTC_LunInfoClean();
         BOTC_PmStore(g_teller, "【疯子】已取消本次爪牙信息，不向疯子发送任何内容。");
         return;
     }
@@ -85148,10 +85845,17 @@ void BOTC_NomPick (int p, int q) {
     // 先启动计时器再切阶段：切阶段会立刻刷新倒计时，必须先有新计时器的值
     libNtve_gf_StopTimer(g_tSpeech);
     TimerStart(g_tSpeech, 60.0, false, c_timeGame);
+    g_speechLock = 2;              // 刚进陈述：锁 1 秒，避免同一拍连点把反驳跳掉
     BOTC_PhaseSet(3);
 }
 
 void BOTC_SpeechAdvance () {
+    // 【刚进入陈述 / 反驳的 1 秒内不接受推进】（用户 2026-11-10 报「反驳会被自己跳过」）：
+    //   说话人连点【结束发言】时，第二次点击（或上一段遗留的计时事件）会落在刚进入的阶段上，
+    //   把下一位的发言直接跳掉；这里先锁一拍再放行。
+    if (g_speechLock > 0 && (g_phase == 3 || g_phase == 4)) {
+        return;
+    }
     if (g_phase == 5) {
         // 说书人可以在 10 秒走完前直接结束投票，结算方式与倒计时到点完全一致
         BOTC_VoteDone();
@@ -85169,6 +85873,7 @@ void BOTC_SpeechAdvance () {
         }
         libNtve_gf_StopTimer(g_tSpeech);
         TimerStart(g_tSpeech, 60.0, false, c_timeGame);
+        g_speechLock = 2;              // 刚进反驳：锁 1 秒，避免同一拍连点把投票跳出来
         BOTC_PhaseSet(4);
         return;
     }
@@ -85403,6 +86108,7 @@ void BOTC_NomReset () {
     g_nomFrom = 0;
     g_nomTo = 0;
     g_nomPickBy = 0;
+    g_speechLock = 0;
     // 【提名阶段结束倒计时】跨天 / 新局先停掉（下一次进提名环节会重新从 30 秒开始）
     g_nomFreeOn = false;
     g_nomFreeSec = 0;
@@ -86081,6 +86787,9 @@ bool BOTC_Tick_Func (bool testConds, bool runActions) {
                 BOTC_Notice(g_who[by], "10 秒内没有选择提名对象，已取消发起提名；5 秒后才能再次发起。");
             }
         }
+    }
+    if (g_speechLock > 0) {
+        g_speechLock = g_speechLock - 1;    // 陈述 / 反驳刚进入时的防连点锁（0.5 秒一拍）
     }
     for (p = 1; p <= 13; p += 1) {
         if (g_nomPickCool[p] > 0) {
