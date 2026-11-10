@@ -647,6 +647,16 @@ int         g_gfRecTitle;
 int         g_gfRecYes;
 int         g_gfRecNo;
 int         g_gfRecX;
+// 【政客（97）】（用户 2026-11-10）：胜负封盘前问说书人「政客所在阵营落败，是否让他转变阵营并获胜」。
+int         g_polDlg;
+int         g_polTitle;
+int         g_polYes;
+int         g_polNo;
+int         g_polSeat;        // 正在询问的政客格子（0 = 没有待判定）
+int         g_polSide;        // 这次原定的胜利阵营（0 善良 / 1 邪恶）
+string      g_polWhy1;        // 保存这次胜负的结局文案，回答后原样交给封盘
+string      g_polWhy2;
+bool[14]    g_polDone;        // 这一次胜负里已经问过的政客，不再追问
 // 【和平主义者（33）· 处决弹窗】（用户 2026-11-06）：处决善良角色时弹窗让说书人决定是否触发
 int         g_pacAskDlg;
 int         g_pacAskTitle;
@@ -1051,6 +1061,9 @@ bool[14]    g_grantDrunkBy;   // 每名玩家附加能力的醉酒标记
 bool[14]    g_grantActing;    // 正在按附加能力唤醒
 bool[14]    g_grantDoneNight; // 这份附加能力今晚已经走过一次
 int[14]     g_grantFirstNight; // 这份附加能力的「首个夜晚」（获得能力的当夜；白天获得则记下一夜）
+// 【变脸师（117）】（用户 2026-11-10）：这一局已经获得过的角色，之后不能再选同一个。
+//   下标 = (逻辑格 * 164) + 角色索引；换位时整行跟着搬，新局整表清空。
+bool[2296]  g_faceEver;
 // 【失忆者 / 食人族 / 变脸师 / 小精灵 · 获得别人能力】（用户 2026-11-03）
 int[14]     g_pickAttachSeat;  // 身份网格点完后，把所选能力挂到哪个座位（0 = 普通选身份）
 int         g_pickOnlyRole;    // 只显示这一个角色（小精灵确认用；-1 = 不限制）
@@ -1061,10 +1074,22 @@ bool        g_poppyEvilPend;   // 罂粟种植者（或获得其能力者）死�
 int         g_poppyEvilNight;  // 这次互认属于第几夜（夜号对不上自动作废）
 int         g_poppyEvilWaitOrd;// 夜间死亡：以当时正在行动的夜序为界插到下一步；0 = 按罂粟自己的夜序；-1 = 立即
 int         g_cannPoisonSeat;  // 被「邪恶处决」自动中毒的食人族座位（0 = 没有）
-int         g_faceDoneNight;   // 变脸师今晚的选择已经完成
+int         g_cannFedSeat;     // 「饱餐」当前挂在哪个座位（最后一名死于处决的玩家；0 = 没有）
+int         g_cannFedDay;      // 最近一次处决死亡发生在第几天（用于「今天是否有人死于处决」）
+int[14]     g_faceDone;        // 变脸师 / 借用变脸师能力者：今晚的能力选择已经完成
+bool[14]    g_faceFail;        // 取消过（疯狂失败）：本局不再弹窗
+int[14]     g_faceShow;        // 变脸师当前借到的角色（角色索引 + 1；0 = 没有变脸）
+int[14]     g_faceBase;        // 变脸之前的魔典标记值（角色索引 + 1；下个夜晚直接写回 g_mark）
+int[14]     g_facePrevRole;    // 变脸之前 g_grantRoleBy 的备份（借来的变脸师能力）
+int[14]     g_facePrevFirstNight;
+bool[14]    g_facePrevDrunkBy;
+bool[14]    g_facePrevActing;
+bool[14]    g_facePrevDoneNight;
+int         g_facePicking;     // 正在为哪个座位挑选变脸师能力（0 = 没有）
 int[14]     g_pixieRoleBy;     // 小精灵首夜得知的镇民角色（索引 + 1，0 = 没有）
 int[14]     g_pixieSeatBy;     // 小精灵得知的镇民当时所在座位（追踪这名玩家，而不是角色）
 bool[14]    g_pixieDone;       // 小精灵是否已经用掉这次获得能力的机会
+bool[14]    g_pixieAsked;      // 借到小精灵能力的座位是否已经弹过「选一个在场的镇民玩家」
 bool[14]    g_philoUsed;       // 哲学家的一次性能力是否已经用掉（含被中毒 / 醉酒浪费）
 // 【异教领袖（106）· 教派投票】（用户 2026-10-10）
 int         g_cultDlg;
@@ -1205,6 +1230,7 @@ string      g_miTrue;         // 这一题脚本算出来的「正确答案」�
 int         g_miRoleA;        // 筑梦师：说书人选出来的「善良角色」
 int         g_miRoleB;        // 筑梦师：说书人选出来的「邪恶角色」
 int         g_miFnRole;       // 首夜信息位（洗衣妇/图管/调查员/祖母）说书人选的那个身份索引（0 = 还没选）
+int         g_pixiePickRole;  // 小精灵选中的镇民角色（索引 + 1，0 = 还没选；用 +1 区分「洗衣妇 = 0」）
 int         g_philoRole;      // 哲学家选的那个角色（之后按这个角色给在场的那个人醉酒；认知覆盖类也记原角色）
 int         g_pickTeam;       // 身份网格的额外过滤：-1 = 不过滤 / 0 镇民 / 1 外来者 / 2 爪牙 / 3 恶魔（用户 2026-09-21）
 int         g_philoSeat;      // 哲学家选酒鬼/疯子时，说书人还要再选一次「他以为自己是哪个角色」
@@ -1364,6 +1390,17 @@ int         g_klutzBy;         // 是哪个座位的呆瓜在等结算（0 = 没
 bool        g_barberWait;      // 今晚有一次「理发师交换」要处理
 int         g_barberSeat;      // 死了的理发师坐在哪（0 = 没有）
 int         g_barberFrom;      // 正在替理发师做交换的那只恶魔坐在哪（0 = 没有；用户 2026-09-21）
+// 【理发师 · 恶魔与死者互换】（用户 2026-11-10）：恶魔想把自己和已死亡的玩家互换 → 先问说书人
+int         g_barAskDlg;       // 说书人确认框
+int         g_barAskTitle;
+int         g_barAskYes;
+int         g_barAskNo;
+int         g_barAskX;
+bool        g_barAskOn;        // 正在等这次判定
+bool        g_barAskBypass;    // 说书人已同意 → 直接执行，不再重复询问
+int         g_barAskP;         // 待判定的恶魔格
+int         g_barAskA;
+int         g_barAskB;
 bool[14]    g_klutzDeclare;    // 呆瓜：他正在「死后声称 → 公开选人」的点头像阶段
 bool        g_sweetBySt;       // 心上人：说书人自己的技能面板正开着等他选人（统一模板）
 // 【相克规则：疯子 × 数学家】（用户 2026-09-21）：疯子今晚的假刀和真恶魔的目标不一样 → 数学家 +1
@@ -1381,11 +1418,18 @@ bool        g_witchLost;       // 女巫到达「只剩 3 人存活」后，本�
 int         g_cerenWho;        // 洗脑师今晚选中的玩家
 int         g_cerenRole;       // 让他疯狂证明的身份
 bool        g_cerenPick;       // 洗脑师正在选角色（网格模式 14）
+// 【洗脑师 · 疯狂 token】（用户 2026-11-10）：每个来源座位独立记账，不共用同一份疯狂
+int[14]     g_cerenTgt;        // 本夜刚放的疯狂目标（0 = 没有）
+int[14]     g_cerenTgtRole;    // 对应的疯狂角色
+int[14]     g_cerenTgtNight;   // 放置时的夜数（黎明按夜数收掉上一夜那一份）
+int[14]     g_cerenOld;        // 上一夜的目标：到本夜黎明前仍然处于疯狂状态
+int[14]     g_cerenOldRole;
+int[14]     g_cerenOldNight;
 int         g_hagWho;          // 麻脸巫婆选中的玩家
 int         g_hagOldRole;      // 他被改造**之前**的身份（酒鬼的提示要用）
 // 【麻脸巫婆二次确认 / 落难少女说书人定点】（用户 2026-11-03）
 int         g_hagActor;        // 本次行动的麻脸巫婆逻辑格
-int         g_hagAsk;          // 正在等说书人确认这次跨阵营改造（1 = 等确认）
+int         g_hagAsk;          // 正在等说书人确认（1 = 跨阵营改造 / 2 = 把场上唯一的恶魔熬成非恶魔）
 int         g_hagAskWho;       // 被改造的座位
 int         g_hagAskRole;      // 目标角色
 int         g_hagAskActor;     // 发起改造的麻脸巫婆
@@ -2209,6 +2253,10 @@ void   BOTC_PickAbortAttach (int p);
 void   BOTC_AmnePickOpen (int q);
 void   BOTC_CannPickOpen (int q);
 void   BOTC_FacePickOpen (int q);
+void   BOTC_FaceMarkSet (int q, int role);
+void   BOTC_FaceTokenSet (int q, bool on);
+void   BOTC_FaceStateClear (int q);
+void   BOTC_FaceNightRevert ();
 void   BOTC_PixieAskOpen (int q, int role);
 bool   BOTC_PreGrantStep ();
 // 【分类按钮 · 单类分页】（用户 2026-11-03）
@@ -2235,13 +2283,19 @@ void   BOTC_WitchSync ();               // 只剩 3 名存活 → 女巫失去�
 bool   BOTC_WitchCanAct (int p);        // 女巫是否仍有能力（<=3 人存活后永久失效）
 void   BOTC_CerenOpen (int p);          // 洗脑师（66）：选角色（善良角色 + 哥布林，相克见 BOTC_CerenShowGoblin）
 void   BOTC_CerenShowGoblin (int p);    // 【洗脑师 × 哥布林】（用户 2026-10-14）：把「哥布林」那一格单独放出来
-void   BOTC_CerenApply (int who, int role);
+void   BOTC_CerenApply (int src, int who, int role);
+bool   BOTC_CerenSeatMad (int s);       // 该格是否仍被任一洗脑师的疯狂记录覆盖
+void   BOTC_CerenDawnClear ();          // 黎明：收掉上一夜那一份疯狂（本夜刚放的那份保留）
+void   BOTC_CerenSourceGone (int q);    // 洗脑师死亡 / 离场：撤掉他那一份疯狂
+void   BOTC_CerenSwapState (int x, int y);  // 换座位：来源与目标一起跟着人走
 void   BOTC_ChangeRoleMsg (int q, int role);   // 统一的「你的身份转变：X的Y」提示（麻脸巫婆 / 哲学家都用）
 void   BOTC_HagOpen (int p);            // 麻脸巫婆（67）：选角色（整张板子）
 void   BOTC_HagApply (int who, int role);      // 真的把人变成那个角色
 void   BOTC_HagApplyReal (int who, int role);  // 跳过二次确认，直接落地（用户 2026-11-03）
 void   BOTC_HagConfirmOpen (int who, int role, int hagSeat); // 跨阵营改造 → 说书人二次确认
-void   BOTC_HagAskAnswer (int ans);            // 二次确认结果（1 = 确认 / 0 = 拒绝并重选）
+bool   BOTC_HagOnlyDemon (int who, int role);  // 目标是不是场上唯一的恶魔，且新身份不是恶魔
+void   BOTC_HagDemonAskOpen (int who, int role, int hagSeat); // 唯一恶魔 → 问说书人要不要让她重选
+void   BOTC_HagAskAnswer (int ans);            // 二次确认结果（1 = 确认 / 0 = 拒绝并重选 / -1 = 点 X）
 void   BOTC_DamselAskOpenHag (int who, int hagSeat);   // 麻脸巫婆造落难少女 → 说书人指定玩家
 void   BOTC_DamselAskOpenBarber (int p, int a, int b); // 理发师换到落难少女 → 说书人指定玩家
 void   BOTC_DamselAskConfirm (int t);          // 说书人选定的落难少女座位
@@ -2321,6 +2375,15 @@ void   BOTC_LevCountGood (int q);                              // 【利维坦�
 void   BOTC_BuildGfRecluse ();                                // 【教父×陌客】说书人判定框
 void   BOTC_GfRecluseAsk (int q);                             // 【教父×陌客】弹窗让说书人定外来者
 void   BOTC_GfRecluseAnswer (int ans);                        // 【教父×陌客】1 = 算作外来者 / 0 = 不算
+// 【理发师 · 恶魔与死者互换】（用户 2026-11-10）：恶魔要把自己和已死亡的玩家互换时先问说书人
+void   BOTC_BuildBarberAsk ();
+void   BOTC_BarberAskOpen (int p, int a, int b);               // 弹窗让说书人决定是否允许这次互换
+void   BOTC_BarberAskAnswer (int ans);                        // 1 = 允许交换 / 0 = 拒绝，让恶魔重新选
+// 【政客（97）】（用户 2026-11-10）：胜负封盘前问说书人是否让落败一方的政客改换阵营并获胜
+void   BOTC_BuildPolitician ();
+bool   BOTC_PoliticianAsk (int side, string why1, string why2);  // 返回 true = 已弹窗，等回答后再封盘
+void   BOTC_PoliticianAnswer (int ans);                          // 1 = 转变阵营并获胜 / 0 = 不转变
+void   BOTC_WinFinalize (int side, string why1, string why2);    // 唯一封盘出口（原 BOTC_ShowWin 的收尾）
 // 【和平主义者（33）· 处决弹窗】（用户 2026-11-06）：处决善良角色时弹窗让说书人决定是否触发
 void   BOTC_BuildPacifistAsk ();
 bool   BOTC_PacifistAsk (int q);                               // 返回 true = 已弹窗（暂停处决）
@@ -2346,6 +2409,8 @@ void   BOTC_HagKill (int p, int a, int b);     // 说书人定了谁死
 void   BOTC_HagBelieveOpen (int who, int kind); // 酒鬼 / 疯子：再选一次他以为的身份
 void   BOTC_HagBelieve (int role);
 int    BOTC_CannSeat ();                       // 【食人族（74）】坐在哪（0 = 没有）
+int    BOTC_CannAbilitySeat ();                // 借到食人族（74）能力的座位（0 = 没有）
+void   BOTC_CannSync ();                       // 食人族持续检测：同步「饱餐 / 中毒（食人族）」两枚标记
 void   BOTC_CannOpen (int kind);               // 弹身份网格：只挑恶魔（疯子）
 void   BOTC_CannPick (int role);               // 说书人选完 → 食人族吃到这个能力
 void   BOTC_CannRevert ();                     // 变回食人族、摘掉「是食人族 / 是酒鬼 / 是疯子」
@@ -3167,6 +3232,7 @@ void   BOTC_TokToggleAt (int ob, int seat, int t);
 void   BOTC_TokClearAll (int ob);
 void   BOTC_Deal ();
 void   BOTC_ConfirmDeal ();
+void   BOTC_CancelDeal ();      // 【取消下发】收回所有玩家的身份标记（用户 2026-11-10）
 void   BOTC_BuildBluff ();
 void   BOTC_BluffRender ();
 void   BOTC_BluffRowRender (int who);
@@ -9346,6 +9412,25 @@ bool BOTC_ClickDo (bool testConds, bool runActions) {
             }
             return true;
         }
+        // 【理发师】恶魔与死者互换（用户 2026-11-10）：是 = 允许交换 / 否、X = 让他重新选
+        if (c == g_barAskYes) {
+            if (p == g_teller) {
+                BOTC_BarberAskAnswer(1);
+            }
+            return true;
+        }
+        if (c == g_barAskNo) {
+            if (p == g_teller) {
+                BOTC_BarberAskAnswer(0);
+            }
+            return true;
+        }
+        if (c == g_barAskX) {
+            if (p == g_teller) {
+                BOTC_BarberAskAnswer(0);
+            }
+            return true;
+        }
         // 【教父×陌客】（用户 2026-11-05）：是 = 算作外来者 / 否、X = 不算
         if (c == g_gfRecYes) {
             if (p == g_teller) {
@@ -9403,16 +9488,22 @@ bool BOTC_ClickDo (bool testConds, bool runActions) {
             }
             return true;
         }
-        // 【麻脸巫婆二次确认】（用户 2026-11-03）：是 = 确认改造 / 否、X = 让她重选
+        // 【麻脸巫婆二次确认】（用户 2026-11-03）：是 = 确认改造 / 否 = 让她重选 / X = 不改造（唯一恶魔那条也是）
         if (c == g_hagAskYes) {
             if (p == g_teller) {
                 BOTC_HagAskAnswer(1);
             }
             return true;
         }
-        if (c == g_hagAskNo || c == g_hagAskX) {
+        if (c == g_hagAskNo) {
             if (p == g_teller) {
                 BOTC_HagAskAnswer(0);
+            }
+            return true;
+        }
+        if (c == g_hagAskX) {
+            if (p == g_teller) {
+                BOTC_HagAskAnswer(-1);
             }
             return true;
         }
@@ -9972,7 +10063,13 @@ bool BOTC_ClickDo (bool testConds, bool runActions) {
     }
     if (c == g_grimConfirm) {
         if (p == g_teller) {
-            BOTC_ConfirmDeal();
+            // 【确认下发 / 取消下发改成同一个按钮】（用户 2026-11-10）：已下发时点它 = 收回全部身份
+            if (g_dealConfirmed) {
+                BOTC_CancelDeal();
+            }
+            else {
+                BOTC_ConfirmDeal();
+            }
         }
         return true;
     }
@@ -10224,6 +10321,19 @@ bool BOTC_ClickDo (bool testConds, bool runActions) {
         }
         return true;
     }
+    // 【理发师】恶魔与死者互换（用户 2026-11-10）：是 = 允许交换 / 否、X = 让他重新选
+    if (c == g_barAskYes) {
+        if (p == g_teller) {
+            BOTC_BarberAskAnswer(1);
+        }
+        return true;
+    }
+    if (c == g_barAskNo || c == g_barAskX) {
+        if (p == g_teller) {
+            BOTC_BarberAskAnswer(0);
+        }
+        return true;
+    }
     // 【教父×陌客】（用户 2026-11-05）：是 = 算作外来者 / 否、X = 不算
     if (c == g_gfRecYes) {
         if (p == g_teller) {
@@ -10234,6 +10344,19 @@ bool BOTC_ClickDo (bool testConds, bool runActions) {
     if (c == g_gfRecNo || c == g_gfRecX) {
         if (p == g_teller) {
             BOTC_GfRecluseAnswer(0);
+        }
+        return true;
+    }
+    // 【政客（97）】（用户 2026-11-10）：是 = 转变阵营并获胜 / 否 = 不转变
+    if (c == g_polYes) {
+        if (p == g_teller) {
+            BOTC_PoliticianAnswer(1);
+        }
+        return true;
+    }
+    if (c == g_polNo) {
+        if (p == g_teller) {
+            BOTC_PoliticianAnswer(0);
         }
         return true;
     }
@@ -10269,16 +10392,22 @@ bool BOTC_ClickDo (bool testConds, bool runActions) {
         }
         return true;
     }
-    // 【麻脸巫婆二次确认】（用户 2026-11-03）：是 = 确认改造 / 否、X = 让她重选
+    // 【麻脸巫婆二次确认】（用户 2026-11-03）：是 = 确认改造 / 否 = 让她重选 / X = 不改造（唯一恶魔那条也是）
     if (c == g_hagAskYes) {
         if (p == g_teller) {
             BOTC_HagAskAnswer(1);
         }
         return true;
     }
-    if (c == g_hagAskNo || c == g_hagAskX) {
+    if (c == g_hagAskNo) {
         if (p == g_teller) {
             BOTC_HagAskAnswer(0);
+        }
+        return true;
+    }
+    if (c == g_hagAskX) {
+        if (p == g_teller) {
+            BOTC_HagAskAnswer(-1);
         }
         return true;
     }
@@ -11604,7 +11733,7 @@ bool BOTC_ChatDo (bool testConds, bool runActions) {
         }
         // -疯狂 = 给座位 2 打「疯狂（洗脑师）」并对他说「疯狂证明自己是钟表匠」
         if (msg == "-疯狂") {
-            BOTC_CerenApply(2, 47);
+            BOTC_CerenApply(2, 2, 47);
         }
         if (msg == "-哲酒鬼" || msg == "-philo14") {
             BOTC_TestPhilo(14);
@@ -14003,6 +14132,8 @@ void BOTC_NightGo () {
         if (g_dayNum > 0 || g_nightNum > 0) {
             g_nightNum = g_dayNum + 1;
         }
+        // 【变脸师（117）】（用户 2026-11-10）：进入下一个夜晚立刻变回原身份并移除「是变脸师」标记。
+        BOTC_FaceNightRevert();
         libNtve_gf_SetDialogItemText(g_nightBtn, StringToText("进入白天"), PlayerGroupSingle(g_teller));
         UIDisplayMessage(PlayerGroupAll(), c_messageAreaSubtitle, StringToText("天黑了"));
         if (g_nightNum > 0) {
@@ -15020,14 +15151,33 @@ void BOTC_ResetGameVars () {
     g_poppyEvilNight = 0;
     g_poppyEvilWaitOrd = 0;
     g_cannPoisonSeat = 0;
-    g_faceDoneNight = 0;
+    g_cannFedSeat = 0;
+    g_cannFedDay = 0;
+    g_facePicking = 0;
     g_pickOnlyRole = -1;
     for (i = 0; i <= 13; i += 1) {
         g_pickAttachSeat[i] = 0;
         g_pixieRoleBy[i] = 0;
         g_pixieSeatBy[i] = 0;
         g_pixieDone[i] = false;
+        g_pixieAsked[i] = false;
         g_philoUsed[i] = false;
+        g_faceDone[i] = 0;
+        g_faceFail[i] = false;
+        g_faceShow[i] = 0;
+        g_faceBase[i] = 0;
+        g_facePrevRole[i] = 0;
+        g_facePrevFirstNight[i] = 0;
+        g_facePrevDrunkBy[i] = false;
+        g_facePrevActing[i] = false;
+        g_facePrevDoneNight[i] = false;
+        // 【洗脑师 · 疯狂记账】新局清零（用户 2026-11-10）
+        g_cerenTgt[i] = 0;
+        g_cerenTgtRole[i] = 0;
+        g_cerenTgtNight[i] = 0;
+        g_cerenOld[i] = 0;
+        g_cerenOldRole[i] = 0;
+        g_cerenOldNight[i] = 0;
     }
     g_vixenSeat = 0;
     g_vixenTarget = 0;
@@ -15045,6 +15195,26 @@ void BOTC_ResetGameVars () {
     g_levRecSeat = 0;              // 【利维坦×陌客】新一局清掉待判定
     if (g_levRecDlg != 0) {
         DialogSetVisible(g_levRecDlg, PlayerGroupAll(), false);
+    }
+    // 【理发师 · 恶魔与死者互换】（用户 2026-11-10）：新一局清掉待判定
+    g_barAskOn = false;
+    g_barAskBypass = false;
+    g_barAskP = 0;
+    g_barAskA = 0;
+    g_barAskB = 0;
+    if (g_barAskDlg != 0) {
+        DialogSetVisible(g_barAskDlg, PlayerGroupAll(), false);
+    }
+    // 【政客（97）】（用户 2026-11-10）：新一局清掉「是否转变阵营获胜」的待判定。
+    g_polSeat = 0;
+    g_polSide = 0;
+    g_polWhy1 = "";
+    g_polWhy2 = "";
+    for (i = 2; i <= 13; i += 1) {
+        g_polDone[i] = false;
+    }
+    if (g_polDlg != 0) {
+        DialogSetVisible(g_polDlg, PlayerGroupAll(), false);
     }
     // 【教父×陌客】（用户 2026-11-05）：新一局清掉待判定与全部判定结果
     g_gfRecSeat = 0;
@@ -15447,6 +15617,10 @@ void BOTC_ResetGameVars () {
             g_boffinDoneBy[(i * 14) + j] = false;
             g_bnestDoneBy[(i * 14) + j] = false;
         }
+    }
+    // 【变脸师（117）】（用户 2026-11-10）：新局清空「已经获得过的角色」清单。
+    for (i = 0; i < 2296; i += 1) {
+        g_faceEver[i] = false;
     }
     // 【换局清空全部观察者 token 行】（用户 2026-10-26）：
     //   以前 BOTC_Deal 只清当前 g_teller 那一行；手动配板则一行都没彻底清。
@@ -25787,10 +25961,12 @@ g_tokName[119] = "即将被处决（军团）"; g_tokShort[119] = "即将被处�
     g_tokName[175] = "死亡（饕餮）";           g_tokShort[175] = "饕餮死亡"; g_tokIcon[175] = "botc_tk154.dds"; g_tokRole[175] = 154;
     // 【通用 token】（用户 2026-11-03）：无敌 ---- 夜间和白天都不会死亡，仅作说书人备用，系统不自动调用。
     g_tokName[176] = "无敌";                  g_tokShort[176] = "无敌";     g_tokIcon[176] = "botc_tk07.dds";  g_tokRole[176] = -1;
-    // 【失忆者（73）】获得能力标记（用户 2026-11-03）：无论说书人选了角色还是取消 DIY，都会打上。
-    g_tokName[177] = "获得能力（失忆者）";      g_tokShort[177] = "获得能力"; g_tokIcon[177] = "botc_tk73.dds"; g_tokRole[177] = 73;
+    // 【失忆者（73）】（用户 2026-11-10）：获得能力不再打专属 token，能力按 g_grantRoleBy 正常生效。
     // 【食人族（74）】处决邪恶角色后自动中毒，持续到下一次有人死于处决。
     g_tokName[178] = "中毒（食人族）";          g_tokShort[178] = "中毒";     g_tokIcon[178] = "botc_tk74.dds"; g_tokRole[178] = 74;
+    // 【食人族（74）· 饱餐】（用户 2026-11-10）：白天死于处决的玩家身上挂这枚标记，跨夜不清，
+    //   下一名玩家死于处决时转移过去；食人族是否在场 / 是否醉酒中毒都不影响放置。
+    g_tokName[206] = "饱餐（食人族）";          g_tokShort[206] = "饱餐";     g_tokIcon[206] = "botc_tk74.dds"; g_tokRole[206] = 74;
     // 【精神病患者（84）】（用户 2026-11-03 / 2026-11-07）：被提名处决时先猜石头剪刀布，
     //   没有输就处决无事发生；触发按能力层判断，不再依赖专属 token。
     // 【书生被猜】（用户 2026-11-04）：恶魔在「声称/猜测」里猜书生时，不管猜没猜中，
@@ -25815,6 +25991,8 @@ g_tokName[119] = "即将被处决（军团）"; g_tokShort[119] = "即将被处�
     g_tokName[201] = "判罚（典狱长）";           g_tokShort[201] = "判罚";     g_tokIcon[201] = "botc_tk163.dds"; g_tokRole[201] = 163;
     g_tokName[202] = "死于今日（典狱长）";       g_tokShort[202] = "死于今日"; g_tokIcon[202] = "botc_tk163.dds"; g_tokRole[202] = 163;
     g_tokName[204] = "死亡（典狱长）";           g_tokShort[204] = "典狱长死亡"; g_tokIcon[204] = "botc_tk163.dds"; g_tokRole[204] = 163;
+    // 【变脸师（117）】（用户 2026-11-10）：临时变成别的角色时，说书人魔典上多放这枚标记记住真身。
+    g_tokName[205] = "是变脸师";                 g_tokShort[205] = "是变脸师"; g_tokIcon[205] = "botc_role117.dds"; g_tokRole[205] = 117;
     // 【全员追忆 · 猜角色】（用户 2026-11-06）：猜对后放在说书人魔典上
     g_tokName[203] = "猜对了";                  g_tokShort[203] = "猜对了";   g_tokIcon[203] = "botc_tk_good.dds"; g_tokRole[203] = -1;
     g_tokName[148] = "活尸（赶尸人）";        g_tokShort[148] = "活尸";        g_tokIcon[148] = "botc_tk126.dds"; g_tokRole[148] = 126;
@@ -27174,6 +27352,7 @@ void BOTC_PhaseUiForceClose () {
         //   的选能力网格在阶段切换时被统一收掉，但 BOTC_PickChoose 只认这个值判断「挂能力」，
         //   不清的话下一次点任何身份网格都会被当成给旧座位获得能力（身份没标上、能力挂错人）。
         g_pickAttachSeat[q] = 0;
+        g_facePicking = 0;
         g_gambleWait[q] = false;
         g_skillPicking[q] = false;
         g_wardenBy[q] = 0;
@@ -27197,6 +27376,13 @@ void BOTC_PhaseUiForceClose () {
     g_levRecSeat = 0;
     g_gfRecSeat = 0;
     g_pacAskSeat = 0;
+    // 【理发师 · 恶魔与死者互换】切阶段 / 换座位收掉待判定，避免旧弹窗劫持后续点击
+    g_barAskOn = false;
+    g_barAskBypass = false;
+    g_barAskP = 0;
+    g_barAskA = 0;
+    g_barAskB = 0;
+    DialogSetVisible(g_barAskDlg, PlayerGroupAll(), false);
     // 【奥赫（134）/ 心上人（61）】说书人那一格的单目标面板标志：面板被统一收掉后必须一起清，
     //   否则跨阶段后说书人格的下一次技能会被误判成奥赫补杀 / 心上人选人（目标槽被限成 1、确认被吞）。
     g_ojoAskSt = false;
@@ -27222,6 +27408,13 @@ void BOTC_PhaseUiForceClose () {
     DialogSetVisible(g_levRecDlg, PlayerGroupAll(), false);
     DialogSetVisible(g_gfRecDlg, PlayerGroupAll(), false);
     DialogSetVisible(g_pacAskDlg, PlayerGroupAll(), false);
+    // 【政客（97）】（用户 2026-11-10）：换座位 / 切阶段打断政客判定 → 按「不转变」直接封盘，
+    //   不让这一局卡在等回答上。
+    if (g_polSeat >= 2) {
+        BOTC_WinFinalize(g_polSide, g_polWhy1, g_polWhy2);
+    }
+    g_polSeat = 0;
+    DialogSetVisible(g_polDlg, PlayerGroupAll(), false);
     DialogSetVisible(g_fakeAskDlg, PlayerGroupAll(), false);
     DialogSetVisible(g_fakeDlg, PlayerGroupAll(), false);
     DialogSetVisible(g_gossipDlg, PlayerGroupAll(), false);
@@ -28463,15 +28656,51 @@ void BOTC_GrantClose () {
 }
 
 // ===== 【获得别人能力】（用户 2026-11-03）=====
-// 失忆者 73 / 食人族 74 / 变脸师 117 / 小精灵 91 获得能力时，不再替换自身角色标记，
-// 也不打「是哲学家 / 是炼金术士」token；统一走 g_grantRoleBy 这一层附加能力，能力真实生效。
+// 失忆者 73 / 食人族 74 / 变脸师 117 / 小精灵 91 / 炼金术士 95 获得能力时，统一走 g_grantRoleBy 这一层附加能力。
+// 所有「获得别人能力」都不替换自身角色标记，也不打「是哲学家 / 是炼金术士」token；
+// 变脸师由说书人每晚弹窗决定，只有真身是变脸师（117）才临时改说书人魔典的角色标记并多放
+// 「是变脸师」标记、下个夜晚还原；玩家本人魔典始终显示变脸师本人，借用变脸师能力的座位只挂当夜能力。
 void BOTC_AttachGrant (int q, int role, bool useNow) {
+    int i;
+    bool real;
     if (q < 2 || q > 13 || role < 0 || role > 163) {
         return;
+    }
+    i = 0;
+    // 【套娃不改标记】（用户 2026-11-10）：只有真身是变脸师（117）才改魔典角色标记；
+    //   失忆者 / 食人族 / 小精灵 / 哲学家 / 炼金术士等借来变脸师能力时只挂能力层。
+    real = false;
+    if (g_facePicking == q && BOTC_SeatTrueRole(q) == 117) {
+        real = true;
+    }
+    // 【变脸师（117）】（用户 2026-11-10）：先备份这一层原本借到的能力，夜里恢复时原样还原。
+    //   g_faceBase 存的是魔典标记值（角色索引 + 1），还原时直接写回 g_mark，不会差一位。
+    //   借用者不改标记，备份值写 0，夜里还原时只清临时状态、不动魔典。
+    if (g_facePicking == q && g_faceShow[q] <= 0) {
+        if (real) {
+            g_faceBase[q] = BOTC_SeatTrueRole(q) + 1;
+        }
+        else {
+            g_faceBase[q] = 0;
+        }
+        g_facePrevRole[q] = g_grantRoleBy[q];
+        g_facePrevFirstNight[q] = g_grantFirstNight[q];
+        g_facePrevDrunkBy[q] = g_grantDrunkBy[q];
+        g_facePrevActing[q] = g_grantActing[q];
+        g_facePrevDoneNight[q] = g_grantDoneNight[q];
     }
     BOTC_GrantClearPassiveMarks(q);
     // 食人族得到新能力时失去旧能力：用 g_grantRoleBy 覆盖即可。被中毒 / 醉酒也照样记录（用户第 10 条）。
     g_grantRoleBy[q] = role + 1;
+    // 【变脸师（117）】（用户 2026-11-10）：记录本局获得过的角色，之后网格里不再出现。
+    if (BOTC_SeatTrueRole(q) == 117) {
+        g_faceEver[(q * 164) + role] = true;
+    }
+    // 【变脸师（117）】（用户 2026-11-10）：这个座位重新获得「变脸师」能力（哲学家 / 食人族 /
+    //   说书人赋予等）时，清掉之前留下的「疯狂失败」记录，之后每个夜晚照常单独询问他。
+    if (role == 117) {
+        g_faceFail[q] = false;
+    }
     g_grantDrunkBy[q] = false;
     g_grantActing[q] = false;
     g_grantDoneNight[q] = false;
@@ -28479,13 +28708,35 @@ void BOTC_AttachGrant (int q, int role, bool useNow) {
     if (!g_isNight || g_grantFirstNight[q] < 1) {
         g_grantFirstNight[q] = g_nightNum + 1;
     }
-    // 【失忆者】（用户第 4 条）：无论选到能力还是取消 DIY，都要打上「获得能力（失忆者）」
-    if (BOTC_SeatTrueRole(q) == 73) {
-        g_tokOn[(((g_teller * 14) + q) * 256) + 177] = true;
+    // 【变脸师（117）】（用户 2026-11-10）：真身变脸师获得能力后把说书人魔典上的角色标记临时
+    //   改成该角色，并在说书人魔典上多放一枚「是变脸师」标记；进入下一个夜晚自动变回。
+    //   玩家本人魔典始终显示变脸师本人（用户 2026-11-10）。
+    if (g_facePicking == q) {
+        g_faceShow[q] = role + 1;
+        g_faceEver[(q * 164) + role] = true;
+        if (real) {
+            i = 1;
+            BOTC_FaceMarkSet(q, role);
+            BOTC_FaceTokenSet(q, true);
+        }
+        g_facePicking = 0;
     }
     BOTC_SeatStateSync();
     BOTC_GrimRender(g_teller);
-    BOTC_PmStore(g_teller, "【获得能力】" + BOTC_NameStr(q) + " 获得「" + g_roleName[role] + "」能力（不改身份、不打哲学 / 炼金术士 token）。");
+    if (i == 1 && g_who[q] >= 1 && g_who[q] <= 13 && g_who[q] != g_teller) {
+        BOTC_GrimRender(g_who[q]);
+    }
+    if (i == 1) {
+        BOTC_PmStore(g_teller, "【变脸师】" + BOTC_NameStr(q) + " 今晚获得「" + g_roleName[role] + "」能力：说书人魔典上的角色标记已临时改成该角色，并放置「是变脸师」标记（他本人魔典仍显示变脸师）；下个夜晚自动变回。");
+    }
+    else {
+        if (g_faceShow[q] > 0) {
+            BOTC_PmStore(g_teller, "【变脸师】" + BOTC_NameStr(q) + " 今晚获得「" + g_roleName[role] + "」能力（借用变脸师能力，不改魔典角色标记）；下个夜晚自动失效并恢复借来的变脸师能力。");
+        }
+        else {
+            BOTC_PmStore(g_teller, "【获得能力】" + BOTC_NameStr(q) + " 获得「" + g_roleName[role] + "」能力（不改身份、不打哲学 / 炼金术士 token）。");
+        }
+    }
 }
 
 // 获得能力时若选到哲学家 / 炼金术士：继续选一层真正生效的能力（第 5 条）。
@@ -28521,15 +28772,21 @@ void BOTC_AttachGrantOrNest (int q, int role) {
     BOTC_AttachGrant(q, role, true);
 }
 
-// 放弃这次获得能力；失忆者即使取消（DIY）也要打「获得能力」token。
+// 放弃这次获得能力；失忆者取消（DIY）时只提醒说书人，不再打 token。
 void BOTC_AttachCancel (int q) {
     if (q < 2 || q > 13) {
         return;
     }
+    // 【变脸师（117）】（用户 2026-11-10）：取消 = 疯狂失败，本局不再为他弹窗；
+    //   只影响这一个座位，别的借用变脸师能力者照常每晚询问。
+    if (g_facePicking == q) {
+        g_facePicking = 0;
+        g_faceFail[q] = true;
+        BOTC_PmStore(g_teller, "【变脸师】" + BOTC_NameStr(q) + " 取消获得能力，视为疯狂失败：本局不再询问他。");
+        return;
+    }
     if (BOTC_SeatTrueRole(q) == 73) {
-        g_tokOn[(((g_teller * 14) + q) * 256) + 177] = true;
-        BOTC_PmStore(g_teller, "【失忆者】已按「DIY 能力」处理：" + BOTC_NameStr(q) + " 打上「获得能力（失忆者）」，能力由说书人自行裁定。");
-        BOTC_GrimRender(g_teller);
+        BOTC_PmStore(g_teller, "【失忆者】已按「DIY 能力」处理：" + BOTC_NameStr(q) + "，能力由说书人自行裁定。");
     }
 }
 
@@ -28584,23 +28841,115 @@ void BOTC_CannPickOpen (int q) {
     BOTC_PmStore(cp, "【食人族】今日处决结算：先给 " + BOTC_NameStr(q) + " 选一项本剧本角色能力，取消 = 不获得。");
 }
 
-// 变脸师：每晚先从当前剧本全部角色里选择，取消 = 保留上一个能力
+// 【变脸师（117）】（用户 2026-11-10）：第二夜起每晚由说书人决定是否给予一项镇民能力；
+//   取消 = 疯狂失败，本局不再询问这个座位；别的借用变脸师能力者照常询问。
 void BOTC_FacePickOpen (int q) {
     int cp;
     if (q < 2 || q > 13) {
         return;
     }
     cp = g_teller;
+    g_facePicking = q;
     g_pickMode[cp] = 48;
     g_pickAttachSeat[cp] = q;
     g_pickTeam = -1;
     g_pickAlign = -1;
     BOTC_PickFilter(cp, false);
-    libNtve_gf_SetDialogItemText(g_pickClear, StringToText("取消（保留能力）"), PlayerGroupSingle(cp));
+    libNtve_gf_SetDialogItemText(g_pickClear, StringToText("取消（疯狂失败，本局不再询问）"), PlayerGroupSingle(cp));
     DialogControlSetVisible(g_pickClear, PlayerGroupSingle(cp), true);
-    libNtve_gf_SetDialogItemText(g_pickTitle, StringToText("【变脸师】选择今晚获得的能力（可选本剧本任意角色）"), PlayerGroupSingle(cp));
+    libNtve_gf_SetDialogItemText(g_pickTitle, StringToText("【变脸师】是否给予今晚的镇民能力？（不能选已获得过的）"), PlayerGroupSingle(cp));
     DialogSetVisible(g_pickDlg, PlayerGroupSingle(cp), true);
-    BOTC_PmStore(cp, "【变脸师】先选择今晚获得的能力：" + BOTC_NameStr(q) + "；取消 = 保留上一个能力。");
+    if (BOTC_SeatTrueRole(q) == 117) {
+        BOTC_PmStore(cp, "【变脸师】" + BOTC_NameStr(q) + "：点镇民角色 = 今晚获得该能力，说书人魔典上的角色标记临时改成该角色，并放置「是变脸师」标记（他本人魔典仍显示变脸师）；取消 = 疯狂失败，本局不再询问他。");
+    }
+    else {
+        BOTC_PmStore(cp, "【变脸师】" + BOTC_NameStr(q) + " 是借用变脸师能力（失忆者 / 食人族 / 小精灵 / 哲学家等）：点镇民角色只挂能力、不改魔典角色标记；取消 = 本局不再询问他。");
+    }
+}
+
+
+// 【变脸师（117）】把说书人真值行的角色标记临时改成借到的角色（玩家本人那一份不改）。
+void BOTC_FaceMarkSet (int q, int role) {
+    if (q < 2 || q > 13 || role < 0 || role > 163) {
+        return;
+    }
+    g_mark[(g_teller * 14) + q] = role + 1;
+}
+
+// 【变脸师（117）】「是变脸师」标记只放在说书人的魔典上。
+void BOTC_FaceTokenSet (int q, bool on) {
+    int i;
+    if (q < 2 || q > 13) {
+        return;
+    }
+    for (i = 0; i < 14; i += 1) {
+        g_tokOn[(((i * 14) + q) * 256) + 205] = on && (i == g_teller);
+    }
+}
+
+// 【变脸师（117）】身份被真正改掉 / 新局时，清空临时变脸状态（不还原标记，由调用方写入新身份）。
+void BOTC_FaceStateClear (int q) {
+    int i;
+    if (q < 1 || q > 13) {
+        return;
+    }
+    g_faceShow[q] = 0;
+    g_faceBase[q] = 0;
+    g_faceFail[q] = false;
+    g_facePrevRole[q] = 0;
+    g_facePrevFirstNight[q] = 0;
+    g_facePrevDrunkBy[q] = false;
+    g_facePrevActing[q] = false;
+    g_facePrevDoneNight[q] = false;
+    for (i = 0; i < 14; i += 1) {
+        g_tokOn[(((i * 14) + q) * 256) + 205] = false;
+    }
+}
+
+// 【变脸师（117）】进入下一个夜晚：把说书人真值行的角色标记还原成变脸师本人，移除「是变脸师」标记，
+//   并还原本层借用的能力（玩家本人那一份始终显示变脸师，不用还原）。
+void BOTC_FaceNightRevert () {
+    int q;
+    int i;
+    bool any;
+    any = false;
+    for (q = 2; q <= 13; q += 1) {
+        if (g_faceShow[q] <= 0) {
+            continue;
+        }
+        any = true;
+        // 只说书人真值行：玩家本人魔典上这一格从没被改过。
+        if (g_faceBase[q] > 0) {
+            if (g_mark[(g_teller * 14) + q] == g_faceShow[q]) {
+                g_mark[(g_teller * 14) + q] = g_faceBase[q];
+            }
+        }
+        g_faceShow[q] = 0;
+        g_faceBase[q] = 0;
+        for (i = 0; i < 14; i += 1) {
+            g_tokOn[(((i * 14) + q) * 256) + 205] = false;
+        }
+        // 还原这一层「变脸师」覆盖前借到的能力（真变脸师原本没有 → 清空）。
+        g_grantRoleBy[q] = g_facePrevRole[q];
+        g_grantFirstNight[q] = g_facePrevFirstNight[q];
+        g_grantDrunkBy[q] = g_facePrevDrunkBy[q];
+        g_grantActing[q] = g_facePrevActing[q];
+        g_grantDoneNight[q] = g_facePrevDoneNight[q];
+        g_facePrevRole[q] = 0;
+        g_facePrevFirstNight[q] = 0;
+        g_facePrevDrunkBy[q] = false;
+        g_facePrevActing[q] = false;
+        g_facePrevDoneNight[q] = false;
+    }
+    if (any) {
+        BOTC_GrimRender(g_teller);
+        for (q = 2; q <= 13; q += 1) {
+            if (g_who[q] >= 1 && g_who[q] <= 13 && g_who[q] != g_teller) {
+                BOTC_GrimRender(g_who[q]);
+            }
+        }
+        BOTC_PmStore(g_teller, "【变脸师】进入新的夜晚：已移除「是变脸师」标记，说书人魔典上的角色标记已还原成变脸师本人。");
+    }
 }
 
 // 小精灵：得知的镇民死亡后，说书人确认是否获得其能力
@@ -28627,6 +28976,7 @@ void BOTC_PixieAskOpen (int q, int role) {
 bool BOTC_PreGrantStep () {
     int q;
     int role;
+    int i;
     if (!g_isNight) {
         return false;
     }
@@ -28640,30 +28990,64 @@ bool BOTC_PreGrantStep () {
         }
     }
     // 2. 食人族：今天有人死于处决
-    if (g_cannPending > 0) {
+    //    【持续检测】（用户 2026-11-10）：中途被创造出来的食人族也按「饱餐」标记判断——
+    //    只要最后一名死于处决的玩家就死在刚刚结束的这一天，就照样补发一次能力。
+    //    【自动获得】（用户 2026-11-10）：食人族没中毒 / 醉酒时不再由说书人选，
+    //    直接自动获得「饱餐」持有者（最后一名死于处决的玩家）的能力；
+    //    中毒 / 醉酒时才弹出身份网格，由说书人自己决定给什么能力（或取消不给）。
+    if (g_cannDoneNight != g_nightNum && (g_cannPending > 0 || (g_cannFedSeat >= 2 && g_cannFedSeat <= 13 && g_cannFedDay == g_dayNum))) {
         g_cannPending = 0;
-        q = BOTC_SeatOfRole(74);
+        // 【检测食人族能力者】（用户 2026-11-10）：按能力判定，而不是只看真实角色 74——
+        //   失忆者 / 哲学家等借到食人族能力的座位同样要发这一次能力。
+        q = BOTC_CannSeat();
+        if (q < 2) {
+            q = BOTC_CannAbilitySeat();
+        }
         if (q >= 2 && q <= 13 && BOTC_SeatDead(q) == false) {
             g_cannDoneNight = g_nightNum;
+            if (g_cannFedSeat >= 2 && g_cannFedSeat <= 13 && g_cannFedDay == g_dayNum && BOTC_SeatImpaired(q) == false) {
+                role = BOTC_SeatTrueRole(g_cannFedSeat);
+                if (role >= 0 && role <= 163) {
+                    BOTC_PmStore(g_teller, "【食人族】" + BOTC_NameStr(q) + " 未中毒，自动获得「饱餐」持有者 " + BOTC_NameStr(g_cannFedSeat) + " 的能力：" + g_roleName[role] + "。");
+                    BOTC_AttachGrantOrNest(q, role);
+                    return true;
+                }
+            }
             BOTC_CannPickOpen(q);
             return true;
         }
     }
-    // 3. 变脸师：每晚一次
-    q = BOTC_SeatOfRole(117);
-    if (q >= 2 && q <= 13 && BOTC_SeatDead(q) == false && g_faceDoneNight != g_nightNum) {
-        g_faceDoneNight = g_nightNum;
-        BOTC_FacePickOpen(q);
-        return true;
-    }
-    // 4. 小精灵：得知的镇民已经死亡，且还没用掉机会
-    q = BOTC_SeatOfRole(91);
-    if (q >= 2 && q <= 13 && BOTC_SeatDead(q) == false && g_pixieRoleBy[q] > 0 && !g_pixieDone[q]) {
-        role = g_pixieRoleBy[q] - 1;
-        if (g_pixieSeatBy[q] > 0 && BOTC_SeatDead(g_pixieSeatBy[q])) {
-            g_pixieDone[q] = true;
-            BOTC_PixieAskOpen(q, role);
+    // 3. 变脸师（含借用该能力的座位）：第二夜起每晚一次；取消过（疯狂失败）的座位不再询问
+    if (g_nightNum >= 2) {
+        for (i = 2; i <= 13; i += 1) {
+            if (BOTC_SeatDead(i) || g_faceFail[i] || g_faceDone[i] == g_nightNum) {
+                continue;
+            }
+            if (!BOTC_HasAbility(i, 117)) {
+                continue;
+            }
+            g_faceDone[i] = g_nightNum;
+            BOTC_FacePickOpen(i);
             return true;
+        }
+    }
+    // 4. 小精灵（借到该能力的座位，例如食人族）：还没挑过镇民玩家 → 先让说书人挑一个在场的镇民玩家
+    for (i = 2; i <= 13; i += 1) {
+        if (BOTC_SeatDead(i) == false && BOTC_HasAbility(i, 91) && BOTC_SeatTrueRole(i) != 91 && g_pixieRoleBy[i] <= 0 && !g_pixieAsked[i]) {
+            g_pixieAsked[i] = true;
+            BOTC_MiFnOpen(i, 26);
+            return true;
+        }
+    }
+    // 5. 小精灵：得知的镇民已经死亡，且还没用掉机会
+    for (i = 2; i <= 13; i += 1) {
+        if (BOTC_SeatDead(i) == false && g_pixieRoleBy[i] > 0 && !g_pixieDone[i] && BOTC_HasAbility(i, 91)) {
+            role = g_pixieRoleBy[i] - 1;
+            if (g_pixieSeatBy[i] > 0 && BOTC_SeatDead(g_pixieSeatBy[i])) {
+                g_pixieDone[i] = true;
+                BOTC_PixieAskOpen(i, role);
+                return true;
+            }
         }
     }
     return false;
@@ -30133,6 +30517,12 @@ void BOTC_GrimRender (int ob) {
     //   哲学家一中毒 / 酒鬼 / 死亡，那份醉酒立刻从他选的那个角色身上摘掉；他恢复清醒再自动加回来。
     if (ob == g_teller) {
         BOTC_PhiloDrunkSync();
+        // 【食人族（74）· 持续检测】（用户 2026-11-10）：每次重画说书人这份真魔典前，
+        //   按「最后一名死于处决的玩家」同步「饱餐 / 中毒（食人族）」；中途转阵营、
+        //   中途被创造出来的食人族都会在下一次重画时自动补上标记。
+        if (!fake) {
+            BOTC_CannSync();
+        }
     }
     // 【换座位后的说书人也要看得见自己那格的头像】（用户 2026-10-18）：按「现在的」说书人设一次
     DialogControlSetVisible(g_saySeatIcon, PlayerGroupAll(), false);
@@ -30171,6 +30561,20 @@ void BOTC_GrimRender (int ob) {
         }
         else {
             markVal = g_mark[(src * 14) + q];
+            // 【本人那一格跟随真值行】（用户 2026-11-10）：失忆者 / 食人族 / 炼金术士等**借来**的红唇女郎接刀后，
+            //   当事人自己那份魔典的镜像行可能还停在旧身份（原生红唇不会）。这里在渲染时按说书人真值行自愈一次，
+            //   只写"自己这一格"，保证本人视角和真值行一致；全员追忆仍按占位卡走 BOTC_PlayerRoleView。
+            //   偷看（src != ob）、伪造、快照三条路径不在这里，删掉自己这格也不会提前暴露身份。
+            if (src == ob && ob != g_teller && g_who[q] == ob && (g_started || g_dealConfirmed)) {
+                k = g_mark[(g_teller * 14) + q];
+                if (k > 0) {
+                    k = BOTC_PlayerRoleView(q, k - 1) + 1;
+                    if (k != markVal) {
+                        g_mark[(ob * 14) + q] = k;
+                        markVal = k;
+                    }
+                }
+            }
         }
         if (markVal > 0) {
             libNtve_gf_SetDialogItemText(g_grimRole[q], TextWithColor(StringToText(g_roleName[markVal - 1]), BOTC_RoleTeamColor(markVal - 1)), PlayerGroupSingle(ob));
@@ -30880,6 +31284,10 @@ void BOTC_RsApply (int p) {
     if (p != g_teller) {
         return;
     }
+    // 【已下发状态点随机配板 → 先自动取消下发】（用户 2026-11-10）
+    if (g_dealConfirmed) {
+        BOTC_CancelDeal();
+    }
     BOTC_ResetGameVars();          // 换局：先把上一局的记录清干净
     BOTC_GrimRelayout();
     BOTC_GrimResetPerPlayer();     // 【玩家自己那份也清空】（用户 2026-10-18）：不然会留着上一把别人的身份
@@ -31379,6 +31787,14 @@ void BOTC_PickChoose (int ob, int idx) {
         g_pickAlign = -1;
         if (idx >= 0) {
             BOTC_AttachGrantOrNest(attachSeat, idx);
+            // 【小精灵获得能力】（用户 2026-11-10）：确认获得后把目标身上的「疯狂」换成本人身上的「获得能力」token。
+            if (q == 49 && attachSeat >= 2 && attachSeat <= 13) {
+                if (g_pixieSeatBy[attachSeat] > 0 && g_pixieSeatBy[attachSeat] <= 13) {
+                    g_tokOn[(((g_teller * 14) + g_pixieSeatBy[attachSeat]) * 256) + 116] = false;
+                }
+                g_tokOn[(((g_teller * 14) + attachSeat) * 256) + 117] = true;
+                BOTC_GrimRender(g_teller);
+            }
             // 【炼金术士能力者】借到爪牙后，在私聊里告诉他获得的是谁的能力
             if ((q == 21 || q == 36) && BOTC_RoleTeam(idx) == 2 && attachSeat >= 2 && attachSeat <= 13) {
                 BOTC_PmInfo(g_who[attachSeat], "【信息】你得知" + g_roleName[idx]);
@@ -31626,14 +32042,14 @@ void BOTC_PickChoose (int ob, int idx) {
                 return;
             }
             g_alcBorrow = idx;
-            BOTC_SetSeatRole(g_teller, alcSeat, g_alcBorrow);
-            BOTC_SetSeatRole(g_who[alcSeat], alcSeat, g_alcBorrow);
+            // 【获得能力不改角色标记】（用户 2026-11-10）：炼金术士借到爪牙能力后，
+            //   魔典上仍显示「炼金术士」本人，只靠 token 123 + g_alcBorrow 记账这份能力。
             g_tokOn[(((g_teller * 14) + alcSeat) * 256) + 123] = true;
-            BOTC_SeatStateSync();      // 【打完「是炼金术士」之后再算一次】（用户 2026-10-14）：上面那句 SetSeatRole 是拿「还没打标记」时的角色算的
+            BOTC_SeatStateSync();
             BOTC_GrimRender(g_teller);
             BOTC_GrimRender(g_who[alcSeat]);
             BOTC_PmInfo(g_who[alcSeat], "【信息】你得知" + g_roleName[g_alcBorrow]);
-            BOTC_PmStore(g_teller, "【炼金术士】" + BOTC_NameStr(alcSeat) + " 借到的是【" + g_roleName[g_alcBorrow] + "】（魔典显示这只，真身仍是炼金术士）。");
+            BOTC_PmStore(g_teller, "【炼金术士】" + BOTC_NameStr(alcSeat) + " 借到的是【" + g_roleName[g_alcBorrow] + "】（魔典仍显示炼金术士，能力按借到的那只结算）。");
         }
         return;
     }
@@ -31766,7 +32182,7 @@ void BOTC_PickChoose (int ob, int idx) {
     // 【洗脑师（66）】（用户 2026-09-21）：选完善良角色 → 给目标打「疯狂」标记 + 告诉他
     if (g_pickMode[ob] == 14) {
         if (idx >= 0) {
-            BOTC_CerenApply(g_cerenWho, idx);
+            BOTC_CerenApply(g_pickWho[ob], g_cerenWho, idx);
         }
         DialogSetVisible(g_pickDlg, PlayerGroupSingle(ob), false);
         libNtve_gf_SetDialogItemText(g_pickClear, StringToText("清除身份"), PlayerGroupSingle(ob));
@@ -31794,6 +32210,10 @@ void BOTC_PickChoose (int ob, int idx) {
     if (g_pickMode[ob] == 12) {
         if (idx >= 0) {
             g_miFnRole = idx;
+            // 【小精灵】单独记一份（索引 + 1），避免角色 0（洗衣妇）与「还没选」混淆。
+            if (g_miRole == 86) {
+                g_pixiePickRole = idx + 1;
+            }
         }
         DialogSetVisible(g_pickDlg, PlayerGroupSingle(ob), false);
         libNtve_gf_SetDialogItemText(g_pickClear, StringToText("清除身份"), PlayerGroupSingle(ob));
@@ -32178,6 +32598,105 @@ void BOTC_BoffinRecipientSync () {
     }
 }
 
+// 【持续检测 · 村夫 / 半兽人 / 掮客】（用户 2026-11-10）：这三条都要求「角色中途上场 / 阵营中途变化」
+//   时立刻重算，而不是只在正式开局设置里做一次；统一挂在 BOTC_SeatStateSync()、死亡记录与手动改 token 之后。
+// 【村夫（105）】场上存在多名存活村夫时，必须有且只有一名带「醉酒（村夫）」126；
+//   不足两名时把该标记摘掉（中途被变成村夫、或村夫死亡 / 复活都会重新算）。
+void BOTC_VillageSync () {
+    int i;
+    int n;
+    int drunk;
+    if (!g_started) {
+        return;
+    }
+    n = 0;
+    drunk = 0;
+    for (i = 2; i <= 13; i += 1) {
+        if (!g_seatOn[i] || BOTC_SeatDead(i)) {
+            continue;
+        }
+        if (!BOTC_HasAbility(i, 105)) {
+            continue;
+        }
+        n = n + 1;
+        if (g_tokOn[(((g_teller * 14) + i) * 256) + 126]) {
+            drunk = i;
+        }
+    }
+    if (n < 2) {
+        if (drunk >= 2) {
+            for (i = 2; i <= 13; i += 1) {
+                g_tokOn[(((g_teller * 14) + i) * 256) + 126] = false;
+            }
+            BOTC_PmStore(g_teller, "【村夫】场上已不足两名村夫 → 已摘掉「醉酒（村夫）」。");
+        }
+        return;
+    }
+    if (drunk >= 2) {
+        return;
+    }
+    for (i = 2; i <= 13; i += 1) {
+        if (!g_seatOn[i] || BOTC_SeatDead(i) || !BOTC_HasAbility(i, 105)) {
+            continue;
+        }
+        g_tokOn[(((g_teller * 14) + i) * 256) + 126] = true;
+        BOTC_PmStore(g_teller, "【村夫】场上有多名村夫 → " + BOTC_NameStr(i) + " 获得「醉酒（村夫）」；要换人直接挪标记。");
+        break;
+    }
+}
+
+// 【半兽人（107）】正式开局已经随机打过「失足」127；中途被麻脸巫婆 / 理发师 / 舞蛇人 / 说书人改动上场时，
+//   只要场上还没有这枚标记，就按开局的规则补打一枚（标记本身本局永久保留，不随来源离场清除）。
+void BOTC_HalfOrcSync () {
+    int i;
+    int k;
+    int n;
+    int pick;
+    if (!g_started || !BOTC_RoleInPlay(107)) {
+        return;
+    }
+    for (i = 2; i <= 13; i += 1) {
+        if (g_tokOn[(((g_teller * 14) + i) * 256) + 127]) {
+            return;
+        }
+    }
+    n = 0;
+    for (i = 2; i <= 13; i += 1) {
+        if (!g_seatOn[i] || BOTC_SeatDead(i)) { continue; }
+        if (BOTC_SeatAlign(i) != 0) { continue; }
+        if (BOTC_SeatTrueRole(i) == 107) { continue; }
+        n = n + 1;
+    }
+    pick = 0;
+    if (n > 0) {
+        k = RandomInt(1, n);
+        for (i = 2; i <= 13; i += 1) {
+            if (!g_seatOn[i] || BOTC_SeatDead(i)) { continue; }
+            if (BOTC_SeatAlign(i) != 0) { continue; }
+            if (BOTC_SeatTrueRole(i) == 107) { continue; }
+            k = k - 1;
+            if (k <= 0) { pick = i; break; }
+        }
+    }
+    if (pick >= 2) {
+        g_tokOn[(((g_teller * 14) + pick) * 256) + 127] = true;
+        BOTC_PmStore(g_teller, "【半兽人】中途上场 → 补打「失足」标记：" + BOTC_NameStr(pick) + "。");
+    }
+}
+
+// 【掮客（159）】熟客标记 195 只在「能力可用 + 两名熟客阵营一致」时保留；
+//   阵营中途被改动、掮客死亡 / 醉酒 / 失去能力时，立即整套失效并移除标记（不再等天亮）。
+void BOTC_BrokerSync () {
+    if (!g_started || !g_isNight || !g_brokerOn || g_brokerForced) {
+        return;
+    }
+    if (BOTC_BrokerActive()) {
+        return;
+    }
+    BOTC_BrokerClear("阵营变化");
+    BOTC_PmStore(g_teller, "【掮客】两名熟客的阵营已不一致（或掮客已失效）→ 本夜熟客失效，已移除熟客标记。");
+}
+
 void BOTC_SeatStateSync () {
     BOTC_NoDashiiSync();
     BOTC_VortoxSync();
@@ -32194,6 +32713,9 @@ void BOTC_SeatStateSync () {
     BOTC_LeviathanTokenWin();
     BOTC_SkinSourceCheck();
     BOTC_BartenderSync();
+    BOTC_VillageSync();             // 【村夫】中途变成村夫 / 村夫数量变化时重算醉酒标记
+    BOTC_HalfOrcSync();             // 【半兽人】中途上场时补「失足」标记
+    BOTC_BrokerSync();              // 【掮客】熟客阵营中途变化时立即失效
 }
 
 // 【夜序插入·例外】炼金术士借到科学怪人能力时允许插队（帽匠夜间死亡另走 g_hatWaitOrd 的击杀阶段插入）。
@@ -32316,6 +32838,15 @@ void BOTC_SetSeatRole (int ob, int seat, int roleIdx) {
             g_halfOriginal = 0;
         }
         BOTC_SourceGoneCleanup(seat);
+        // 【变脸师（117）】（用户 2026-11-10）：变脸期间被真正改身份 → 结束临时变脸，
+        //   否则下个夜晚会把说书人刚改的新身份换回原身份。
+        if (g_faceShow[seat] > 0) {
+            BOTC_FaceStateClear(seat);
+        }
+        if (roleIdx == 117 && oldR != 117) {
+            g_faceFail[seat] = false;
+            g_faceDone[seat] = 0;
+        }
         // 【换身份就清掉旧的认知标记】（用户 2026-09-21）：是酒鬼(8) / 是恶魔(13) / 是疯子(49) / 是哲学家(70) / 是悟道者(140)
         //   【炼金术士也清】（用户 2026-10-19）：是炼金术士(123) 不清的话，他换身份之后真身还挂在炼金术士上，
         //   对面那个「变成炼金术士」的人反而读不出 95 ---- 换完两边都不对。
@@ -32350,16 +32881,28 @@ void BOTC_SetSeatRole (int ob, int seat, int roleIdx) {
             }
         }
     }
+    // 【僵怖（43）· 假死状态不跟座位】（用户 2026-11-10）：g_zombFake / g_zombUsed / 「已假死」token 58
+    //   记的都是座位，身份被换走（理发师交换、麻脸巫婆、说书人改身份等）后不会自己清掉，会留下一个
+    //   「不是僵怖却内部算活着」的假活座位，胜负也永远判不掉 → 身份离场时统一清干净。
+    //   新拿到僵怖身份的座位从全新的「第一次不会死」开始；如果它本身已经死了，就照样是死的。
+    if (ob == g_teller && oldR == 43 && roleIdx != 43) {
+        g_zombFake[seat] = false;
+        g_zombUsed[seat] = false;
+        g_tokOn[(((g_teller * 14) + seat) * 256) + 58] = false;
+    }
     // 投毒者换了身份（被改掉 / 传位 / 重新发牌...）→ 他这次下的毒收回来
     if (g_poisonFrom == seat) {
         BOTC_PoisonClear("投毒者换了身份");
     }
-    // 说书人改说书人那份的身份（= 改了配板）→ 之前那次【确认发放】作废，得重新确认
-    if (ob == g_teller) {
-        g_dealConfirmed = false;
-    }
+    // 【确认下发之后改标记不算取消下发】（用户 2026-11-10）：不再把 g_dealConfirmed 清掉，
+    //   已下发状态保持，下面按「已下发」直接把新身份实时同步到玩家自己那份魔典。
     if (roleIdx < 0) {
         g_mark[(ob * 14) + seat] = 0;
+    }
+    else if (ob != g_teller) {
+        // 【全员追忆 · 正式开始前一律映射占位卡】（用户 2026-11-10）：只要是玩家自己那份魔典，
+        //   不管是否已经确认下发，正式开局前改标记都只写「失忆的镇民 / 外来者 / 爪牙 / 恶魔」。
+        g_mark[(ob * 14) + seat] = BOTC_PlayerRoleView(seat, roleIdx) + 1;
     }
     else {
         g_mark[(ob * 14) + seat] = roleIdx + 1;
@@ -32367,11 +32910,30 @@ void BOTC_SetSeatRole (int ob, int seat, int roleIdx) {
     if (ob == g_teller && seat >= 2) {
         // 【写给"这一格现在坐的人"自己那一份】（用户 2026-10-07）：行号 = 他的**物理座位**
         //   （g_who[seat]），列号 = **格子** seat。原来写 `(seat * 14) + seat`，随机座位后就错人了。
-        if (roleIdx < 0) {
-            g_mark[(g_who[seat] * 14) + seat] = 0;
+        // 【确认下发前不下发身份】（用户 2026-11-10）：配板阶段还没点【确认发放】时只写说书人真值行，
+        //   玩家自己那份魔典这一格保持空白；已下发（g_dealConfirmed）或游戏已正式开始则实时同步。
+        if (!g_started && !g_dealConfirmed) {
+            for (i = 1; i <= 13; i += 1) {
+                if (i == g_teller) {
+                    continue;                      // 真值行不能动
+                }
+                if (g_mark[(i * 14) + seat] != 0) {
+                    g_mark[(i * 14) + seat] = 0;
+                    BOTC_GrimRender(i);
+                }
+            }
         }
         else {
-            g_mark[(g_who[seat] * 14) + seat] = BOTC_PlayerRoleView(seat, roleIdx) + 1;
+            if (roleIdx < 0) {
+                g_mark[(g_who[seat] * 14) + seat] = 0;
+            }
+            else {
+                g_mark[(g_who[seat] * 14) + seat] = BOTC_PlayerRoleView(seat, roleIdx) + 1;
+            }
+            // 【已下发状态下改标记 → 本人实时变化】（用户 2026-11-10）：还开着「我的角色」的立刻重刷
+            if (g_tipOpen[g_who[seat]]) {
+                BOTC_TipRender(g_who[seat]);
+            }
         }
     }
     // 【身份一变就重算的常驻标记】（用户 2026-09-21 / 2026-10-14）----
@@ -33219,6 +33781,12 @@ bool BOTC_TokHidden (int t, int ob) {
     if (t == 23) {
         return true;
     }
+    // 【饱餐（食人族）206】（用户 2026-11-10）：食人族不在场时只记账、不显示；
+    //   等场上真的出现食人族（真实角色或借用食人族能力者）后，才把已经放好的标记显示出来。
+    //   这一条必须排在「失忆者在场 → token 全开」和板子过滤之前，否则会被提前放行。
+    if (t == 206) {
+        return !(BOTC_CannSeat() > 0 || BOTC_CannAbilitySeat() > 0);
+    }
     // 【失忆者（73）在本剧本 → token 全开】（用户 2026-11-06）：失忆者能获得任意角色能力，
     //   不管他是否已经拿到、是否在场，玩家标记面板都要能打上任意角色的 token；
     //   已经打上的 token 也要能在圆桌小格里显示出来。
@@ -33267,6 +33835,11 @@ bool BOTC_IsHiddenTok (int t) {
     // 23 = 「死亡（白天·恶魔）」：没有任何角色会自动用到它，先收起来（用户 2026-09-20：要恢复就删掉这一条）
     if (t == 23) {
         return true;
+    }
+    // 【饱餐（食人族）206】（用户 2026-11-10）：和 token 面板同一口径——
+    //   场上没有食人族（真实角色或借用食人族能力者）时只记账、不在圆桌小格里显示。
+    if (t == 206) {
+        return !(BOTC_CannSeat() > 0 || BOTC_CannAbilitySeat() > 0);
     }
     // 【是恶魔（小怪宝）134】（用户 2026-10-13 改）：同上 ---- 板子里有小怪宝就一直列出来
     if (t == 134) {
@@ -33833,6 +34406,12 @@ void BOTC_SourceGoneCleanup (int q) {
     // 【借来的旅店老板能力】（用户 2026-11-08）：哲学家 / 食人族 / 炼金术士 / 说书人赋予的能力持有者
     //   死亡 / 离场时，按 g_drunkFrom 收掉他放的那份醉酒（token 60 / 24），不能只认真身 26。
     if (r != 26 && g_drunkFrom == q) { BOTC_DrunkClear("旅店老板能力持有者离场"); }
+    // 【洗脑师】（用户 2026-11-10）：来源死亡 / 离场 / 换身份 → 撤掉他那一份疯狂记录与 token
+    //   按记录判断而不是按真身 66，这样借用洗脑师能力的玩家离场也能正确收掉自己那一份。
+    if (g_cerenTgt[q] > 0 || g_cerenOld[q] > 0) {
+        BOTC_CerenSourceGone(q);
+        n = n + 1;
+    }
     if (r == 44) { BOTC_PukkaPoisonClear("普卡离场"); }
     if (r == 100) { BOTC_LleechPoisonClear("痢蛭离场"); }    // 中毒（痢蛭）120
     if (r == 95) { }          // 炼金术士离场：123「是炼金术士」的清理在下面统一做
@@ -34006,6 +34585,7 @@ void BOTC_MarkDeadPlain (int q) {
     if (!BOTC_DeathSfxMute(q)) {
         BOTC_PlaySfx("Marine_Death");      // 【红叉音效】（用户 2026-09-22）：有人被打上红叉（含自动打）就放一声
     }
+    BOTC_VillageSync();            // 【村夫】红叉死亡后不足两人时，同步摘掉「醉酒（村夫）」
     BOTC_GrimRender(g_teller);                // 立刻刷一次（用户 2026-09-20）
     BOTC_DeclareRender();              // 他那一格立刻换成【死后声称】（用户 2026-09-20）
     BOTC_MoonChildCheck(q);            // 月之子（36）：红叉死亡也触发他的公开选择（用户 2026-09-20）
@@ -34236,6 +34816,14 @@ void BOTC_MarkDeathRowTok (int q, int row, int tok, bool pierce) {
     if (g_deadKind[q] == 3 && (BOTC_RoleEffInPlay(6) || BOTC_RoleEffInPlay(74))) {
         g_tokOn[(((g_teller * 14) + q) * 256) + 11] = true;
     }
+    // 【食人族（74）· 饱餐】（用户 2026-11-10）：白天有人死于处决 → 饱餐标记转移到这名死者；
+    //   是否已经把食人族发到场上、是否醉酒中毒都不影响，跨夜也不清（等下一次处决死亡再转移）。
+    //   记录死亡天数，供夜里判断「今天是否有人死于处决」，中途被创造的食人族也能补到能力。
+    if (!g_isNight && g_deadKind[q] == 3) {
+        g_cannFedSeat = q;
+        g_cannFedDay = g_dayNum;
+        BOTC_CannSync();
+    }
     // 僵怖（43）的「死于今日」：**白天死的任何人都要打**（用户 2026-09-20）----
     //   跟送葬者那个不一样：送葬者只认「今天被处决的人」，僵怖是任何类型的白天死亡都算
     if (!g_isNight && BOTC_RoleEffInPlay(43)) {
@@ -34255,6 +34843,7 @@ void BOTC_MarkDeathRowTok (int q, int row, int tok, bool pierce) {
     BOTC_HatDeath(q);
     // 【立刻刷新说书人那份魔典】（用户 2026-09-20）：夜里的死亡是「先记 token、天亮才公开」，
     //   以前这里不刷，所以 token 面板里已经打上✓了、圆桌上却还是空的。
+    BOTC_VillageSync();            // 【村夫】村夫死亡后不足两人时，同步摘掉「醉酒（村夫）」
     BOTC_GrimRender(g_teller);
     BOTC_SkinSourceCheck();
 }
@@ -34428,6 +35017,7 @@ void BOTC_ClearDeath (int q) {
     BOTC_DeclareRender();              // 声称 / 死后声称 按钮跟着刷新（用户 2026-09-21）
     BOTC_SailorSync();
     BOTC_TeaLadySync();                        // 茶艺师（32）：有人复活了，重新算一次
+    BOTC_VillageSync();                        // 村夫（105）：复活后重新恢复两名村夫时补回醉酒标记
 }
 
 // 死亡类型的中文（说书人私聊日志里用）
@@ -34815,8 +35405,8 @@ int BOTC_SeatTrueRole (int q) {
     if (g_tokOn[(((g_teller * 14) + q) * 256) + 97]) {
         return 74;                                // 是食人族（74）
     }
-    // 【是炼金术士(123)】（用户 2026-10-03）：真身判成炼金术士(95) → 算善良（除非身上有「邪恶」token）；
-    //   魔典上显示的仍是说书人给他选的那只爪牙（g_mark）。
+    // 【是炼金术士(123)】（用户 2026-10-03 / 2026-11-10）：真身判成炼金术士(95) → 算善良（除非身上有「邪恶」token）；
+    //   魔典上仍显示炼金术士本人，借到的爪牙能力由 g_alcBorrow 记账。
     if (g_tokOn[(((g_teller * 14) + q) * 256) + 123]) {
         return 95;
     }
@@ -37924,6 +38514,17 @@ void BOTC_GfPickSet (int p, bool plus) {
     }
 }
 
+// 【小精灵】按角色找「在场且活着」的玩家座位（真身 = r 的第一个存活座位；没有 = 0）
+int BOTC_PixieLiveSeatOf (int r) {
+    int i;
+    for (i = 2; i <= 13; i += 1) {
+        if (!g_seatOn[i]) { continue; }
+        if (BOTC_SeatDead(i)) { continue; }
+        if (BOTC_SeatTrueRole(i) == r) { return i; }
+    }
+    return 0;
+}
+
 // 技能专用角色网格的限制：翻页后也必须继续生效。
 bool BOTC_PickModeRoleAllowed (int p, int r) {
     int mode;
@@ -37932,6 +38533,13 @@ bool BOTC_PickModeRoleAllowed (int p, int r) {
         return false;
     }
     mode = g_pickMode[p];
+    // 【小精灵选镇民】（用户 2026-11-10）：网格只列在场且活着、真实身份是镇民的角色。
+    if (mode == 12 && g_miRole == 86) {
+        if (g_roleTeam[r] != 0) {
+            return false;
+        }
+        return (BOTC_PixieLiveSeatOf(r) >= 2);
+    }
     if (mode == 3) {
         return BOTC_CanDeathClaimRole(r, BOTC_PosOf(p));
     }
@@ -37983,6 +38591,36 @@ bool BOTC_PickModeRoleAllowed (int p, int r) {
     if (mode == 51 || mode == 54) {
         return (r < 143 || r > 146);
     }
+    // 【变脸师（117）】（用户 2026-11-10）：只列镇民，并且这一局获得过的角色不再出现。
+    if (mode == 48) {
+        if (BOTC_RoleTeam(r) != 0) {
+            return false;
+        }
+        // 全员追忆的占位身份 143..146 不是真正的「镇民角色」。
+        if (r >= 143 && r <= 146) {
+            return false;
+        }
+        // 变脸师自己（117）不能选，避免自己给自己再套一层。
+        if (r == 117) {
+            return false;
+        }
+        seat = g_pickAttachSeat[p];
+        if (seat >= 2 && seat <= 13 && g_faceEver[(seat * 164) + r]) {
+            return false;
+        }
+    }
+    // 【变脸师 · 嵌套那一层】（哲学家）：同样只允许镇民，且不能再次拿到获得过的角色。
+    if (mode == 35 || mode == 36) {
+        seat = g_pickAttachSeat[p];
+        if (seat >= 2 && seat <= 13 && g_facePicking == seat) {
+            if (BOTC_RoleTeam(r) != 0) {
+                return false;
+            }
+            if (g_faceEver[(seat * 164) + r]) {
+                return false;
+            }
+        }
+    }
     return true;
 }
 
@@ -37991,6 +38629,10 @@ bool BOTC_PickModeShowsGoblin (int p) {
     int mode;
     int act;
     if (p < 1 || p > 13) {
+        return false;
+    }
+    // 【相克】只有当前剧本里存在哥布林（99）才允许露出（用户 2026-11-10）
+    if (!BOTC_RoleOnBoard(99)) {
         return false;
     }
     mode = g_pickMode[p];
@@ -40061,6 +40703,24 @@ void BOTC_BuildGfRecluse () {
 }
 
 //--------------------------------------------------------------------------------------------------
+// 【政客（97）· 胜负前改阵营】（用户 2026-11-10）：政客所在阵营即将落败时，封盘前问说书人
+//   是否让他转变阵营、跟着获胜方一起获胜；点【否】= 不改，按原来的结果结算。
+//   只有说书人看得到，放在屏幕正中偏下，不挡其他面板。
+//--------------------------------------------------------------------------------------------------
+void BOTC_BuildPolitician () {
+    DialogCreate(684, 185, c_anchorCenter, 0, 70, false);
+    g_polDlg = DialogLastCreated();
+    DialogSetVisible(g_polDlg, PlayerGroupAll(), false);
+    g_polTitle = BOTC_NewLabel(g_polDlg, 666, 80, 18, 10, StringToText("【政客】所在阵营落败：是否让他转变阵营并一起获胜？"));
+    libNtve_gf_SetDialogItemStyle(g_polTitle, g_nomBigStyle, PlayerGroupAll());
+    libNtve_gf_SetDialogItemAcceptMouse(g_polTitle, false, PlayerGroupAll());
+    g_polYes = BOTC_NewButton(g_polDlg, 306, 50, 27, 105, "是：转变阵营并获胜");
+    g_polNo = BOTC_NewButton(g_polDlg, 306, 50, 351, 105, "否：不转变");
+    DialogControlSetVisible(g_polYes, PlayerGroupAll(), false);
+    DialogControlSetVisible(g_polNo, PlayerGroupAll(), false);
+}
+
+//--------------------------------------------------------------------------------------------------
 // 【和平主义者（33）· 处决弹窗】（用户 2026-11-06）：处决善良角色时弹窗让说书人决定是否触发。
 //   【是】= 不死；【否】/ 右上角 X = 照常处决。
 //   放在教父判定框下面，三个弹窗同时出现时不会互相盖住。
@@ -40081,6 +40741,29 @@ void BOTC_BuildPacifistAsk () {
     DialogControlSetVisible(g_pacAskYes, PlayerGroupSingle(g_teller), true);
     DialogControlSetVisible(g_pacAskNo, PlayerGroupSingle(g_teller), true);
     DialogControlSetVisible(g_pacAskX, PlayerGroupSingle(g_teller), true);
+}
+
+//--------------------------------------------------------------------------------------------------
+// 【理发师 · 恶魔与死者互换】（用户 2026-11-10）：恶魔想把自己和已死亡的玩家互换角色时，
+//   先问说书人是否允许。【是】= 照常交换；【否】/ 右上角 X = 拒绝，恶魔重新选两名玩家。
+//   放在和平主义者判定框下面，和其它判定框不会互相盖住。
+//--------------------------------------------------------------------------------------------------
+void BOTC_BuildBarberAsk () {
+    DialogCreate(684, 183, c_anchorRight, 185, 330, false);
+    g_barAskDlg = DialogLastCreated();
+    DialogSetVisible(g_barAskDlg, PlayerGroupAll(), false);
+    g_barAskTitle = BOTC_NewLabel(g_barAskDlg, 666, 80, 18, 10, StringToText("【理发师】恶魔要把自己和死者互换：是否允许？"));
+    libNtve_gf_SetDialogItemStyle(g_barAskTitle, g_nomBigStyle, PlayerGroupAll());
+    libNtve_gf_SetDialogItemAcceptMouse(g_barAskTitle, false, PlayerGroupAll());
+    g_barAskYes = BOTC_NewButton(g_barAskDlg, 306, 50, 27, 105, "是：允许交换");
+    g_barAskNo = BOTC_NewButton(g_barAskDlg, 306, 50, 351, 105, "否：让他重选");
+    g_barAskX = BOTC_NewButton(g_barAskDlg, 30, 26, 640, 6, "X");
+    DialogControlSetVisible(g_barAskYes, PlayerGroupAll(), false);
+    DialogControlSetVisible(g_barAskNo, PlayerGroupAll(), false);
+    DialogControlSetVisible(g_barAskX, PlayerGroupAll(), false);
+    DialogControlSetVisible(g_barAskYes, PlayerGroupSingle(g_teller), true);
+    DialogControlSetVisible(g_barAskNo, PlayerGroupSingle(g_teller), true);
+    DialogControlSetVisible(g_barAskX, PlayerGroupSingle(g_teller), true);
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -42750,11 +43433,21 @@ void BOTC_ManInfoReShow () {
 void BOTC_MiFnRefresh () {
     string s;
     s = "已选身份：";
-    if (g_miFnRole > 0) {
-        s = s + g_roleName[g_miFnRole];
+    if (g_miRole == 86) {
+        if (g_pixiePickRole > 0) {
+            s = s + g_roleName[g_pixiePickRole - 1];
+        }
+        else {
+            s = s + "（还没选）";
+        }
     }
     else {
-        s = s + "（还没选）";
+        if (g_miFnRole > 0) {
+            s = s + g_roleName[g_miFnRole];
+        }
+        else {
+            s = s + "（还没选）";
+        }
     }
     libNtve_gf_SetDialogItemText(g_miNote, StringToText(s), PlayerGroupSingle(g_teller));
     DialogControlSetVisible(g_miNote, PlayerGroupSingle(g_teller), true);
@@ -42770,21 +43463,22 @@ void BOTC_MiFnOpen (int seat, int role) {
     g_miRole = 60 + role;
     g_miFnRole = 0;
     if (role == 26) {
-        libNtve_gf_SetDialogItemText(g_miTitle, BOTC_NameSubstText(StringToText("【小精灵】" + BOTC_NameStr(seat) + "：选一个在场的镇民角色")), PlayerGroupSingle(g_teller));
+        // 【小精灵】（用户 2026-11-10）：不填座位号，改为点【选镇民】弹身份网格；
+        //   网格只列在场且活着、真实身份是镇民的角色，选中后再点确定。
+        g_pixiePickRole = 0;
+        libNtve_gf_SetDialogItemText(g_miTitle, BOTC_NameSubstText(StringToText("【小精灵】" + BOTC_NameStr(seat) + "：选一个在场且活着的镇民角色")), PlayerGroupSingle(g_teller));
         DialogControlSetVisible(g_miEdit, PlayerGroupSingle(g_teller), false);
         DialogControlSetVisible(g_miEdit2, PlayerGroupSingle(g_teller), false);
         DialogControlSetVisible(g_miEdit3, PlayerGroupSingle(g_teller), false);
         DialogControlSetVisible(g_miEdit4, PlayerGroupSingle(g_teller), false);
-        DialogControlSetPosition(g_miEdit, PlayerGroupSingle(g_teller), c_anchorTopLeft, 3000, 3000);
-        libNtve_gf_SetDialogItemText(g_miEdit, StringToText(""), PlayerGroupSingle(g_teller));
-        libNtve_gf_SetDialogItemText(g_miEdit2, StringToText(""), PlayerGroupSingle(g_teller));
         libNtve_gf_SetDialogItemText(g_miYes, StringToText("选镇民"), PlayerGroupSingle(g_teller));
-        DialogControlSetPosition(g_miYes, PlayerGroupSingle(g_teller), c_anchorTopLeft, 450, 79);
         DialogControlSetVisible(g_miYes, PlayerGroupSingle(g_teller), true);
         DialogControlSetVisible(g_miNo, PlayerGroupSingle(g_teller), false);
         DialogControlSetVisible(g_miOk, PlayerGroupSingle(g_teller), true);
-        DialogControlSetVisible(g_miCancel, PlayerGroupSingle(g_teller), false);
-        BOTC_MiFnRefresh();
+        DialogControlSetVisible(g_miCancel, PlayerGroupSingle(g_teller), true);
+        libNtve_gf_SetDialogItemText(g_miNote, StringToText("已选身份：（还没选）"), PlayerGroupSingle(g_teller));
+        DialogControlSetVisible(g_miNote, PlayerGroupSingle(g_teller), true);
+        DialogSetVisible(g_miDlg, PlayerGroupSingle(g_teller), true);
         return;
     }
     // 【选身份】按钮无条件摆到最右边（用户 2026-09-21：它原来压在左边那个输入框上；祖母 / 洗衣妇两条路都要走这一句）
@@ -42900,6 +43594,7 @@ void BOTC_MiFnSend () {
     int n;
     int i;
     int k;
+    int tRole;
     string s;
     if (g_miRole < 60) {
         return;
@@ -42918,19 +43613,31 @@ void BOTC_MiFnSend () {
     if (n >= 1 && n <= 12) {
         b = n + 1;
     }
-    // 【气球驾驶员（72）】（用户 2026-09-23）：只填一个座位号 ---- 发「你得知X。」+ 自动打 95 号 token，
-    //   不需要选身份、也不走「两个座位」那套校验。
     if (role == 26) {
-        if (g_miFnRole <= 0) {
-            BOTC_Notice(g_teller, "先点【选镇民】挑一个角色。");
+        // 【小精灵】（用户 2026-11-10）：先点【选镇民】选一个在场且活着的镇民角色，
+        //   确认后给该角色对应的玩家打「疯狂（小精灵）」token。
+        if (g_pixiePickRole <= 0) {
+            BOTC_Notice(g_teller, "先点【选镇民】选一个在场且活着的镇民角色。");
             return;
         }
-        // 【小精灵获得能力】（用户 2026-11-03）：记住他得知的角色，等对应玩家死亡后由说书人确认是否获得。
-        g_pixieRoleBy[seat] = g_miFnRole + 1;
-        g_pixieSeatBy[seat] = BOTC_SeatOfRole(g_miFnRole);
+        tRole = g_pixiePickRole - 1;
+        a = BOTC_PixieLiveSeatOf(tRole);
+        if (a < 2 || a > 13) {
+            BOTC_Notice(g_teller, "这个镇民角色现在没有在场且活着的玩家。");
+            return;
+        }
+        // 旧目标身上的「疯狂（小精灵）」先清掉，再写到新目标身上。
+        if (g_pixieSeatBy[seat] > 0 && g_pixieSeatBy[seat] <= 13 && g_pixieSeatBy[seat] != a) {
+            g_tokOn[(((g_teller * 14) + g_pixieSeatBy[seat]) * 256) + 116] = false;
+        }
+        g_pixieRoleBy[seat] = tRole + 1;
+        g_pixieSeatBy[seat] = a;
         g_pixieDone[seat] = false;
-        BOTC_PmInfo(g_who[seat], "【信息】你得知一个在场的镇民角色：" + g_roleName[g_miFnRole] + "。");
-        BOTC_PmStore(g_teller, "【小精灵】已发给 " + BOTC_NameStr(seat) + "：一个在场的镇民角色 " + g_roleName[g_miFnRole] + "。");
+        g_tokOn[(((g_teller * 14) + a) * 256) + 116] = true;
+        BOTC_PmInfo(g_who[seat], "【信息】你得知一个在场的镇民角色：" + g_roleName[tRole] + "。");
+        BOTC_PmStore(g_teller, "【小精灵】" + BOTC_NameStr(seat) + " 得知的镇民角色：" + g_roleName[tRole] + "；已在 " + BOTC_NameStr(a) + " 身上打好「疯狂（小精灵）」token。");
+        g_pixiePickRole = 0;
+        BOTC_GrimRender(g_teller);
         DialogSetVisible(g_miDlg, PlayerGroupSingle(g_teller), false);
         g_miSeat = 0;
         g_miRole = -1;
@@ -42954,6 +43661,8 @@ void BOTC_MiFnSend () {
         BOTC_GrimRender(g_teller);
         return;
     }
+    // 【气球驾驶员（72）】（用户 2026-09-23）：只填一个座位号 ---- 发「你得知X。」+ 自动打 95 号 token，
+    //   不需要选身份、也不走「两个座位」那套校验。
     if (role == 72) {
         a = BOTC_TextNum(libNtve_gf_DialogItemEditValue(g_miEdit, g_teller));   // 只读**第一个**框（第二个框是隐藏的、可能留着上一次的旧值）
         if (a >= 1 && a <= 12) {
@@ -43005,7 +43714,7 @@ void BOTC_MiFnSend () {
     }
     // 【洗脑师】（用户 2026-09-21）：填要洗脑的座位号 + 让他疯狂证明的善良角色
     if (role == 25) {
-        BOTC_CerenApply(a, g_miFnRole);
+        BOTC_CerenApply(seat, a, g_miFnRole);
         g_miSeat = 0;
         g_miRole = -1;
         return;
@@ -43782,6 +44491,25 @@ void BOTC_RascalPick (int p, int role) {
     BOTC_PmStore(g_teller, "【熊孩子】" + BOTC_NameStr(p) + " 选择了镇民角色「" + g_roleName[role] + "」：获得「捣蛋」的是 " + s + "，直到下个黄昏。");
 }
 
+// 【哲学家】（用户 2026-11-10）：哲学家获得能力只改说书人真值行的角色标记，并在说书人魔典上放
+//   「是哲学家」标记；玩家自己那份魔典继续显示哲学家本人，不跟着变成获得的能力。
+void BOTC_PhiloOwnMarkKeep (int seat) {
+    int ob;
+    if (seat < 2 || seat > 13) {
+        return;
+    }
+    ob = g_who[seat];
+    if (ob < 1 || ob > 13 || ob == g_teller) {
+        return;
+    }
+    if (!g_started && !g_dealConfirmed) {
+        g_mark[(ob * 14) + seat] = 0;
+    }
+    else {
+        g_mark[(ob * 14) + seat] = BOTC_PlayerRoleView(seat, 56) + 1;
+    }
+}
+
 void BOTC_PhiloOpen (int p) {
     int cp;
     if (p < 1 || p > 13) {
@@ -43883,13 +44611,15 @@ void BOTC_PhiloPick (int p, int role) {
         g_autoWoke[p] = false;
     }
     // ③ 其它角色：他直接获得那个能力
+    // 【哲学家不改本人魔典】（用户 2026-11-10）：说书人真值行照旧换成获得的能力，并在说书人魔典上放
+    //   「是哲学家」标记；玩家自己那份魔典仍显示哲学家本人。
     BOTC_SetSeatRole(g_teller, p, role);
-    BOTC_SetSeatRole(g_who[p], p, role);
     g_philoRole = role;                         // 换身份会把这份记录清掉，这里补回（用户 2026-09-21）
     g_tokOn[(((g_teller * 14) + p) * 256) + 70] = true;      // 换身份会清掉认知标记，这里补回「是哲学家」（用户 2026-09-21）
     BOTC_SeatStateSync();      // 【打完「是哲学家」之后再算一次】（用户 2026-10-14）
     if (g_who[p] == g_teller) { g_mark[(g_teller * 14) + 1] = role + 1; }
-    BOTC_PmStore(g_teller, "【哲学家】" + BOTC_NameStr(p) + " 获得了 " + g_roleName[role] + " 的能力。");
+    BOTC_PhiloOwnMarkKeep(p);
+    BOTC_PmStore(g_teller, "【哲学家】" + BOTC_NameStr(p) + " 获得了 " + g_roleName[role] + " 的能力（说书人魔典标记已换成该角色并放置「是哲学家」标记，本人魔典仍显示哲学家）。");
     BOTC_GrimRender(g_teller);
     BOTC_GrimRender(g_who[p]);
 }
@@ -44059,8 +44789,9 @@ void BOTC_PhiloBelieve (int p, int role) {
         g_seatFirstNight[p] = g_nightNum;
         g_autoWoke[p] = false;
     }
+    // 【认知覆盖类同样不改本人魔典】（用户 2026-11-10）：说书人真值行照旧换成他以为的身份
+    //   （酒鬼 / 疯子 / 悟道者那套判定都读这一行），但玩家自己那份魔典仍显示哲学家本人。
     BOTC_SetSeatRole(g_teller, p, role);
-    BOTC_SetSeatRole(g_who[p], p, role);
     g_philoRole = g_philoKind;                  // 他选的是酒鬼 / 疯子：换身份会把这份记录清掉，这里补回
     g_tokOn[(((g_teller * 14) + p) * 256) + 70] = true;      // 换身份会清掉认知标记，这里补回「是哲学家」（用户 2026-09-21）
     BOTC_SeatStateSync();      // 【同上】（用户 2026-10-14）
@@ -44082,6 +44813,9 @@ void BOTC_PhiloBelieve (int p, int role) {
     }
     // 【身份转变提示】（用户 2026-09-21）：哲学家选了酒鬼 / 疯子同样要发（认知覆盖造成的）
     BOTC_ChangeRoleMsg(p, role);
+    // 【ChangeRoleMsg 会顺手把本人魔典写成新身份】（用户 2026-11-10）：这里再写回哲学家本人，
+    //   只说书人魔典跟着变。
+    BOTC_PhiloOwnMarkKeep(p);
     BOTC_GrimRender(g_teller);
     BOTC_GrimRender(g_who[p]);
 }
@@ -47702,6 +48436,7 @@ void BOTC_BarberSwap (int p, int a, int b) {
     int cogB;
     int cardA;
     int cardB;
+    int other;
     if (p < 2 || p > 13 || a < 2 || a > 13 || b < 2 || b > 13 || a == b) {
         BOTC_Notice(g_teller, "理发师：要选两个不同的玩家。");
         return;
@@ -47715,6 +48450,20 @@ void BOTC_BarberSwap (int p, int a, int b) {
     if (ra < 0 || rb < 0) {
         BOTC_Notice(g_teller, "理发师：这两个座位里有人还没定身份。");
         return;
+    }
+    // 【恶魔与死者互换 · 先问说书人】（用户 2026-11-10）：恶魔把自己和已死亡的玩家互换会让恶魔
+    //   落到尸体上 → 弹窗让说书人决定；点【否】/ X 就把面板还给他重新选。
+    //   ⚠ 只看「被换的那一方」是不是真死：恶魔本身是僵怖（43，含公开红叉的假死状态）也照样弹窗；
+    //     只有另一方是假死僵怖（内部还活着，BOTC_SeatDead 返回假）时才按普通交换、不弹窗。
+    if (!g_barAskBypass && (a == p || b == p)) {
+        other = a;
+        if (a == p) {
+            other = b;
+        }
+        if (BOTC_SeatDead(other)) {
+            BOTC_BarberAskOpen(p, a, b);
+            return;
+        }
     }
     // 【相克 · 理发师 × 落难少女】（用户 2026-11-03）：交换到落难少女 → 由说书人指定谁当落难少女
     if (!g_damselBarberBypass && (ra == 82 || rb == 82)) {
@@ -47794,6 +48543,68 @@ void BOTC_BarberDecline (int p) {
     g_barberWait = false;
     BOTC_GrimRender(g_teller);
     BOTC_PmStore(g_teller, "【理发师】恶魔（" + BOTC_NameStr(p) + "）放弃交换 → 撤掉「今晚理发」标记。");
+}
+
+// 【理发师 · 恶魔与死者互换】（用户 2026-11-10）：恶魔把自己和已死亡的玩家互换时，
+//   先弹窗让说书人决定；【是】= 照常交换，【否】/ X = 拒绝，把交换面板还给恶魔重新选。
+//   恶魔本身是僵怖（含公开红叉的假死状态）也照样走到这里 —— 判的是「被换的那一方」是否真死。
+void BOTC_BarberAskOpen (int p, int a, int b) {
+    int other;
+    if (p < 2 || p > 13 || a < 2 || a > 13 || b < 2 || b > 13) {
+        return;
+    }
+    other = a;
+    if (a == p) {
+        other = b;
+    }
+    // 电脑说书人不会点弹窗：直接按允许处理，保持旧行为。
+    if (PlayerType(g_teller) != 1) {
+        g_barAskBypass = true;
+        BOTC_BarberSwap(p, a, b);
+        g_barAskBypass = false;
+        return;
+    }
+    if (g_barAskDlg != 0) {
+        DialogSetVisible(g_barAskDlg, PlayerGroupAll(), false);
+    }
+    g_barAskOn = true;
+    g_barAskP = p;
+    g_barAskA = a;
+    g_barAskB = b;
+    g_skillPicking[p] = false;
+    DialogSetVisible(g_skillDlg[p], PlayerGroupSingle(g_who[p]), false);
+    libNtve_gf_SetDialogItemText(g_barAskTitle, StringToText("【理发师】" + BOTC_NameStr(p) + " 要与已死亡的 " + BOTC_NameStr(other) + " 互换：互换后恶魔会是死的（天亮可能判善良胜），是否允许？"), PlayerGroupSingle(g_teller));
+    DialogSetVisible(g_barAskDlg, PlayerGroupSingle(g_teller), true);
+    BOTC_PmStore(g_teller, "【理发师】" + BOTC_NameStr(p) + " 要把自己和已死亡的 " + BOTC_NameStr(other) + " 互换 → 允许后恶魔会处于死亡状态（僵怖也一样，不会在尸体上活着），之后可能判善良胜；请选择【是：允许】或【否：让他重新选】。");
+}
+
+void BOTC_BarberAskAnswer (int ans) {
+    int p;
+    int a;
+    int b;
+    p = g_barAskP;
+    a = g_barAskA;
+    b = g_barAskB;
+    g_barAskOn = false;
+    g_barAskP = 0;
+    g_barAskA = 0;
+    g_barAskB = 0;
+    if (g_barAskDlg != 0) {
+        DialogSetVisible(g_barAskDlg, PlayerGroupAll(), false);
+    }
+    if (p < 2 || p > 13) {
+        return;
+    }
+    if (ans != 0) {
+        g_barAskBypass = true;
+        BOTC_BarberSwap(p, a, b);
+        g_barAskBypass = false;
+        return;
+    }
+    // 拒绝：把交换面板还给这只恶魔，让他重新选两名玩家。
+    g_barberFrom = p;
+    BOTC_SkillOpen(p);
+    BOTC_PmStore(g_teller, "【理发师】已拒绝 " + BOTC_NameStr(p) + " 把自己和死者互换 → 让他重新选择两名玩家。");
 }
 
 // ■ 月之子（36）超时兜底：说书人替他选
@@ -49352,7 +50163,7 @@ void BOTC_ComboResolve (int p) {
             BOTC_PmStore(g_teller, "【洗脑师】" + BOTC_NameStr(p) + " 中毒/酒鬼/提线木偶 → 这一次能力失效（没有让他疯狂）。");
         }
         else {
-            BOTC_CerenApply(t, role);
+            BOTC_CerenApply(p, t, role);
         }
     }
     else if (r == 67) {
@@ -53072,6 +53883,7 @@ void BOTC_EnvoyDawnClear () {
 
 //==================================================================================================
 // 【半仙（158）】夜间只转移“选中半仙”的那一个目标槽，由说书人指定另一名邪恶玩家。
+//   候选只要「还在座位上 + 登记为邪恶」即可，**已经死亡的邪恶玩家同样可选**。
 //==================================================================================================
 int BOTC_HalfImmortalSeat () {
     int q;
@@ -53157,7 +53969,7 @@ bool BOTC_HalfImmortalMaybePrompt (int p) {
         }
         names = names + BOTC_NameStr(q);
     }
-    BOTC_ManInfoOpenSeats(p, "【半仙改选】输入一名邪恶玩家座位号作为新的目标；候选：" + names, 12);
+    BOTC_ManInfoOpenSeats(p, "【半仙改选】输入一名邪恶玩家座位号作为新的目标（已死亡的邪恶玩家也可以）；候选：" + names, 12);
     g_miRole = 815;
     g_miKind = 0;
     DialogControlSetSize(g_miEdit, PlayerGroupSingle(g_teller), 240, 41);
@@ -53167,7 +53979,7 @@ bool BOTC_HalfImmortalMaybePrompt (int p) {
     DialogControlSetVisible(g_miEdit3, PlayerGroupSingle(g_teller), false);
     DialogControlSetVisible(g_miEdit4, PlayerGroupSingle(g_teller), false);
     BOTC_Notice(g_teller, "【半仙】" + BOTC_NameStr(p) + " 选择了半仙：请输入一名邪恶玩家作为新的选择目标。");
-    BOTC_PmStore(g_teller, "【半仙】" + BOTC_NameStr(p) + " 的选择包含半仙 " + BOTC_NameStr(half) + "；请改指一名邪恶玩家（候选：" + names + "）。原选择不得重复作为其他目标槽。");
+    BOTC_PmStore(g_teller, "【半仙】" + BOTC_NameStr(p) + " 的选择包含半仙 " + BOTC_NameStr(half) + "；请改指一名邪恶玩家（可含已死亡，候选：" + names + "）。原选择不得重复作为其他目标槽。");
     BOTC_GrimRender(g_teller);
     return true;
 }
@@ -53186,7 +53998,7 @@ void BOTC_HalfImmortalApply (int p, int slot, int seat) {
         return;
     }
     if (!g_seatOn[seat] || BOTC_SeatAlign(seat) != 1 || seat == g_halfOriginal) {
-        BOTC_Notice(g_teller, "半仙只能改为选择另一名邪恶玩家。");
+        BOTC_Notice(g_teller, "半仙只能改为选择另一名邪恶玩家（已死亡的邪恶玩家也可以）。");
         return;
     }
     if (slot == 1) { g_skillT1[p] = seat; }
@@ -57357,13 +58169,132 @@ void BOTC_CerenOpen (int p) {
     DialogSetVisible(g_pickDlg, PlayerGroupSingle(g_who[p]), true);
 }
 
-void BOTC_CerenApply (int who, int role) {
-    if (who < 1 || who > 13 || role < 0 || role > 163) {    // 允许 1（用户 2026-09-21）
+// 【洗脑师 · 疯狂记账】（用户 2026-11-10）：
+//   每个来源座位（真身洗脑师 / 失忆洗脑师 / 借来能力的玩家）各存一份，不共用同一枚 token；
+//   某格只要还被任一来源的「本夜目标 / 上一夜目标」覆盖，就保留 token 71。
+bool BOTC_CerenSeatMad (int s) {
+    int src;
+    if (s < 1 || s > 13) {
+        return false;
+    }
+    for (src = 1; src <= 13; src += 1) {
+        if (g_cerenTgt[src] == s && g_cerenTgt[src] > 0) {
+            return true;
+        }
+        if (g_cerenOld[src] == s && g_cerenOld[src] > 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
+// 洗脑师死亡 / 离场 / 换身份：撤掉他那一份疯狂，不能连带撤掉别的洗脑师的。
+void BOTC_CerenSourceGone (int q) {
+    int t1;
+    int t2;
+    if (q < 1 || q > 13) {
+        return;
+    }
+    t1 = g_cerenTgt[q];
+    t2 = g_cerenOld[q];
+    g_cerenTgt[q] = 0;
+    g_cerenTgtRole[q] = 0;
+    g_cerenTgtNight[q] = 0;
+    g_cerenOld[q] = 0;
+    g_cerenOldRole[q] = 0;
+    g_cerenOldNight[q] = 0;
+    if (t1 > 0 && !BOTC_CerenSeatMad(t1)) {
+        g_tokOn[(((g_teller * 14) + t1) * 256) + 71] = false;
+    }
+    if (t2 > 0 && t2 != t1 && !BOTC_CerenSeatMad(t2)) {
+        g_tokOn[(((g_teller * 14) + t2) * 256) + 71] = false;
+    }
+}
+
+// 黎明：按夜数收掉上一夜那一份；本夜刚放的那一份保留，玩家继续疯狂。
+void BOTC_CerenDawnClear () {
+    int src;
+    int s;
+    for (src = 1; src <= 13; src += 1) {
+        if (g_cerenOld[src] > 0 && g_cerenOldNight[src] < g_nightNum) {
+            s = g_cerenOld[src];
+            g_cerenOld[src] = 0;
+            g_cerenOldRole[src] = 0;
+            g_cerenOldNight[src] = 0;
+            if (!BOTC_CerenSeatMad(s)) {
+                g_tokOn[(((g_teller * 14) + s) * 256) + 71] = false;
+            }
+        }
+    }
+    for (src = 1; src <= 13; src += 1) {
+        if (g_cerenTgt[src] > 0 && g_cerenTgtNight[src] < g_nightNum) {
+            s = g_cerenTgt[src];
+            g_cerenTgt[src] = 0;
+            g_cerenTgtRole[src] = 0;
+            g_cerenTgtNight[src] = 0;
+            if (!BOTC_CerenSeatMad(s)) {
+                g_tokOn[(((g_teller * 14) + s) * 256) + 71] = false;
+            }
+        }
+    }
+}
+
+// 换座位：来源与目标都是一整格，跟着人一起换。
+void BOTC_CerenSwapState (int x, int y) {
+    int i;
+    int t;
+    if (x < 1 || x > 13 || y < 1 || y > 13 || x == y) {
+        return;
+    }
+    // 先把「目标座位」按换位映射（来源记录稍后整条换位，避免重复映射）
+    for (i = 1; i <= 13; i += 1) {
+        if (g_cerenTgt[i] == x) {
+            g_cerenTgt[i] = y;
+        }
+        else if (g_cerenTgt[i] == y) {
+            g_cerenTgt[i] = x;
+        }
+        if (g_cerenOld[i] == x) {
+            g_cerenOld[i] = y;
+        }
+        else if (g_cerenOld[i] == y) {
+            g_cerenOld[i] = x;
+        }
+    }
+    t = g_cerenTgt[x];
+    g_cerenTgt[x] = g_cerenTgt[y];
+    g_cerenTgt[y] = t;
+    t = g_cerenTgtRole[x];
+    g_cerenTgtRole[x] = g_cerenTgtRole[y];
+    g_cerenTgtRole[y] = t;
+    t = g_cerenTgtNight[x];
+    g_cerenTgtNight[x] = g_cerenTgtNight[y];
+    g_cerenTgtNight[y] = t;
+    t = g_cerenOld[x];
+    g_cerenOld[x] = g_cerenOld[y];
+    g_cerenOld[y] = t;
+    t = g_cerenOldRole[x];
+    g_cerenOldRole[x] = g_cerenOldRole[y];
+    g_cerenOldRole[y] = t;
+    t = g_cerenOldNight[x];
+    g_cerenOldNight[x] = g_cerenOldNight[y];
+    g_cerenOldNight[y] = t;
+}
+
+void BOTC_CerenApply (int src, int who, int role) {
+    if (src < 1 || src > 13 || who < 1 || who > 13 || role < 0 || role > 163) {    // 允许 1（用户 2026-09-21）
         return;
     }
     g_cerenWho = who;
     g_cerenRole = role;
     g_cerenPick = false;
+    // 上一夜那一份转入 old：本夜到黎明前仍然处于疯狂状态
+    g_cerenOld[src] = g_cerenTgt[src];
+    g_cerenOldRole[src] = g_cerenTgtRole[src];
+    g_cerenOldNight[src] = g_cerenTgtNight[src];
+    g_cerenTgt[src] = who;
+    g_cerenTgtRole[src] = role;
+    g_cerenTgtNight[src] = g_nightNum;
     g_tokOn[(((g_teller * 14) + who) * 256) + 71] = true;
     BOTC_GrimRender(g_teller);
     BOTC_PmInfo(g_who[who], "【洗脑师】你明天白天和夜晚都要「疯狂」地证明自己是" + g_roleName[role] + "，不然可能被处决。");
@@ -57461,6 +58392,11 @@ void BOTC_HagApply (int who, int role) {
     }
     hagSeat = g_hagActor;
     oldR = BOTC_SeatTrueRole(who);
+    // 【唯一恶魔】（用户 2026-11-10）：把场上唯一一只恶魔熬成非恶魔角色 → 先问说书人要不要让她改变选择
+    if (hagSeat >= 1 && !g_hagConfirmOk && BOTC_HagOnlyDemon(who, role)) {
+        BOTC_HagDemonAskOpen(who, role, hagSeat);
+        return;
+    }
     if (role == 82 && oldR != 82 && hagSeat >= 1 && !g_hagDamselBypass) {
         if (BOTC_RoleInPlay(82)) {
             g_hagActor = 0;
@@ -57769,14 +58705,59 @@ void BOTC_HagConfirmOpen (int who, int role, int hagSeat) {
     DialogSetVisible(g_hagAskDlg, PlayerGroupSingle(g_teller), true);
 }
 
-// 说书人的二次确认：1 = 同意改造 / 0 = 拒绝（让她重新选）
+// 【麻脸巫婆 · 唯一恶魔】（用户 2026-11-10）
+//   目标是不是场上唯一一只还活着的恶魔，而且这次选的角色不是恶魔。
+bool BOTC_HagOnlyDemon (int who, int role) {
+    int q;
+    int n;
+    if (who < 2 || who > 13 || role < 0 || role > 163) {
+        return false;
+    }
+    if (BOTC_SeatDead(who) || !BOTC_IsDemonSeat(who)) {
+        return false;
+    }
+    if (BOTC_RoleTeam(role) == 3) {
+        return false;
+    }
+    n = 0;
+    for (q = 2; q <= 13; q += 1) {
+        if (!BOTC_SeatDead(q) && BOTC_IsDemonSeat(q)) {
+            n = n + 1;
+        }
+    }
+    return (n <= 1);
+}
+
+// 弹给说书人：这次改造会把场上唯一的恶魔熬成非恶魔，要不要让她改变选择？
+//   是（或 X）= 让她重选 / 否 = 仍然改造
+void BOTC_HagDemonAskOpen (int who, int role, int hagSeat) {
+    if (who < 2 || who > 13 || role < 0 || role > 163 || hagSeat < 1 || hagSeat > 13) {
+        return;
+    }
+    g_hagAsk = 2;
+    g_hagAskWho = who;
+    g_hagAskRole = role;
+    g_hagAskActor = hagSeat;
+    g_hagActor = hagSeat;
+    libNtve_gf_SetDialogItemText(g_hagAskTitle, StringToText("【麻脸巫婆】要把场上唯一的恶魔 ") + StringToText(BOTC_NameStr(who)) + StringToText("（原") + StringToText(g_roleName[BOTC_SeatTrueRole(who)]) + StringToText("）变成「") + StringToText(g_roleName[role]) + StringToText("」，之后场上就没有恶魔了。是否让她改变选择？"), PlayerGroupSingle(g_teller));
+    libNtve_gf_SetDialogItemText(g_hagAskYes, StringToText("是：让她重选"), PlayerGroupSingle(g_teller));
+    libNtve_gf_SetDialogItemText(g_hagAskNo, StringToText("否：仍然改造"), PlayerGroupSingle(g_teller));
+    DialogControlSetVisible(g_hagAskYes, PlayerGroupSingle(g_teller), true);
+    DialogControlSetVisible(g_hagAskNo, PlayerGroupSingle(g_teller), true);
+    DialogControlSetVisible(g_hagAskX, PlayerGroupSingle(g_teller), true);
+    DialogSetVisible(g_hagAskDlg, PlayerGroupSingle(g_teller), true);
+}
+
+// 说书人的二次确认：1 = 同意改造 / 0 = 拒绝（让她重新选）/ -1 = 点了 X（按不改造处理）
 void BOTC_HagAskAnswer (int ans) {
     int who;
     int role;
     int hagSeat;
+    int mode;
     if (g_hagAsk <= 0) {
         return;
     }
+    mode = g_hagAsk;
     who = g_hagAskWho;
     role = g_hagAskRole;
     hagSeat = g_hagAskActor;
@@ -57785,7 +58766,29 @@ void BOTC_HagAskAnswer (int ans) {
     g_hagAskRole = 0;
     g_hagAskActor = 0;
     DialogSetVisible(g_hagAskDlg, PlayerGroupSingle(g_teller), false);
-    if (ans != 0) {
+    // 【唯一恶魔】（用户 2026-11-10）：这一问的按钮文案是反的，问完先恢复默认
+    if (mode == 2) {
+        libNtve_gf_SetDialogItemText(g_hagAskYes, StringToText("是：确认改造"), PlayerGroupSingle(g_teller));
+        libNtve_gf_SetDialogItemText(g_hagAskNo, StringToText("否：让她重选"), PlayerGroupSingle(g_teller));
+        if (ans != 0) {                 // 是 / X → 不改造，让她重新选
+            g_hagDamselBypass = false;
+            g_hagActor = 0;
+            if (hagSeat >= 1 && hagSeat <= 13) {
+                BOTC_PmStore(g_teller, "【麻脸巫婆】说书人不让她把场上唯一的恶魔熬成别的东西 → 她需要重新选择。");
+                g_hagPick = false;
+                g_hagConfirmOk = false;
+                g_hagActor = hagSeat;
+                BOTC_SkillOpen(hagSeat);
+            }
+            return;
+        }
+        // 否 → 仍然改造：已经问过「唯一恶魔」这一条，跳过跨阵营那条，免得连着弹两次
+        g_hagConfirmOk = true;
+        g_hagActor = hagSeat;
+        BOTC_HagApply(who, role);
+        return;
+    }
+    if (ans > 0) {
         g_hagConfirmOk = true;
         g_hagActor = hagSeat;
         BOTC_HagApply(who, role);
@@ -58015,22 +59018,71 @@ int BOTC_CannAbilitySeat () {
     return 0;
 }
 
-// 【处决死亡的食人族钩子】（用户第 6 / 7 条）：
-//   1. 先清掉上一位被处决者留下的中毒，再按本次死者是否邪恶决定是否重新中毒；
-//   2. 只要今天有人死于处决且食人族存活，夜里就先给他发一次能力。
-void BOTC_CannExecHooks (int q) {
+// 【食人族（74）· 持续检测】（用户 2026-11-10）：
+//   「饱餐」永远只挂在最后一名死于处决的玩家角色标记旁，跨夜不清；下一名玩家死于处决时转移。
+//   「中毒（食人族）」跟着「饱餐」持有人的当前阵营走：邪恶 → 食人族中毒；变善良 → 摘掉。
+//   因为每次都按当前状态重算，食人族中途被创造（麻脸巫婆 / 理发师 / 舞蛇人 / 说书人改身份 /
+//   借用能力）时会自动补放这两枚标记，不依赖当时有没有提前放好标记。
+void BOTC_CannSync () {
+    int i;
     int cs;
-    int team;
-    if (q < 1 || q > 13) {
-        return;
+    int bearer;
+    bool bad;
+    bearer = g_cannFedSeat;
+    if (bearer < 2 || bearer > 13) {
+        bearer = 0;
     }
-    if (g_cannPoisonSeat >= 2 && g_cannPoisonSeat <= 13) {
-        g_tokOn[(((g_teller * 14) + g_cannPoisonSeat) * 256) + 178] = false;
+    // 饱餐：只保留在最后一名死于处决的玩家身上
+    for (i = 2; i <= 13; i += 1) {
+        if (i == bearer) {
+            g_tokOn[(((g_teller * 14) + i) * 256) + 206] = true;
+        }
+        else if (g_tokOn[(((g_teller * 14) + i) * 256) + 206]) {
+            g_tokOn[(((g_teller * 14) + i) * 256) + 206] = false;
+        }
     }
-    g_cannPoisonSeat = 0;
     cs = BOTC_CannSeat();
     if (cs < 2) {
         // 【失忆者 / 借用能力者】（用户 2026-11-06）：中毒标记要落到能力持有者身上。
+        cs = BOTC_CannAbilitySeat();
+    }
+    bad = false;
+    if (bearer > 0 && BOTC_SeatAlign(bearer) == 1) {
+        bad = true;
+    }
+    if (cs < 2 || cs > 13 || cs == bearer || BOTC_SeatDead(cs)) {
+        bad = false;
+    }
+    // 中毒：只在「饱餐」持有人当前为邪恶阵营时挂在食人族身上
+    for (i = 2; i <= 13; i += 1) {
+        if (bad && i == cs) {
+            g_tokOn[(((g_teller * 14) + i) * 256) + 178] = true;
+        }
+        else if (g_tokOn[(((g_teller * 14) + i) * 256) + 178]) {
+            g_tokOn[(((g_teller * 14) + i) * 256) + 178] = false;
+        }
+    }
+    if (bad) {
+        g_cannPoisonSeat = cs;
+    }
+    else {
+        g_cannPoisonSeat = 0;
+    }
+}
+
+// 【处决死亡的食人族钩子】（用户第 6 / 7 条 + 2026-11-10 的持续检测规则）：
+//   1. 「饱餐 / 中毒」统一交给 BOTC_CannSync 按最新状态重算；
+//   2. 只要今天有人死于处决且食人族存活，夜里就先给他发一次能力。
+void BOTC_CannExecHooks (int q) {
+    int cs;
+    int oldPoison;
+    if (q < 1 || q > 13) {
+        return;
+    }
+    oldPoison = g_cannPoisonSeat;
+    BOTC_CannSync();
+    cs = BOTC_CannSeat();
+    if (cs < 2) {
         cs = BOTC_CannAbilitySeat();
     }
     if (cs < 2 || cs > 13 || cs == q || BOTC_SeatDead(cs)) {
@@ -58042,11 +59094,8 @@ void BOTC_CannExecHooks (int q) {
     if (BOTC_SeatTrueRole(q) != 38) {
         g_cannPending = 1;
     }
-    team = BOTC_RoleTeam(BOTC_SeatTrueRole(q));
-    if (team == 2 || team == 3) {
-        g_tokOn[(((g_teller * 14) + cs) * 256) + 178] = true;
-        g_cannPoisonSeat = cs;
-        BOTC_PmStore(g_teller, "【食人族】邪恶角色 " + BOTC_NameStr(q) + " 死于处决 → " + BOTC_NameStr(cs) + " 自动中毒，持续到下一次有人死于处决。");
+    if (g_cannPoisonSeat == cs && oldPoison != cs) {
+        BOTC_PmStore(g_teller, "【食人族】邪恶角色 " + BOTC_NameStr(q) + " 死于处决 → " + BOTC_NameStr(cs) + " 自动中毒；「饱餐」已转移到 " + BOTC_NameStr(q) + "。");
     }
     BOTC_GrimRender(g_teller);
 }
@@ -59391,6 +60440,7 @@ void BOTC_DawnResolve () {
     BOTC_HeshangDawnClear();
     BOTC_CultChoiceSettle();       // 【异教领袖（106）】天亮仍未作答 → 今晚不改变阵营
     BOTC_NoDashiiSync();           // 和尚压制结束后，持续中毒在黎明恢复
+    BOTC_CerenDawnClear();         // 【洗脑师】黎明收掉上一夜那一份「疯狂」（本夜刚放的那份保留）
     // 【「死于今日」的移除时机】（用户 2026-09-20）：昨天留下的「死于今日 / 死于今日（僵怖）/ 死于今日（教父）」标记，
     //   一到第二天白天就清掉 ---- 放在整个天亮流程的**最前面**，免得后面处理夜间死亡时又混进新标记。
     for (q = 2; q <= 13; q += 1) {
@@ -60687,6 +61737,11 @@ void BOTC_ShowWin (int side, string why1, string why2) {
     if (g_gameOver) {
         return;
     }
+    // 【政客（97）】（用户 2026-11-10）：已经弹窗在等说书人回答，重复调用直接忽略，
+    //   否则会重新算一遍异端分子对调、还把没问完的政客跳过去。
+    if (g_polSeat >= 2) {
+        return;
+    }
     if (!g_started) {
         return;
     }
@@ -60738,6 +61793,17 @@ void BOTC_ShowWin (int side, string why1, string why2) {
         BOTC_PmStore(g_teller, "【异端分子】能力生效 → 这次胜负对调。");
     }
 
+    // 【政客（97）】（用户 2026-11-10）：政客所在阵营落败时，先问说书人是否让他改换阵营一起获胜。
+    //   弹窗期间先不封盘（g_gameOver 还是 false），回答后由 BOTC_PoliticianAnswer 走同一个封盘出口。
+    if (BOTC_PoliticianAsk(side, why1, why2)) {
+        return;
+    }
+    BOTC_WinFinalize(side, why1, why2);
+}
+
+// 【政客（97）】（用户 2026-11-10）：胜负封盘 —— 原 BOTC_ShowWin 的收尾部分。
+//   政客判定问完（或者根本不需要问）之后才走到这里，全图仍然只有这一个封盘出口。
+void BOTC_WinFinalize (int side, string why1, string why2) {
     g_gameOver = true;
     // 【场次统计】（用户 2026-10-20）：唯一胜负出口只记一次；此时阵营 / 说书人座位都已经确定。
     BOTC_StatsRecord(side);
@@ -60763,6 +61829,94 @@ void BOTC_ShowWin (int side, string why1, string why2) {
     BOTC_PlaySfxTimed(g_sfxJieSuanName, 2.0);
     BOTC_EndNoticeShow();
     TimerStart(g_tWinStage, 5.0, false, c_timeGame);
+}
+
+//--------------------------------------------------------------------------------------------------
+// 【政客（97）· 找人说书人判定】（用户 2026-11-10）
+//   扫一遍还在座位上的玩家：拥有政客能力且能力生效（含哲学家 / 食人族 / 说书人赋予等借来的），
+//   并且登记阵营不是这次获胜的那一侧 → 弹窗问说书人要不要让他转变阵营一起赢。
+//   返回 true = 已经弹窗、正在等说书人回答（这一拍先别封盘）。
+//   · 已经在获胜方阵营的政客不用问，本来就跟着赢。
+//   · 「说书人胜」（side 2）没有另一个阵营可转，直接不问。
+//   · 多名政客逐个问，每人只问一次（g_polDone）。
+//--------------------------------------------------------------------------------------------------
+bool BOTC_PoliticianAsk (int side, string why1, string why2) {
+    int i;
+    if (side != 0 && side != 1) {
+        return false;
+    }
+    // 已经在等回答：保持弹窗，别再换人问、也别让调用方直接封盘。
+    if (g_polSeat >= 2) {
+        return true;
+    }
+    for (i = 2; i <= 13; i += 1) {
+        if (g_polDone[i]) {
+            continue;
+        }
+        if (!g_seatOn[i]) {
+            continue;
+        }
+        if (!BOTC_AbilityWorks(i, 97)) {
+            continue;
+        }
+        if (BOTC_SeatAlign(i) == side) {
+            continue;
+        }
+        g_polDone[i] = true;
+        g_polSeat = i;
+        g_polSide = side;
+        g_polWhy1 = why1;
+        g_polWhy2 = why2;
+        libNtve_gf_SetDialogItemText(g_polTitle, StringToText("【政客】" + BOTC_NameStr(i) + " 所在阵营落败\n是否让他转变阵营并一起获胜？"), PlayerGroupSingle(g_teller));
+        DialogControlSetVisible(g_polYes, PlayerGroupSingle(g_teller), true);
+        DialogControlSetVisible(g_polNo, PlayerGroupSingle(g_teller), true);
+        DialogSetVisible(g_polDlg, PlayerGroupSingle(g_teller), true);
+        return true;
+    }
+    return false;
+}
+
+// 【政客（97）】（用户 2026-11-10）：说书人回答 —— 1 = 转变阵营并获胜 / 0 = 不转变。
+//   转变 = 把该格写成获胜那一侧的 善良 / 邪恶 token，登记层随即作废缓存，
+//   之后的场次统计、复盘魔典和胜负面板都按新阵营算。
+void BOTC_PoliticianAnswer (int ans) {
+    int q;
+    int side;
+    int i;
+    string w1;
+    string w2;
+    q = g_polSeat;
+    side = g_polSide;
+    w1 = g_polWhy1;
+    w2 = g_polWhy2;
+    g_polSeat = 0;
+    DialogSetVisible(g_polDlg, PlayerGroupAll(), false);
+    if (q < 2 || q > 13) {
+        return;
+    }
+    if (ans != 0) {
+        if (side == 1) {
+            g_tokOn[(((g_teller * 14) + q) * 256) + 15] = true;
+            g_tokOn[(((g_teller * 14) + q) * 256) + 14] = false;
+        }
+        else {
+            g_tokOn[(((g_teller * 14) + q) * 256) + 14] = true;
+            g_tokOn[(((g_teller * 14) + q) * 256) + 15] = false;
+        }
+        BOTC_PairClearSeat(q);
+        BOTC_PmStore(g_teller, "【政客】" + BOTC_NameStr(q) + " 转变为" + BOTC_AlignName(side) + "阵营，跟着获胜方一起胜利。");
+        BOTC_PmInfo(g_who[q], "【政客】你的阵营转变为" + BOTC_AlignName(side) + "，本局随获胜方一起胜利。");
+    }
+    else {
+        BOTC_PmStore(g_teller, "【政客】" + BOTC_NameStr(q) + " 没有转变阵营，按原来的结果结算。");
+    }
+    for (i = 1; i <= 13; i += 1) {
+        BOTC_GrimRender(i);
+    }
+    if (BOTC_PoliticianAsk(side, w1, w2)) {
+        return;
+    }
+    BOTC_WinFinalize(side, w1, w2);
 }
 
 // 胜利该放哪一首（善良胜 + 存活 ≤ 3 → 第二首；邪恶胜 → 那首邪恶曲）
@@ -62954,6 +64108,13 @@ void BOTC_SeatChangeUiCancel () {
     g_levRecSeat = 0;
     g_gfRecSeat = 0;
     g_pacAskSeat = 0;
+    // 【理发师 · 恶魔与死者互换】切阶段 / 换座位收掉待判定，避免旧弹窗劫持后续点击
+    g_barAskOn = false;
+    g_barAskBypass = false;
+    g_barAskP = 0;
+    g_barAskA = 0;
+    g_barAskB = 0;
+    DialogSetVisible(g_barAskDlg, PlayerGroupAll(), false);
     g_ojoAskSt = false;
     g_ojoFrom = 0;
     g_ojoRole = -1;
@@ -62977,6 +64138,13 @@ void BOTC_SeatChangeUiCancel () {
     DialogSetVisible(g_levRecDlg, PlayerGroupAll(), false);
     DialogSetVisible(g_gfRecDlg, PlayerGroupAll(), false);
     DialogSetVisible(g_pacAskDlg, PlayerGroupAll(), false);
+    // 【政客（97）】（用户 2026-11-10）：换座位 / 切阶段打断政客判定 → 按「不转变」直接封盘，
+    //   不让这一局卡在等回答上。
+    if (g_polSeat >= 2) {
+        BOTC_WinFinalize(g_polSide, g_polWhy1, g_polWhy2);
+    }
+    g_polSeat = 0;
+    DialogSetVisible(g_polDlg, PlayerGroupAll(), false);
     DialogSetVisible(g_fakeAskDlg, PlayerGroupAll(), false);
     DialogSetVisible(g_fakeDlg, PlayerGroupAll(), false);
     DialogSetVisible(g_gossipDlg, PlayerGroupAll(), false);
@@ -63555,6 +64723,22 @@ void BOTC_SwapPerSeatRuntime (int x, int y) {
     t = g_skillRoleSel[x];   g_skillRoleSel[x] = g_skillRoleSel[y]; g_skillRoleSel[y] = t;
 
     t = g_grantRoleBy[x];    g_grantRoleBy[x] = g_grantRoleBy[y]; g_grantRoleBy[y] = t;
+    // 【变脸师】获得过的角色清单跟着角色所在格一起搬（用户 2026-11-10）。
+    for (i = 0; i < 164; i += 1) {
+        b = g_faceEver[(x * 164) + i];
+        g_faceEver[(x * 164) + i] = g_faceEver[(y * 164) + i];
+        g_faceEver[(y * 164) + i] = b;
+    }
+    // 【变脸师】临时变脸状态也跟着角色所在格一起搬（用户 2026-11-10）。
+    t = g_faceDone[x];       g_faceDone[x] = g_faceDone[y];       g_faceDone[y] = t;
+    b = g_faceFail[x];       g_faceFail[x] = g_faceFail[y];       g_faceFail[y] = b;
+    t = g_faceShow[x];       g_faceShow[x] = g_faceShow[y];       g_faceShow[y] = t;
+    t = g_faceBase[x];       g_faceBase[x] = g_faceBase[y];       g_faceBase[y] = t;
+    t = g_facePrevRole[x];   g_facePrevRole[x] = g_facePrevRole[y]; g_facePrevRole[y] = t;
+    t = g_facePrevFirstNight[x]; g_facePrevFirstNight[x] = g_facePrevFirstNight[y]; g_facePrevFirstNight[y] = t;
+    b = g_facePrevDrunkBy[x]; g_facePrevDrunkBy[x] = g_facePrevDrunkBy[y]; g_facePrevDrunkBy[y] = b;
+    b = g_facePrevActing[x]; g_facePrevActing[x] = g_facePrevActing[y]; g_facePrevActing[y] = b;
+    b = g_facePrevDoneNight[x]; g_facePrevDoneNight[x] = g_facePrevDoneNight[y]; g_facePrevDoneNight[y] = b;
     b = g_grantDrunkBy[x];   g_grantDrunkBy[x] = g_grantDrunkBy[y]; g_grantDrunkBy[y] = b;
     b = g_grantActing[x];    g_grantActing[x] = g_grantActing[y]; g_grantActing[y] = b;
     b = g_grantDoneNight[x]; g_grantDoneNight[x] = g_grantDoneNight[y]; g_grantDoneNight[y] = b;
@@ -63623,6 +64807,8 @@ void BOTC_SwapPerSeatRuntime (int x, int y) {
         if (g_wardenCand[i] == x) { g_wardenCand[i] = y; }
         else if (g_wardenCand[i] == y) { g_wardenCand[i] = x; }
     }
+    // 【洗脑师 · 疯狂记账】跟着人一起搬家（用户 2026-11-10）
+    BOTC_CerenSwapState(x, y);
 }
 
 void BOTC_GudiaoSwapState (int x, int y) {
@@ -64027,6 +65213,9 @@ void BOTC_BoardSwitch () {
     if (g_started) {
         BOTC_Notice(g_teller, "已经开始游戏了，不能换板子。");
         return;
+    }
+    if (g_dealConfirmed) {
+        BOTC_CancelDeal();         // 【切换板子也要收回已下发的身份】按钮文字同时回到【确认发放】
     }
     g_dealConfirmed = false;
     // 【切换板子前先收夜间唤醒弹窗】（用户 2026-11-07）：玩家技能面板 / 说书人夜间弹窗全部关闭
@@ -79635,6 +80824,7 @@ void BOTC_TokToggleAt (int ob, int seat, int t) {
         BOTC_VizierSync();          // 中毒 / 醉酒 / 死亡 / 复活 / 换身份后立即校正维齐尔免死 token
         BOTC_SkinSourceCheck();     // 画皮来源中毒 / 醉酒 / 死亡后按昼夜处理仍在场的活尸
         BOTC_BartenderSync();       // 酒保自身失能或目标改变阵营时立即撤掉酒保醉酒
+        BOTC_BrokerSync();          // 掮客：手动改阵营 token 后熟客立即失效并移除标记
     }
     BOTC_GrimRender(ob);
     BOTC_LeviathanTokenWin();
@@ -80305,8 +81495,9 @@ void BOTC_OpeningMarkSync () {
 //   多人同时满足场次条件时恶魔 / 爪牙永远落在总场数最高的那几个人身上，
 //   反复点【随机发牌】也不换人。改成按场次加权随机，恶魔位和爪牙位共用同一张表：
 //   <5 场 = 1；5..9 场 = 5；10..15 场 = 10；16..20 场 = 15；>20 场 = 20。
-//   上一场不是邪恶的玩家权重 ×1.5（整数按 (w*3)/2 计算）作为软换边。
-int BOTC_DealSeatWeight (int tot, int lastEvil) {
+// 【随机发牌的座位基础权重】（用户 2026-11-10）：恶魔 / 爪牙 / 失忆者（73）共用的场次权重，
+//   只按总场数给权重，不含上一场阵营的软换边。
+int BOTC_DealSeatBaseWeight (int tot) {
     int w;
     w = 1;
     if (tot > 20) {
@@ -80327,6 +81518,13 @@ int BOTC_DealSeatWeight (int tot, int lastEvil) {
             }
         }
     }
+    return w;
+}
+
+//   上一场不是邪恶的玩家权重 ×1.5（整数按 (w*3)/2 计算）作为软换边。
+int BOTC_DealSeatWeight (int tot, int lastEvil) {
+    int w;
+    w = BOTC_DealSeatBaseWeight(tot);
     if (lastEvil == 0) {
         w = (w * 3) / 2;
     }
@@ -80476,6 +81674,9 @@ void BOTC_Deal () {
     int slot;
     int goodN;
     int goodSeatN;
+    int amnScore;                  // 【失忆者（73）】按场次权重挑座位时的总权重（用户 2026-11-10）
+    int amnBest;                   // 【失忆者（73）】加权抽到的座位下标
+    int amnSc;                     // 【失忆者（73）】加权抽签的滚动值
     int sentAdj;                   // 【哨兵（88）】：这一局实际生效的 -1 / 0 / +1
     bool wantNew;
     bool seatNew;
@@ -80486,6 +81687,10 @@ void BOTC_Deal () {
     int[16] goodR;
     int[16] goodSeat;
 
+    // 【已下发状态点随机配板 → 先自动取消下发】（用户 2026-11-10）
+    if (g_dealConfirmed) {
+        BOTC_CancelDeal();
+    }
     BOTC_ResetGameVars();          // 换局：先把上一局的记录（主谋加时 / 概率 / 假死...）清干净
     g_lgDealGood = false;          // 重新发牌：上一次军团局的善良角色过滤标记先清掉
     g_lgNoBounty = false;          // 重新发牌：上一次军团局「不抽赏金猎人」的标记先清掉
@@ -81348,6 +82553,43 @@ void BOTC_Deal () {
         k = RandomInt(0, i);
         pick = goodSeat[i]; goodSeat[i] = goodSeat[k]; goodSeat[k] = pick;
     }
+    // 【失忆者（73）】（用户 2026-11-10）：随机配板时跟恶魔 / 爪牙共用同一张场次权重表，
+    //   优先落在总场数较多的玩家身上；但失忆者不参与软换边（不读上一场阵营，不做 ×1.5）。
+    for (i = goodN - 1; i >= 0; i -= 1) {
+        if (goodR[i] != 73) {
+            continue;
+        }
+        amnScore = 0;
+        for (k = 0; k < goodSeatN; k += 1) {
+            q = goodSeat[k];
+            if (q < 2) {
+                continue;
+            }
+            amnScore = amnScore + BOTC_DealSeatBaseWeight(g_dealStatT[q]);
+        }
+        amnBest = -1;
+        if (amnScore > 0) {
+            amnSc = RandomInt(1, amnScore);
+            for (k = 0; k < goodSeatN; k += 1) {
+                q = goodSeat[k];
+                if (q < 2) {
+                    continue;
+                }
+                amnSc = amnSc - BOTC_DealSeatBaseWeight(g_dealStatT[q]);
+                if (amnSc <= 0) {
+                    amnBest = k;
+                    break;
+                }
+            }
+        }
+        if (amnBest >= 0) {
+            q = goodSeat[amnBest];
+            g_mark[(g_teller * 14) + q] = 74;      // 失忆者 73 + 1
+            goodSeat[amnBest] = 0;
+            goodN = goodN - 1;
+            goodR[i] = goodR[goodN];
+        }
+    }
     drunkSeat = 0;
     for (i = 0; i < goodN; i += 1) {
         pick = -1;
@@ -81665,6 +82907,31 @@ void BOTC_ConfirmDeal () {
         BOTC_TipOpen(g_who[q]);
     }
     BOTC_GrimShareRender();        // 确认发放后立即刷新说书人的测试发送按钮
+    // 【按钮变成取消下发】（用户 2026-11-10）：再点一次 = 收回所有玩家的身份标记
+    libNtve_gf_SetDialogItemText(g_grimConfirm, StringToText("取消下发"), PlayerGroupSingle(g_teller));
+}
+
+// 【取消下发】（用户 2026-11-10）：把每位玩家自己那份魔典里的身份 / token 全部收回，
+//   说书人的配板（真值行）原样保留，之后可以继续改标记或重新点【确认下发】。
+void BOTC_CancelDeal () {
+    int p;
+    if (!g_dealConfirmed) {
+        return;
+    }
+    g_dealConfirmed = false;
+    BOTC_GrimResetPerPlayer();     // 只清玩家行，说书人真值行不动
+    g_swapUnlocked = true;         // 收回身份 → 【换座位】按钮放回来
+    BOTC_BsBtnRender();
+    BOTC_ClaimBtnRender();         // 邪恶角色的【伪装身份】按钮收起
+    BOTC_GrimShareRender();
+    // 还开着「游戏帮助 / 我的角色」的玩家：角色那一栏立刻变回未发放状态
+    for (p = 1; p <= 13; p += 1) {
+        if (g_tipOpen[p]) {
+            BOTC_TipRender(p);
+        }
+    }
+    libNtve_gf_SetDialogItemText(g_grimConfirm, StringToText("确认发放"), PlayerGroupSingle(g_teller));
+    BOTC_NoticeBox(g_teller, "已取消下发：所有玩家的身份标记已收回，配板保留。");
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -82397,6 +83664,17 @@ void BOTC_MiCancelApply () {
     }
     if (g_miRole == 816) {
         BOTC_ManualDeathCancel();
+        return;
+    }
+    // 【小精灵】阶段点取消 / X = 不发信息、不打 token，本局不再为这个座位询问。
+    if (g_miRole == 86) {
+        seat = g_miSeat;
+        g_miSeat = 0;
+        g_miRole = -1;
+        g_pixiePickRole = 0;
+        if (seat >= 2 && seat <= 13) {
+            BOTC_PmStore(g_teller, "【小精灵】" + BOTC_NameStr(seat) + " 未选择镇民玩家，本局不再询问。");
+        }
         return;
     }
     // 【帽匠 · 茶会换角色】（用户 2026-11-09）：点 X = 这一位不换。
@@ -83258,6 +84536,13 @@ void BOTC_NomUI () {
         if (!g_started && !g_startPending) {
             DialogControlSetVisible(g_grimDeal, PlayerGroupSingle(g_teller), true);
             DialogControlSetVisible(g_grimConfirm, PlayerGroupSingle(g_teller), true);
+            // 【确认下发按钮文字跟状态走】（用户 2026-11-10）：已下发 → 取消下发
+            if (g_dealConfirmed) {
+                libNtve_gf_SetDialogItemText(g_grimConfirm, StringToText("取消下发"), PlayerGroupSingle(g_teller));
+            }
+            else {
+                libNtve_gf_SetDialogItemText(g_grimConfirm, StringToText("确认发放"), PlayerGroupSingle(g_teller));
+            }
             DialogControlSetVisible(g_rsOpenBtn, PlayerGroupSingle(g_teller), true);
         }
         DialogControlSetVisible(g_grimStart, PlayerGroupSingle(g_teller), true);
@@ -85350,8 +86635,10 @@ void BOTC_Init () {
     BOTC_BuildEndNotice();
     BOTC_BuildSlayAsk();
     BOTC_BuildLevRecluse();     // 【利维坦×陌客】说书人判定框（用户 2026-11-02）
+    BOTC_BuildPolitician();     // 【政客（97）】胜负前改阵营判定框（用户 2026-11-10）
     BOTC_BuildGfRecluse();      // 【教父×陌客】说书人判定框（用户 2026-11-05）
     BOTC_BuildPacifistAsk();    // 【和平主义者（33）】处决弹窗（用户 2026-11-06）
+    BOTC_BuildBarberAsk();      // 【理发师】恶魔与死者互换确认框（用户 2026-11-10）
     BOTC_BuildCultChoice();     // 【异教领袖（106）】夜间改阵营弹窗（用户 2026-11-07）
     BOTC_BuildHagAsk();         // 【麻脸巫婆】跨阵营改造二次确认框（用户 2026-11-03）
     BOTC_BuildPsyRps();         // 【精神病患者】处决猜拳：石头 / 剪刀 / 布（用户 2026-11-03）
@@ -88716,3 +90003,4 @@ text BOTC_ArtLine (int i) {
     if (i < 0 || i >= 1100) { return StringToText(""); }
     return g_artLine[i];
 }
+
