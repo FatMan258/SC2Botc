@@ -125,6 +125,33 @@ ARRAY_CAPACITY_GROUPS = (
     ("g_jinxA", "g_jinxB", "g_jinxText", "g_jinxText2", "g_jinxText3"),
 )
 ARRAY_COUNT_CAPACITY = (("g_jinxCount", "g_jinxA"),)
+# 数组维度必须写在类型后：`int[14] g_vote;`。
+#   反过来写成 `int g_vote[14];` 编辑器会报「数组的定义需要在类型后添加维度」，
+#   整份脚本编译失败（地图里所有按钮都不会出现），所以单独查一遍。
+REVERSED_ARRAY_DECL = re.compile(
+    r"^[ \t]*([A-Za-z_][A-Za-z0-9_]*)\s+([A-Za-z_][A-Za-z0-9_]*)\s*"
+    r"\[\s*(\d+)\s*\]\s*;",
+    re.MULTILINE,
+)
+# 这些关键字后面跟 `名字[数字];` 是普通语句（例如 `return g_x[3];`），不是声明。
+REVERSED_ARRAY_SKIP_WORDS = {
+    "return",
+    "if",
+    "else",
+    "while",
+    "for",
+    "do",
+    "switch",
+    "case",
+    "break",
+    "continue",
+    "true",
+    "false",
+    "null",
+    "and",
+    "or",
+    "not",
+}
 
 
 def mask_galaxy_comments_and_strings(text: str) -> str:
@@ -258,6 +285,23 @@ def find_literal_array_index_errors(text: str) -> list[str]:
     return errors
 
 
+def find_reversed_array_declaration_errors(text: str) -> list[str]:
+    clean = mask_galaxy_comments_and_strings(text)
+    errors: list[str] = []
+    for match in REVERSED_ARRAY_DECL.finditer(clean):
+        type_name = match.group(1)
+        var_name = match.group(2)
+        capacity = match.group(3)
+        if type_name in REVERSED_ARRAY_SKIP_WORDS:
+            continue
+        line = text.count("\n", 0, match.start()) + 1
+        errors.append(
+            f"第 {line} 行数组声明把维度写在变量名后：{type_name} {var_name}[{capacity}];，"
+            f"应写成 {type_name}[{capacity}] {var_name};"
+        )
+    return errors
+
+
 def find_array_capacity_errors(text: str) -> list[str]:
     clean = mask_galaxy_comments_and_strings(text)
     arrays: dict[str, int] = {
@@ -329,6 +373,7 @@ def check_script(path: Path) -> tuple[list[str], list[str]]:
     for name in duplicates:
         errors.append(f"函数定义重复：{name}")
     errors.extend(find_forward_call_errors(text))
+    errors.extend(find_reversed_array_declaration_errors(text))
     errors.extend(find_literal_array_index_errors(text))
     errors.extend(find_array_capacity_errors(text))
 

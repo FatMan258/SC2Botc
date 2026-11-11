@@ -28,6 +28,7 @@ from galaxy_check import (
     find_array_capacity_errors,
     find_forward_call_errors,
     find_literal_array_index_errors,
+    find_reversed_array_declaration_errors,
     scan_galaxy,
 )
 from private_dependency import render_impl
@@ -222,6 +223,31 @@ class GalaxyCheckTests(unittest.TestCase):
         )
         self.assertEqual(find_literal_array_index_errors(source), [])
 
+    def test_rejects_array_dimension_after_name(self) -> None:
+        source = (
+            "bool[14] g_ok;\n"
+            "void Test () {\n"
+            "    int[2] g_local;\n"
+            "}\n"
+            "bool g_bad[14];\n"
+        )
+        errors = find_reversed_array_declaration_errors(source)
+        self.assertEqual(len(errors), 1)
+        self.assertIn("g_bad", errors[0])
+        self.assertIn("bool[14] g_bad;", errors[0])
+
+    def test_ignores_array_index_statements(self) -> None:
+        source = (
+            "int[2] g_values;\n"
+            "int Test () {\n"
+            "    // int g_bad[2];\n"
+            '    string s = "int g_bad[2];";\n'
+            "    g_values[1] = 1;\n"
+            "    return g_values[1];\n"
+            "}\n"
+        )
+        self.assertEqual(find_reversed_array_declaration_errors(source), [])
+
     def test_rejects_mismatched_paired_array_capacities(self) -> None:
         source = (
             "int[3] g_jinxA;\n"
@@ -389,7 +415,7 @@ class RoleSpecTests(unittest.TestCase):
             "g_tokName[202]",
             "g_tokName[204]",
             "g_deathN = 24;",
-            "g_deathTok[23] = 204;",
+            "g_deathTok[22] = 204;",
             "g_roleDeathTok[163] = 204;",
             "if (r == 163) {",
             "BOTC_WardenResolve(p, w1, w2, w3)",
