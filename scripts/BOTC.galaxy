@@ -45288,7 +45288,12 @@ void BOTC_GambleGuess (int p, int guess) {
     }
     // 【陌客 / 间谍 · 说书人拍板】（用户 2026-11-01）：这两种身份登记成什么由说书人自己挑，
     //   所以猜它们时脚本不能自己算对错 → 弹面板让说书人决定他死不死。
+    // 【间谍 / 陌客能力者】（用户 2026-11-12）：只要目标拥有这两种能力，无论猜什么角色都弹面板。
     if (works && real >= 0 && real <= 163) {
+        if (BOTC_IsDisguiseAbility(g_gambleTarget[p])) {
+            BOTC_GblOpen(p, guess);
+            return;
+        }
         if (guess == 15 && (real == 15 || BOTC_RoleTeam(real) == 2 || BOTC_RoleTeam(real) == 3)) {
             BOTC_GblOpen(p, guess);
             return;
