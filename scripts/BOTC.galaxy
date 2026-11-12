@@ -1517,12 +1517,13 @@ int         g_lunTar;          // 疯子今晚「杀」的第一个目标（0 = 
 int         g_lunSeat;         // 那个疯子坐在哪
 bool        g_lunActed;        // 疯子今晚真的做出选择了（没中毒/酒鬼）
 int         g_demonTar;        // 真恶魔今晚的第一个目标（0 = 没记到）
-// 【疯子·告知恶魔】（用户 2026-11-12）：真疯子选完目标并确定后立即私聊所有真恶魔（无延迟）。
+// 【疯子·告知恶魔】（用户 2026-11-12）：真疯子选完目标后只记下来，等恶魔被唤醒再延迟 1..3 秒私聊。
 bool        g_lunPickPend;     // 今晚有一份还没发给恶魔的疯子选择
 string      g_lunPickText;     // 待发目标串（如「[3] 甲、[5] 乙」）
 int         g_lunPickLu;       // 做出这次选择的疯子座位（0 = 没有）
 bool        g_lunPickCann;     // 食人族吃到的疯子：消息里要带上「某玩家是疯子」
 bool[14]    g_lunPickSent;     // 这个恶魔今晚已经收到
+int[14]     g_lunPickWait;     // 每个恶魔座位的剩余拍数（0.5 秒一拍；0 = 没在等）
 // 【梦殒春宵 · 第 3 批】64 镜像双子 / 65 女巫 / 66 洗脑师 / 67 麻脸巫婆
 bool        g_twinPick;        // 说书人正在面板上点：给镜像双子指定对立双子
 int         g_twinA;           // 镜像双子（爪牙那只）坐在哪（0 = 没有）
@@ -2872,9 +2873,10 @@ void   BOTC_MarionetteRoleSync ();
 void   BOTC_MarionetteSeatAlign ();
 bool   BOTC_MarionetteFakeIs (int role);
 void   BOTC_LunaticPickNotify (int q);         // 疯子今晚「杀」了谁：写给说书人 + 告诉真恶魔
-void   BOTC_LunPickQueue (string body, int lu, bool cann);   // 【疯子】立即告知所有真恶魔
+void   BOTC_LunPickQueue (string body, int lu, bool cann);   // 【疯子】记下这份选择，等恶魔行动阶段再发
 void   BOTC_LunPickSend (int q);                             // 立即私聊一只真恶魔
-void   BOTC_LunPickWakeOf (int q);                           // 恶魔被唤醒 → 兜底补发
+void   BOTC_LunPickWakeOf (int q);                           // 恶魔被唤醒 → 排 1..3 秒延迟
+void   BOTC_LunPickTick ();                                  // 到点私聊恶魔
 void   BOTC_GfPickSet (int p, bool plus);
 void   BOTC_BalPickSet (int p, bool plus);      // 【气球驾驶员（72）】的 0 / +1 配比小按钮
 
@@ -16826,6 +16828,7 @@ void BOTC_ResetGameVars () {
         g_utWait[i] = 0;
         g_utSeatP[i] = 0;
         g_lunPickSent[i] = false;
+        g_lunPickWait[i] = 0;
     }
     g_lunPickPend = false;
     g_lunPickText = "";
@@ -39250,7 +39253,7 @@ void BOTC_BoomVoteEnd () {
     }
     BOTC_PmStore(g_teller, "【炸弹人】10 秒指向投票结束，完整票数已显示在各座位下方。最高票不自动处决，请按规则手工裁定。");
     if (g_boomCount[1] > 0) {
-        if (g_boomCount[1] == topN && tie) {
+        if (g_boomCount[1] == topN && tie != 0) {
             BOTC_PmStore(g_teller, "【炸弹人】说书人获得 " + IntToString(g_boomCount[1]) + " 票，并列最高，请手动裁定是否处决说书人。");
         }
         else {
@@ -50055,7 +50058,7 @@ void BOTC_JudgeAnswer (int yes) {
     if (kind == 17) {
         g_cannFedEvilSet[a] = true;
         g_cannFedEvil[a] = (yes != 0);
-        BOTC_PmStore(g_teller, "【食人族】说书人判定 " + BOTC_NameStr(a) + " 被处决时按" + BOTC_AlignName(g_cannFedEvil[a]) + "阵营结算。");
+        BOTC_PmStore(g_teller, "【食人族】说书人判定 " + BOTC_NameStr(a) + " 被处决时按" + BOTC_AlignName(yes) + "阵营结算。");
         BOTC_CannExecHooks(a);
         return;
     }
@@ -50192,7 +50195,7 @@ void BOTC_OjoPick (int p, int role) {
     int matches;
     int alive;
     int last;
-    int dm;
+    int sent;
     if (p < 1 || p > 13 || role < 0 || role > 163) {
         return;
     }
@@ -50206,16 +50209,10 @@ void BOTC_OjoPick (int p, int role) {
         g_ojoFrom = 0;
         g_ojoAskSt = false;
         if (BOTC_SkillWorks(p)) {
-            // 【确认后立即告知】（用户 2026-11-12）：奥赫疯子选完角色名并确定后立即私聊所有真恶魔。
-            dm = 0;
-            for (q = 2; q <= 13; q += 1) {
-                if (BOTC_RoleTeam(BOTC_SeatTrueRole(q)) == 3) {
-                    dm = q;
-                }
-            }
-            if (dm >= 2) {
-                BOTC_LunPickQueue(g_roleName[role], p, g_cannLun[p]);
-                BOTC_PmStore(g_teller, "【疯子】奥赫疯子选择了「" + g_roleName[role] + "」，已立即私聊告知所有真恶魔。");
+            // 【奥赫疯子】：奥赫只报角色名、不产生死亡，选完角色后直接私聊所有真恶魔。
+            sent = BOTC_PmInfoDemons("【信息】疯子选择了" + g_roleName[role] + "。");
+            if (sent > 0) {
+                BOTC_PmStore(g_teller, "【疯子】已直接私聊告诉 " + IntToString(sent) + " 只恶魔：奥赫疯子选择了「" + g_roleName[role] + "」。");
             }
             else {
                 BOTC_PmStore(g_teller, "【疯子】场上没有可接收信息的真恶魔；奥赫疯子实际选择了「" + g_roleName[role] + "」。");
@@ -52592,9 +52589,10 @@ void BOTC_LunaticPickNotify (int q) {
             BOTC_PmStore(g_teller, "【疯子】疯子（" + BOTC_NameStr(lu) + "）中毒/酒鬼 → 这一次没有发送给恶魔；他实际选择了 " + BOTC_NameStr(q) + "，这条别外传。");
         }
         else {
-            // 【确认后立即告知】（用户 2026-11-12）：说书人手动打「被选择（疯子）」时立即私聊恶魔。
+            // 【延迟到恶魔自己的行动阶段】（用户 2026-11-12）：这里只记下目标，
+            //   等真恶魔被唤醒后再延迟 1..3 秒私聊；食人族吃到的疯子要带上「某玩家是疯子」。
             BOTC_LunPickQueue(BOTC_NameStr(q), lu, lu >= 2 && g_cannLun[lu]);
-            BOTC_PmStore(g_teller, "【疯子】疯子选择了" + BOTC_NameStr(q) + "，已立即私聊告知恶魔。");
+            BOTC_PmStore(g_teller, "【疯子】已记录疯子选择了" + BOTC_NameStr(q) + "，等恶魔被唤醒后 1..3 秒私聊告知。");
         }
     }
 }
@@ -52623,8 +52621,8 @@ void BOTC_LunPickSend (int q) {
     BOTC_PmStore(g_teller, "【疯子】已告诉 " + BOTC_NameStr(q) + "（恶魔）：疯子选择了" + g_lunPickText + "。");
 }
 
-// 【疯子·告知恶魔】（用户 2026-11-12）：疯子选完目标并确认 / 说书人手动打 token 48 时，
-//   立即私聊所有真恶魔（无延迟）。
+// 【疯子·延迟告知恶魔】（用户 2026-11-12）：疯子确认假刀 / 说书人手动打 token 48 时只记下来，
+//   等真恶魔自己被唤醒（行动阶段开始）后再延迟 1..3 秒私聊。
 void BOTC_LunPickQueue (string body, int lu, bool cann) {
     int q;
     g_lunPickPend = true;
@@ -52633,15 +52631,49 @@ void BOTC_LunPickQueue (string body, int lu, bool cann) {
     g_lunPickCann = cann;
     for (q = 2; q <= 13; q += 1) {
         g_lunPickSent[q] = false;
+        g_lunPickWait[q] = 0;
     }
+    // 恶魔这一刻已经醒着（说书人手动打 token 的情形）→ 也照样排延迟；
+    //   今晚本来就轮不到他行动（首夜多数恶魔不唤醒 / 已经行动过）→ 直接排，别把这条信息丢掉。
     for (q = 2; q <= 13; q += 1) {
-        BOTC_LunPickSend(q);
+        if (BOTC_RoleTeam(BOTC_SeatTrueRole(q)) != 3) {
+            continue;
+        }
+        if (g_awake[q] || g_wokeTonight[q] || BOTC_NightOrderOf(q) <= 0) {
+            BOTC_LunPickWakeOf(q);
+        }
     }
 }
 
-// 恶魔被唤醒时调用：有还没发的疯子选择就立即私聊（兜底，正常在确认时已经发完）。
+// 恶魔被唤醒时调用：有还没发的疯子选择就排一个 1..3 秒的延迟
 void BOTC_LunPickWakeOf (int q) {
-    BOTC_LunPickSend(q);
+    if (q < 2 || q > 13) {
+        return;
+    }
+    if (!g_lunPickPend || g_lunPickSent[q]) {
+        return;
+    }
+    if (BOTC_RoleTeam(BOTC_SeatTrueRole(q)) != 3) {
+        return;
+    }
+    if (g_lunPickWait[q] > 0) {
+        return;
+    }
+    g_lunPickWait[q] = RandomInt(2, 6);      // 0.5 秒一拍：2..6 拍 = 1..3 秒
+}
+
+void BOTC_LunPickTick () {
+    int q;
+    for (q = 2; q <= 13; q += 1) {
+        if (g_lunPickWait[q] <= 0) {
+            continue;
+        }
+        g_lunPickWait[q] = g_lunPickWait[q] - 1;
+        if (g_lunPickWait[q] > 0) {
+            continue;
+        }
+        BOTC_LunPickSend(q);
+    }
 }
 
 // 【唤醒之后「跟他进私聊」统一走这一个函数】（用户 2026-10-16）：
@@ -56331,6 +56363,7 @@ void BOTC_WakeApply (int q, bool manual) {
         // 【没选完的弹窗一起收掉】（用户 2026-11-02）：必须排在下面关技能面板之前
         //   （模式 41 取消会重显技能面板、模式 12 取消会重显信息框）。
         BOTC_WakeActionPanelsClose(q);
+        g_lunPickWait[q] = 0;          // 【疯子】收回恶魔的唤醒 = 还没到点的告知一起取消（下次唤醒可重排）
         g_awake[q] = false;
         g_skillPicking[q] = false;
         g_limitedAsk[q] = false;
@@ -60800,11 +60833,11 @@ void BOTC_SkillConfirmCore (int p) {
             BOTC_MalfLunCheck();
         }
         BOTC_GrimRender(g_teller);
-        // 【告诉真恶魔「疯子今晚『杀』的是谁」】（用户 2026-09-20；2026-11-12 改为选完目标确认后立即告知）
+        // 【告诉真恶魔「疯子今晚『杀』的是谁」】（用户 2026-09-20；2026-11-12 改为恶魔被唤醒后延迟告知）
         //   · 目标 1 / 2 / 3 全报（疯子以为自己是珀、带「攻击三次」那一夜就报三个）；
         //   · 哲学家假装的疯子（带「是哲学家」token）照样报，名字就是他本人，后面加一句说明；
         //   · 疯子中毒 / 酒鬼 → 什么都**不发**（用户 2026-09-21 定的口径），只给说书人记一行；
-        //   · 用户 2026-11-12：确认时立即私聊所有真恶魔。
+        //   · 用户 2026-11-12：选完只记下目标，等恶魔被唤醒后 1..3 秒再私聊。
         if (!BOTC_SkillWorks(p)) {
             BOTC_PmStore(g_teller, "【疯子】" + BOTC_NameStr(p) + " 中毒/酒鬼 → 这一次没有发送给恶魔；他实际选择了 " + s + "，这条别外传。");
         }
@@ -60821,7 +60854,7 @@ void BOTC_SkillConfirmCore (int p) {
             }
             if (n2 >= 2) {
                 BOTC_LunPickQueue(s, p, g_cannLun[p]);
-                BOTC_PmStore(g_teller, "【疯子】疯子选择了" + s + lus + "，已立即私聊告知恶魔。");
+                BOTC_PmStore(g_teller, "【疯子】已记录疯子选择了" + s + lus + "，等恶魔被唤醒后 1..3 秒私聊告知。");
             }
             else {
                 BOTC_PmStore(g_teller, "【疯子】疯子选择了" + s + "，但场上没有真恶魔 → 这条信息不会发出去。");
@@ -61648,6 +61681,7 @@ void BOTC_NightSkillReset () {
     g_lunFakeKillNight = 0;            // 【假疯子】每夜重新允许问一次
     for (i = 1; i <= 13; i += 1) {
         g_lunPickSent[i] = false;
+        g_lunPickWait[i] = 0;
     }
     // 【小怪宝 / 军团·死亡目标】跨夜必须彻底清空，避免上一夜的已选座位残留。
     if ((g_mdOpen || g_mdAsk || g_miRole == 816) && g_miDlg > 0) {
@@ -91753,6 +91787,8 @@ bool BOTC_Tick_Func (bool testConds, bool runActions) {
     BOTC_PeekTick();
     // 【送葬者 · 清醒时自动发信息】（用户 2026-11-11）：唤醒后 1..5 秒自动私聊今天被处决者的角色
     BOTC_UtTick();
+    // 【疯子·延迟告知恶魔】（用户 2026-11-12）：恶魔被唤醒后 1..3 秒再私聊疯子的选择
+    BOTC_LunPickTick();
     // 【中毒 / 醉酒 · 说书人无操作自动给伪造魔典】（用户 2026-11-10）：弹窗 5 秒没人点就自动结算
     BOTC_FakeAskTick();
     // 【判定弹窗 / 自动判定】（用户 2026-11-01 / 2026-11-08）：0.5 秒一拍；
