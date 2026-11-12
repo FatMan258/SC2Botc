@@ -300,7 +300,7 @@ class RoleSpecTests(unittest.TestCase):
             "BOTC_TaotieSubmit (",
             "if (seen[team])",
             "BOTC_DemonStrike(p, 154, chosen[i], false);",
-            'g_tokName[175] = "死亡（饕餮）"',
+            'g_tokName[175] = "死亡"',
             "g_roleDeathTok[154] = 175",
             "BOTC_GoonTouch(p, chosen[i]);",
             "BOTC_WudTryTrigger(chosen[i], p)",
@@ -796,6 +796,137 @@ class GameStartLogTests(unittest.TestCase):
         self.assertEqual(cancel.count("BOTC_ClearAllLogs();"), 2)
 
 
+class IntroNameFlowTests(unittest.TestCase):
+    def test_board_selection_starts_name_phase_before_seat_assignment(self) -> None:
+        source = (PROJECT_ROOT / "scripts" / "BOTC.galaxy").read_text(
+            encoding="utf-8-sig"
+        )
+
+        board_finish = source[source.index("void BOTC_BoardFinish (int b) {"):]
+        board_finish = board_finish[: board_finish.index("\n}\n") + 3]
+        self.assertIn("BOTC_IntroBegin();", board_finish)
+
+        intro_finish = source[source.index("void BOTC_IntroFinish () {"):]
+        intro_finish = intro_finish[: intro_finish.index("\n}\n") + 3]
+        self.assertLess(
+            intro_finish.index("BOTC_ShuffleSeats();"),
+            intro_finish.index("BOTC_AssignRandomNames();"),
+        )
+        self.assertLess(
+            intro_finish.index("BOTC_AssignRandomNames();"),
+            intro_finish.index("BOTC_ClearAllLogs();"),
+        )
+
+        self.assertEqual(source.count("BOTC_ShuffleSeats();"), 1)
+        self.assertEqual(source.count("BOTC_AssignRandomNames();"), 1)
+        board_open = source[source.index("void BOTC_BoardOpen () {"):]
+        board_open = board_open[: board_open.index("\n}\n") + 3]
+        self.assertIn("if (BOTC_P1IsComputer()) {", board_open)
+        self.assertLess(
+            board_open.index("BOTC_BoardSelect(1);"),
+            board_open.index("BOTC_BoardStart();"),
+        )
+        self.assertIn("BOTC_BoardSelect(b);", source)
+        self.assertIn("g_boardStartBtn = BOTC_NewButton(g_boardDlg, 280, 50, 1600, 930", source)
+        self.assertIn("DialogSetPosition(g_tmShowDlg, c_anchorTopLeft, 1600, 990);", source)
+        self.assertIn("DialogSetPosition(g_tmShowDlg, c_anchorCenter, 0, 40);", source)
+        self.assertIn("BOTC_FixedCountdownStop();", source)
+        self.assertIn("if (!g_boardOpen || g_boardFade < 4 || g_cOpen)", source)
+        self.assertIn("g_seatInfoLbl = BOTC_NewLabel(g_boardDlg, 900, 36, 980, 956", source)
+        self.assertIn('StringToText("取消")', source)
+        self.assertIn("BOTC_BoardStartCancel();", source)
+        self.assertIn("TimerStart(g_tIntro, 20.0, false, c_timeGame);", source)
+        self.assertIn("TimerStart(g_tStartCd, 1.0, true, c_timeGame);", source)
+        self.assertIn("g_startCdSec = g_startCdSec - 1;", source)
+        count_render = source[source.index("void BOTC_BoardStartCdRender () {"):]
+        count_render = count_render[: count_render.index("\n}\n") + 3]
+        self.assertNotIn("DialogSetVisible", count_render)
+        self.assertIn("输入 -名字 以取名", source)
+        self.assertIn("例如：-好人", source)
+        self.assertIn('g_namePool[4]  = "泰凯斯"', source)
+        self.assertIn("BOTC_TextWidth(name) > 20", source)
+        self.assertIn("bool BOTC_ValidColorName (string s) {", source)
+        self.assertIn("BOTC_ValidColorName(name)", source)
+        self.assertIn("BOTC_IsHexChar(StringSub(code, j, j + 1))", source)
+        self.assertIn("bool BOTC_NameUsesOfficialName (string s)", source)
+        self.assertIn("if (s == g_namePool[i])", source)
+        self.assertIn("visible == g_namePool[i]", source)
+        self.assertIn("return BOTC_ChatNoColor(s);", source)
+        self.assertIn("g_introName[q] == name", source)
+        self.assertIn("positions[m] = i;", source)
+        self.assertIn("g_who[positions[i]] = people[i];", source)
+        self.assertIn('if (p == g_teller) {\n        BOTC_Notice(p, "说书人保持战网名', source)
+        self.assertIn(
+            "DialogSetVisible(g_chatDlg[p], PlayerGroupSingle(p), true);",
+            source,
+        )
+        self.assertIn("BOTC_IntroTryMsg(p, msg);", source)
+        self.assertIn("StringSub(msg, at + 1, n)", source)
+        self.assertIn('StringFind(msg, "\uff0d", false)', source)
+        self.assertIn("if (!g_introHinted[p])", source)
+        self.assertIn(
+            "if (pid == g_teller && !g_introChosen[pid])",
+            source,
+        )
+        self.assertIn(
+            'StringToText("说书人 [") + TextWithColor(BOTC_SeatNameText(1),',
+            source,
+        )
+        intro_begin = source[source.index("void BOTC_IntroBegin () {"):]
+        intro_begin = intro_begin[: intro_begin.index("\n}\n") + 3]
+        self.assertIn("BOTC_ClearAllLogs();", intro_begin)
+        self.assertLess(
+            intro_begin.index("BOTC_ClearAllLogs();"),
+            intro_begin.index("TimerStart(g_tIntro, 20.0, false, c_timeGame);"),
+        )
+        custom_show = source[source.index("void BOTC_CustomShowEditor () {"):]
+        custom_show = custom_show[: custom_show.index("\n}\n") + 3]
+        self.assertIn(
+            "DialogSetVisible(g_boardStartBtn, PlayerGroupAll(), false);",
+            custom_show,
+        )
+        self.assertIn("g_dispName[p] = name;", source)
+        self.assertGreaterEqual(source.count("BOTC_ResetPlayerNames();"), 3)
+
+
+class AmnesiaViewTests(unittest.TestCase):
+    def test_player_identity_stays_masked_until_correct_guess(self) -> None:
+        source = (PROJECT_ROOT / "scripts" / "BOTC.galaxy").read_text(
+            encoding="utf-8-sig"
+        )
+        role_view = source[source.index("int BOTC_PlayerRoleView (int seat, int roleIdx) {"):]
+        role_view = role_view[: role_view.index("\n}\n") + 3]
+        self.assertIn("!g_guessRoleDone[g_who[seat]]", role_view)
+        self.assertNotIn("g_nightNum == 0", role_view)
+
+        sync = source[source.index("void BOTC_AmnesiaSyncSeat (int seat, int roleIdx) {"):]
+        sync = sync[: sync.index("\n}\n") + 3]
+        self.assertIn("BOTC_PlayerRoleView(seat, roleIdx)", sync)
+
+
+class LogIdentityTests(unittest.TestCase):
+    def test_only_storyteller_logs_append_real_battle_ids(self) -> None:
+        source = (PROJECT_ROOT / "scripts" / "BOTC.galaxy").read_text(
+            encoding="utf-8-sig"
+        )
+        player_name = source[source.index("text BOTC_LogPlayerNameText (int p) {"):]
+        player_name = player_name[: player_name.index("\n}\n") + 3]
+        self.assertIn("g_who[p] == g_teller", player_name)
+        self.assertIn("shown == battle", player_name)
+        self.assertIn('StringToText("（")', player_name)
+        self.assertIn('StringToText("）")', player_name)
+
+        line_text = source[source.index("text BOTC_LogLineText (int viewer, string line, int who) {"):]
+        line_text = line_text[: line_text.index("\n}\n") + 3]
+        self.assertIn("viewer == g_teller", line_text)
+        self.assertIn("BOTC_LogNameSubstText(t)", line_text)
+        self.assertIn("BOTC_NameSubstText(t)", line_text)
+
+        self.assertGreaterEqual(source.count("BOTC_LogLineText(p,"), 20)
+        self.assertIn("g_pubLog[i], g_pubWho[i]", source)
+        self.assertIn("g_pmLog[(p * 600) + i]", source)
+
+
 class BluffPanelRegressionTests(unittest.TestCase):
     def test_manual_bottom_right_bluff_panels_are_restored(self) -> None:
         source = (PROJECT_ROOT / "scripts" / "BOTC.galaxy").read_text(
@@ -839,6 +970,86 @@ class MergeRegressionTests(unittest.TestCase):
         start = source.index(signature)
         end = source.find("\nvoid ", start + len(signature))
         return source[start:] if end < 0 else source[start:end]
+
+    def test_living_corpse_skill_keeps_impaired_target_flow(self) -> None:
+        source = (PROJECT_ROOT / "scripts" / "BOTC.galaxy").read_text(
+            encoding="utf-8-sig"
+        )
+        skill_works = self._function_text(source, "bool BOTC_SkillWorks (int q) {")
+        skill_confirm = self._function_text(
+            source, "void BOTC_SkillConfirmCore (int p) {"
+        )
+
+        self.assertIn("if (g_liveCorpse[q])", skill_works)
+        self.assertNotIn("g_liveCorpse[p]", skill_confirm)
+        self.assertIn("BOTC_TellSkillChoice(p, -1);", skill_confirm)
+        self.assertIn("BOTC_PmStore(g_teller, s);", skill_confirm)
+        self.assertIn("BOTC_ManInfoOpen(", skill_confirm)
+
+    def test_handles_command_is_public_colored_and_replies_to_sender(self) -> None:
+        source = (PROJECT_ROOT / "scripts" / "BOTC.galaxy").read_text(
+            encoding="utf-8-sig"
+        )
+        handles = self._function_text(
+            source, "void BOTC_HandleListToPm (int viewer) {"
+        )
+
+        self.assertIn(
+            'if (msg == "-handles") {\n        BOTC_HandleListToPm(p);',
+            source,
+        )
+        self.assertNotIn('BOTC_DevPlayer(p) && msg == "-handles"', source)
+        self.assertIn("BOTC_PmStore(viewer,", handles)
+        self.assertNotIn("BOTC_PmStore(g_teller,", handles)
+        self.assertIn('"【句柄】" + IntToString(p) + "：" + tok', handles)
+        self.assertIn("h = PlayerHandle(p);", handles)
+        self.assertIn("tok = BOTC_HandleToken(p);", handles)
+        self.assertIn('tok = "@@HL" + IntToString(p) + "@@";', handles)
+        self.assertNotIn("物理座位", handles)
+        self.assertIn("PlayerGetColorIndex(p, false)", source)
+        stats = self._function_text(source, "void BOTC_StatsRender (int p) {")
+        self.assertIn("PlayerName(pid)", stats)
+        self.assertNotIn("BOTC_SeatNameText", stats)
+        self.assertNotIn("BOTC_PlayerNameText", stats)
+
+    def test_first_night_marionette_info_waits_for_its_action_turn(self) -> None:
+        source = (PROJECT_ROOT / "scripts" / "BOTC.galaxy").read_text(
+            encoding="utf-8-sig"
+        )
+        demon_info = self._function_text(
+            source, "void BOTC_SendFirstNightDemonInfo () {"
+        )
+        marionette_info = self._function_text(
+            source, "void BOTC_SendFirstNightMarionetteInfo () {"
+        )
+        evil_step = self._function_text(
+            source, "bool BOTC_AutoWakeEvilStep () {"
+        )
+
+        self.assertNotIn("是提线木偶", demon_info)
+        self.assertIn("BOTC_SendMarionetteToDemons();", marionette_info)
+        self.assertIn("BOTC_LunaticMarionetteAsk(lu)", marionette_info)
+        self.assertIn("ord = 19;", evil_step)
+        self.assertIn("BOTC_SendFirstNightMarionetteInfo();", evil_step)
+
+    def test_lunatic_warden_is_fake_and_death_tokens_use_generic_name(self) -> None:
+        source = (PROJECT_ROOT / "scripts" / "BOTC.galaxy").read_text(
+            encoding="utf-8-sig"
+        )
+        night_order = self._function_text(source, "int BOTC_NightOrderOf (int q) {")
+
+        self.assertIn("if (r != 163)", night_order)
+        self.assertIn("if (r == 163 && !BOTC_IsLunatic(p)) {", source)
+        self.assertIn(
+            'g_tokName[175] = "死亡";                   '
+            'g_tokShort[175] = "死亡";',
+            source,
+        )
+        self.assertIn(
+            'g_tokName[204] = "死亡";                   '
+            'g_tokShort[204] = "死亡";',
+            source,
+        )
 
     def test_juggler_claim_draft_survives_phase_cleanup(self) -> None:
         source = (PROJECT_ROOT / "scripts" / "BOTC.galaxy").read_text(
