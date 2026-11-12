@@ -28,6 +28,7 @@ from galaxy_check import (
     find_array_capacity_errors,
     find_forward_call_errors,
     find_literal_array_index_errors,
+    find_reversed_array_declaration_errors,
     scan_galaxy,
 )
 from private_dependency import render_impl
@@ -222,6 +223,31 @@ class GalaxyCheckTests(unittest.TestCase):
         )
         self.assertEqual(find_literal_array_index_errors(source), [])
 
+    def test_rejects_array_dimension_after_name(self) -> None:
+        source = (
+            "bool[14] g_ok;\n"
+            "void Test () {\n"
+            "    int[2] g_local;\n"
+            "}\n"
+            "bool g_bad[14];\n"
+        )
+        errors = find_reversed_array_declaration_errors(source)
+        self.assertEqual(len(errors), 1)
+        self.assertIn("g_bad", errors[0])
+        self.assertIn("bool[14] g_bad;", errors[0])
+
+    def test_ignores_array_index_statements(self) -> None:
+        source = (
+            "int[2] g_values;\n"
+            "int Test () {\n"
+            "    // int g_bad[2];\n"
+            '    string s = "int g_bad[2];";\n'
+            "    g_values[1] = 1;\n"
+            "    return g_values[1];\n"
+            "}\n"
+        )
+        self.assertEqual(find_reversed_array_declaration_errors(source), [])
+
     def test_rejects_mismatched_paired_array_capacities(self) -> None:
         source = (
             "int[3] g_jinxA;\n"
@@ -389,7 +415,7 @@ class RoleSpecTests(unittest.TestCase):
             "g_tokName[202]",
             "g_tokName[204]",
             "g_deathN = 24;",
-            "g_deathTok[23] = 204;",
+            "g_deathTok[22] = 204;",
             "g_roleDeathTok[163] = 204;",
             "if (r == 163) {",
             "BOTC_WardenResolve(p, w1, w2, w3)",
@@ -880,17 +906,19 @@ class MergeRegressionTests(unittest.TestCase):
         for marker in (
             "int[14]     g_sessBar;",
             "int[14]     g_sessKnob;",
+            "int[14]     g_sessPrevBtn;",
+            "int[14]     g_sessNextBtn;",
             "trigger     g_tSessBarDown;",
-            "trigger     g_tWheel;",
+            "void BOTC_SessNavRender (int p) {",
+            "void BOTC_SessNavStep (int p, int d) {",
             "void BOTC_SessBarRender (int p) {",
             "bool BOTC_SessBarDown_Func (bool testConds, bool runActions) {",
             'g_sessBar[p] = BOTC_NewImageItem(DialogLastCreated(), 480, 8, 10, 82, "ui_sess_track.dds");',
             'g_sessKnob[p] = BOTC_NewImageItem(DialogLastCreated(), 44, 12, 10, 81, "ui_sess_knob.dds");',
+            'g_sessPrevBtn[p] = BOTC_NewButton(DialogLastCreated(), 40, 22, 350, 62, "<");',
+            'g_sessNextBtn[p] = BOTC_NewButton(DialogLastCreated(), 40, 22, 395, 62, ">");',
             'g_tSessBarDown = TriggerCreate("BOTC_SessBarDown_Func");',
-            'g_tWheel = TriggerCreate("BOTC_Wheel_Func");',
-            "TriggerAddEventMouseWheel(g_tWheel, c_playerAny);",
-            "spin = FixedToInt(EventMouseWheelSpin());",
-            "g_sessXOff[p] = g_sessXOff[p] - spin;",
+            "g_sessXOff[p] = g_sessXOff[p] + d;",
             "g_sessKnobX[p] = v;",
             "DialogControlSetPosition(g_sessKnob[p], PlayerGroupSingle(p), c_anchorTopLeft, 10 + v, 81);",
         ):
@@ -901,6 +929,7 @@ class MergeRegressionTests(unittest.TestCase):
             self.assertEqual(raw[:4], b"DDS ")
             self.assertEqual(struct.unpack_from("<I", raw, 12)[0], 64)
             self.assertEqual(struct.unpack_from("<I", raw, 16)[0], 16)
+        self.assertNotIn("TriggerAddEventMouseWheel(", source)
         self.assertNotIn(
             "need = (g_sessXOff[p] > 0 || (g_sessMaxSkip[p] > 0 && g_sessLong[p] > 60));",
             source,
@@ -1057,7 +1086,10 @@ class MergeRegressionTests(unittest.TestCase):
             at = int(at)
             count = int(count)
             block = [lines.get(at + offset, "") for offset in range(count)]
-            self.assertEqual(block[0], "【角色能力】")
+            # 新版详情页按章节组织：多数角色从「背景故事」开始，
+            # 少数只有能力/简介/规则细节的角色直接从「角色能力」开始。
+            self.assertIn(block[0], ("【背景故事】", "【角色能力】"))
+            self.assertIn("【角色能力】", block)
             self.assertIn("【角色简介】", block)
         self.assertNotIn("BOTC_BluffAskStart();", source)
         self.assertIn(
