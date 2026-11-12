@@ -457,6 +457,9 @@ rg -n -F -m 20 'BOTC_函数名' scripts\BOTC.galaxy
   换说书人后由 `BOTC_PmVisSync()` 自动恢复，不得每局重置成「开启」；没有保存过设置的
   说书人默认「关闭」，即私聊频道默认不可见。
 - 【发送魔典】按钮只在说书人自己的魔典上显示，其他玩家一律隐藏。
+- 说书人格（格 1）只显示系统自动放置的 token（最多 3 个），不提供【＋】入口；
+  `BOTC_TokOpen()` / `BOTC_TokToggleAt()` 对 `who < 2` 一律忽略，任何玩家都不能手动
+  给说书人格打 / 撤 token。
 - 非说书人不得修改自己座位的角色标记（拦截位于 `BOTC_PickOpen()`）；
   但可以给自己座位标记 token，`BOTC_TokToggleAt()` 不再拦截“给自己”。
 - 玩家正在技能面板选目标期间（`g_skillPicking[格]` 为真）同样禁止修改角色标记和 token；
