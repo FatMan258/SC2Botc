@@ -2313,6 +2313,7 @@ void   BOTC_Notice (int p, string s);
 void   BOTC_NoticeKeep (int p, string s);      // 跟 Notice 一样，但"点界面期间"也照样写进私聊日志
 void   BOTC_NoticeBox (int p, string s);       // 只进私聊框、不进日志（用户 2026-09-30：点按钮那类即时反馈用它）
 void   BOTC_PmStore (int p, string s);
+bool   BOTC_PmOff ();                    // 剧本以外（选板页 / 取名页 / 自定义剧本页）禁用私聊与关键词上色
 void   BOTC_AllPmStore (string s, int sess);   // 【全部私聊】（2026-11-09）：另存一份给说书人回看
 void   BOTC_AllPmStoreTo (string s, int sess, int extra);   // 【全部私聊】另存时把尚未进房间的申请人 / 被邀请人标进快照
 void   BOTC_SessLogEvent (int s, string s2);   // 【全部私聊 · 房间事件】（2026-11-10）
@@ -4483,7 +4484,9 @@ text BOTC_LineText (string line, int who) {
     t = StringToText(line);
     // who == -1：系统行但整行已预着色（BOTC_PubAnnouncePlain），跳过关键词自动上色，
     //   避免玩家战网名里的「邪恶」「善良」等字被染成阵营色。
-    if (who == 0) {
+    // 【剧本以外关闭关键词上色】（用户 2026-11-13）：选板页 / 取名页 / 自定义剧本页只显示纯灰文字，
+    //   聊天窗里的系统行不再按角色 / 阵营关键词上色。
+    if (who == 0 && !BOTC_PmOff()) {
         t = BOTC_KeyColor(t);                          // 1) 关键词先上色
     }
     t = BOTC_NameSubstText(t);                         // 2) 「玩家N」「说书人：」换彩色名字
