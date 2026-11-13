@@ -414,7 +414,7 @@ class RoleSpecTests(unittest.TestCase):
             "g_tokName[201]",
             "g_tokName[202]",
             "g_tokName[204]",
-            "g_deathN = 24;",
+            "g_deathN = 25;",
             "g_deathTok[22] = 204;",
             "g_roleDeathTok[163] = 204;",
             "if (r == 163) {",
@@ -922,7 +922,9 @@ class LogIdentityTests(unittest.TestCase):
         self.assertIn("BOTC_LogNameSubstText(t)", line_text)
         self.assertIn("BOTC_NameSubstText(t)", line_text)
 
-        self.assertGreaterEqual(source.count("BOTC_LogLineText(p,"), 20)
+        # 【日志统一拆行】（用户 2026-11-13）：日志列表统一走 BOTC_LogAddLine，
+        #   由它内部调用 BOTC_LogLineText 做名字替换并处理超宽换行。
+        self.assertGreaterEqual(source.count("BOTC_LogAddLine(p,"), 20)
         self.assertIn("g_pubLog[i], g_pubWho[i]", source)
         self.assertIn("g_pmLog[(p * 600) + i]", source)
 

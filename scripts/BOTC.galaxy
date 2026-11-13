@@ -578,6 +578,15 @@ int          g_rpLCount;
 string[1000] g_rpLPm;
 int[1000]    g_rpLPmWho;
 int          g_rpLPmN;
+// 【结算日志名字快照】（用户 2026-11-13）：结算会清空随机名 / 自选名，说书人日志仍要按
+//   「昵称（星际名）」显示，所以清名前先把每个格子的昵称留一份。
+string[14]   g_logNameKeep;
+// 【复盘名字快照】（用户 2026-11-13）：复盘日志永远显示星际名，名字按结算时的座位快照取，
+//   换局洗座后看上一局复盘也不会串人。
+string[14]   g_rpSeatName;
+string[14]   g_rpLSeatName;
+bool         g_logRealName;     // 复盘渲染期间为真：所有名字强制走星际名
+bool         g_logRealLast;     // 当前复盘渲染的是上一局备份（配合 g_logRealName 选名字快照）
 
 //--------------------------------------------------------------------------------------------------
 // 自绘聊天窗（替代被隐藏的原生聊天记录区）
@@ -710,6 +719,7 @@ bool[14]    g_levJinxLost;     // 【利维坦×守鸦人/贤者/农夫】触发
 int         g_innA;            // 【旅店老板×利维坦相克】上个夜晚保护的第一名玩家
 int         g_innB;            // 【旅店老板×利维坦相克】上个夜晚保护的第二名玩家
 int         g_innNight;        // 【旅店老板×利维坦相克】这份保护记录属于第几夜
+int         g_innFrom;         // 【旅店老板】这份「不会死亡」是谁放的（借用能力时不是真身 26）
 bool        g_execPick;
 int         g_execBtn;
 // 【强制玩家发起提名】（用户 2026-11-03）：说书人在处决标记左边按一下，弹窗选目标1 / 目标2
@@ -738,13 +748,13 @@ int         g_deadBtn;
 //   g_deadByDemon：这次死亡是不是恶魔杀的（贤者这类「被恶魔杀才触发」的角色要看它）
 //   g_deadNightNum：夜间死亡发生在第几夜（守鸦人这类「今晚死了才醒」的角色要看它）
 // 死亡类型表（数据驱动：换板子加死因只动这里，BOTC_IsDeathTok / DeathTokIndex 都查它）
-int[25]     g_deathTok;          // 这种死因打哪个 token 槽（留一格余量；当前 g_deathN = 24）
-int[25]     g_deathKind;         // 对应的死亡类别：1 夜间 / 2 白天 / 3 处决
-int[25]     g_deathByDemon;      // 这次死是不是恶魔造成的
+int[26]     g_deathTok;          // 这种死因打哪个 token 槽（留一格余量；当前 g_deathN = 25）
+int[26]     g_deathKind;         // 对应的死亡类别：1 夜间 / 2 白天 / 3 处决
+int[26]     g_deathByDemon;      // 这次死是不是恶魔造成的
 // 【死亡大类】kind + byDemon 组成大类：死亡[夜间/恶魔]、[夜间/其他]、[白天/恶魔]、[白天/其他]、处决。
 //   g_deathImp 是**小类专用标记**：1 = 这一条是「小恶魔那一刀」---- **只有它能触发自刀传位**
 //   （普卡的毒杀同样属于 死亡[夜间/恶魔]，但这一列是 0，所以不会传位。用户 2026-09-19 要求）。
-int[25]     g_deathImp;
+int[26]     g_deathImp;
 int         g_deathN;            // 这个板子有几种死因
 
 // 【何方教众（板子 9）的角色状态】（用户 2026-10-10）
@@ -843,7 +853,8 @@ bool[14]    g_declareUsed;    // 这一局已经声称过【猎手】了（猎�
 //   g_guessKind 按客户端玩家号：0 没在猜 / 1 猜书生 / 2 猜解谜大师。
 //   每人每局各只能用一次；无效猜测也照常消耗，界面节奏不能暴露真身。
 int[14]     g_guessKind;
-bool[14]    g_pedantGuessUsed;   // 每人每局一次：猜书生
+bool[14]    g_pedantGuessUsed;   // 每人每局一次：猜书生（只负责藏掉本人入口）
+bool        g_pedantUsed;        // 本局恶魔共享的一次猜书生机会是否已经用掉
 bool[14]    g_puzzleGuessUsed;   // 每人每局一次：猜解谜大师
 // 【全员追忆 · 猜角色】（用户 2026-11-06）：每人每天限一次，猜对后本局永久失去按钮
 int[14]     g_guessRoleDay;      // 猜角色用的日期戳（比对 g_dayNum）
@@ -931,7 +942,7 @@ bool[14]    g_cultDeclDone;    // 今天已经声称过【异教领袖】了（�
 
 bool[14]    g_damselPick;      // 他正在「点头像猜落难」
 bool[14]    g_damselDone;      // 这个玩家今天已经公开猜过一次了（每人每天一次）
-bool        g_damselFailed;    // 本局已有真爪牙猜错过 → 之后任何爪牙猜中都不能靠落难少女获胜
+bool        g_damselFailed;    // 本局已有真爪牙猜过（机会已用掉）→ 之后任何爪牙猜中都不能靠落难少女获胜
 bool        g_damselSpySeen;   // 间谍真实进场过（落难少女相克）
 bool        g_damselWidowSeen; // 寡妇真实进场过（落难少女相克）
 // 【夜半狂欢 · 第 7 批】87 哈迪寂亚（用户 2026-09-26）：三个目标依次选活着 / 死亡
@@ -2054,7 +2065,8 @@ int[14]     g_grimShareCd;    // 一键发送魔典的独立冷却：每拍 0.5 
 int[14]     g_declareCd;      // 【声称冷却】（用户 2026-11-06）：30 拍 = 15 秒，猜测不占
 int[14]     g_skipCd;         // 【快进到提名】按钮冷却：10 拍 = 5 秒
 int[14]     g_blockCd;        // 【屏蔽 / 解除屏蔽】按钮冷却：10 拍 = 5 秒
-int         g_kickBtnCd;      // 【踢出玩家】按钮共用冷却（所有人共用）：120 拍 = 60 秒
+int[14]     g_kickTarCd;      // 【踢出玩家】按被踢目标累计的冷却剩余拍数：首次 120 拍 = 60 秒
+int[14]     g_kickTarN;       // 【踢出玩家】本局对每个目标已发起过的次数：每重复一次冷却 +60 秒
 bool        g_tellKickQuiet;  // 【踢出说书人】（用户 2026-11-08）：交接时静默 —— 不再补播「离开了小镇」、也不打蓝叉
 bool[14]    g_kickQuiet;      // 【踢出玩家】（用户 2026-11-08）：开局前踢出已由踢出播报顶替，BOTC_LeftCheck 不再补播「离开了小镇」
 int[14]     g_spamMute;       // 【公聊刷屏禁言】剩余拍数：30 拍 = 15 秒
@@ -2337,6 +2349,9 @@ string BOTC_Spaces (int n);
 int    BOTC_PmWithMe (int p);          // 我这条私聊里的"对面那位"（忽略说书人）
 void   BOTC_LogRender (int p);
 void   BOTC_LogWrapAdd (int p, string s, int who);   // 【全部私聊】实时追加时按同一口径拆行
+int    BOTC_ChatWrapWidthLog ();                     // 日志列表框宽度（半角单位）
+int    BOTC_LogNameExtra (string s);                 // 说书人日志视图里名字多出的宽度
+void   BOTC_LogAddLine (int p, string s, int who);   // 日志列表：整行放不下时自动拆行
 void   BOTC_LogOpen (int p);
 void   BOTC_LogClose (int p);
 void   BOTC_AbClose (int p);
@@ -2938,6 +2953,7 @@ bool   BOTC_LleechHostMode (int p);            // 痢蛭（100）：今晚该「
 void   BOTC_LleechRecoverCheck ();             // 痢蛭（100）：恢复清醒健康时宿主已死 → 立即死亡
 void   BOTC_SailorDrunkClear (string why);     // 水手醉的那一份醉酒收回来
 void   BOTC_SailorSync ();                     // 水手：维护「不会死亡（水手）」标记
+void   BOTC_InnkeeperSync ();                  // 旅店老板：能力失效时立刻收回「不会死亡」标记
 
 int    BOTC_AmnesiaMaskRole (int roleIdx);      // 全员追忆：按真实角色类别返回玩家可见占位身份
 int    BOTC_PlayerRoleView (int seat, int roleIdx); // 全员追忆：玩家视角永远只返回占位身份
@@ -3664,6 +3680,8 @@ void   BOTC_SeatAskStart (int p);             // 点【换座位】→ 进"点�
 void   BOTC_SeatAskSend (int p, int cell);    // 点中某一格 → 向那一格的人发请求
 void   BOTC_SeatAskAnswer (int p, bool yes);  // 对方点【同意】/【拒绝】
 void   BOTC_ShuffleSeats ();                  // 【开局随机分配座位号】（用户 2026-10-07）
+void   BOTC_RandomNameEnsure (int pid);       // 【补发随机名】（用户 2026-11-13）：换位后旧说书人兜底
+bool   BOTC_NameFallbackOk (int pid);         // 【随机名兜底时机】选剧本 / 取名阶段之外的在座真人
 int    BOTC_FirstPresentSeat ();              // 顺位找一个"在座真人"（2..13，优先编号小的 = 先进房间的）
 int    BOTC_TeamTellerSeat ();                // 【队伍1 = 说书人】大厅「队伍1」里的真人在座玩家号（用户 2026-11-07）
 int    BOTC_KickNeed ();
@@ -3854,18 +3872,46 @@ string BOTC_RandomNameOf (int pid) {
     return g_dispName[pid];
 }
 
+// 【随机名兜底时机】（用户 2026-11-13）：选剧本页（g_boardOpen）和取名页（g_introOn）之外，
+//   只要是在座真人且不是说书人，没有随机名就应该立刻补一个。
+//   换座位后"被换下来的旧说书人"没有随机名，就靠这里兜底，不再显示空名 / 战网名。
+bool BOTC_NameFallbackOk (int pid) {
+    // 【结算后不再补随机名】（用户 2026-11-13）：结算画面要显示真实战网名。
+    if (g_boardOpen || g_introOn || g_gameOver) {
+        return false;
+    }
+    if (pid < 1 || pid > 13 || pid == g_teller) {
+        return false;
+    }
+    return (PlayerType(pid) == 1 || PlayerType(pid) == 2) && PlayerStatus(pid) != 2;
+}
+
 // 聊天 / 日志 / 统计里的显示名：非说书人优先用随机 / 自选名；
-// 说书人只有自己输入过名字时才用该名字，否则继续显示战网名。
+// 说书人恒用战网名（换座位后也不沿用 / 继承自己原来的玩家名）。
 text BOTC_PlayerDisplayName (int pid) {
     string nm;
+    if (pid < 1 || pid > 13) {
+        return StringToText("");
+    }
     // 【点开始说书之前只显示星际名称】（用户 2026-11-13）：选剧本页面一律显示战网名
     if (g_boardOpen) {
         return PlayerName(pid);
     }
-    if (pid == g_teller && !g_introChosen[pid]) {
+    // 【结算后也显示真实战网名】（用户 2026-11-13）：结算 / 复盘阶段所有人用星际名。
+    if (g_gameOver) {
+        return PlayerName(pid);
+    }
+    // 【说书人恒用战网名】（用户 2026-11-13）：换到说书人格的人不再显示自己原来的随机名 / 自选名，
+    //   避免"说书人永远显示自己的玩家名、别人继承"的错位。
+    if (pid == g_teller) {
         return PlayerName(pid);
     }
     nm = BOTC_RandomNameOf(pid);
+    // 【兜底随机名】（用户 2026-11-13）：刚被换下来的旧说书人原来没有随机名，先补一个再显示。
+    if (StringLength(nm) <= 0 && BOTC_NameFallbackOk(pid)) {
+        BOTC_RandomNameEnsure(pid);
+        nm = BOTC_RandomNameOf(pid);
+    }
     if (StringLength(nm) > 0) {
         return StringToText(nm);
     }
@@ -4022,14 +4068,23 @@ string BOTC_NameTag (int p) {
 //   魔典座位和聊天里的名字会整块空白；这里统一兜底成按编号的「玩家N」（编号仍取 g_lab[位置]）。
 text BOTC_SeatNameText (int pos) {
     string nm;
-    // 【显示名】：说书人主动取名时也显示自选名；未取名仍回退战网名。
+    int pid;
+    // 【显示名】：非说书人优先随机 / 自选名；说书人恒用战网名。
     // 【点开始说书之前只显示星际名称】（用户 2026-11-13）：选剧本页面不显示起名阶段的自选名 / 随机名。
     nm = "";
-    if (!g_boardOpen && (g_who[pos] != g_teller || g_introChosen[g_who[pos]])) {
-        nm = BOTC_RandomNameOf(g_who[pos]);
+    pid = g_who[pos];
+    // 【结算后显示真实战网名】（用户 2026-11-13）：胜负已分就不再补随机名，避免清算时被重新随机。
+    if (!g_boardOpen && !g_gameOver && pid != g_teller) {
+        nm = BOTC_RandomNameOf(pid);
+        // 【换下来的旧说书人兜底随机名】（用户 2026-11-13）：原来他没随机名 → 这里补一个，
+        //   不再回退到战网名（会暴露身份）或显示空名。
+        if (StringLength(nm) <= 0 && BOTC_NameFallbackOk(pid)) {
+            BOTC_RandomNameEnsure(pid);
+            nm = BOTC_RandomNameOf(pid);
+        }
     }
     if (StringLength(nm) <= 0) {
-        nm = TextToString(PlayerName(g_who[pos]));
+        nm = TextToString(PlayerName(pid));
     }
     if (StringLength(nm) <= 0) {
         if (pos == 1) {
@@ -4377,7 +4432,12 @@ text BOTC_NameSubstText (text t) {
         t = TextReplaceWord(t, StringToText(BOTC_SayToken(p)), BOTC_PlayerNameText(BOTC_PosOf(p)), c_stringReplaceAll, true);
     }
     for (p = 1; p <= 13; p += 1) {
-        h = PlayerHandle(p);
+        // 【防报错】（用户 2026-11-13）：PlayerHandle 对电脑 / 空 / 已退出座位没有 gameUser，
+        //   直接调用会让整条渲染触发器报错中断（表现成全场按钮和聊天无响应），必须先判真人。
+        h = "";
+        if (PlayerType(p) == 1 && PlayerStatus(p) != 2) {
+            h = PlayerHandle(p);
+        }
         if (StringLength(h) <= 0) {
             h = TextToString(PlayerName(p));
         }
@@ -4399,11 +4459,19 @@ text BOTC_LogPlayerNameText (int p) {
     if (p < 1 || p > 13) {
         return StringToText("");
     }
-    base = BOTC_PlayerNameText(p);
     if (p == 1 || g_who[p] == g_teller) {
-        return base;
+        return BOTC_PlayerNameText(p);
     }
-    shown = BOTC_ChatNoColor(TextToString(BOTC_SeatNameText(p)));
+    // 【结算后说书人日志仍用昵称 + 星际名】（用户 2026-11-13）：结算会清空随机名，
+    //   这里改用清名前留下的昵称快照，说书人日志格式保持「[编号] 昵称（星际名）」。
+    if (g_gameOver && StringLength(g_logNameKeep[p]) > 0) {
+        shown = g_logNameKeep[p];
+        base = StringToText(BOTC_NameTag(p)) + TextWithColor(StringToText(shown), libNtve_gf_ConvertPlayerColorToColor(g_seatColor[p]));
+    }
+    else {
+        base = BOTC_PlayerNameText(p);
+        shown = BOTC_ChatNoColor(TextToString(BOTC_SeatNameText(p)));
+    }
     battle = TextToString(PlayerName(g_who[p]));
     if (StringLength(battle) <= 0 || shown == battle) {
         return base;
@@ -4444,7 +4512,78 @@ text BOTC_LogNameSubstText (text t) {
         t = TextReplaceWord(t, StringToText(BOTC_SayToken(p)), BOTC_LogPlayerNameText(BOTC_PosOf(p)), c_stringReplaceAll, true);
     }
     for (p = 1; p <= 13; p += 1) {
-        h = PlayerHandle(p);
+        // 【防报错】（用户 2026-11-13）：PlayerHandle 对电脑 / 空 / 已退出座位没有 gameUser，
+        //   直接调用会让整条渲染触发器报错中断（表现成全场按钮和聊天无响应），必须先判真人。
+        h = "";
+        if (PlayerType(p) == 1 && PlayerStatus(p) != 2) {
+            h = PlayerHandle(p);
+        }
+        if (StringLength(h) <= 0) {
+            h = TextToString(PlayerName(p));
+        }
+        if (StringLength(h) <= 0) {
+            h = "座位" + IntToString(p);
+        }
+        t = TextReplaceWord(t, StringToText(BOTC_HandleToken(p)), TextWithColor(StringToText(h), libNtve_gf_ConvertPlayerColorToColor(PlayerGetColorIndex(p, false))), c_stringReplaceAll, true);
+        t = TextReplaceWord(t, StringToText("@@HL" + IntToString(p) + "@@"), TextWithColor(StringToText("本地玩家"), libNtve_gf_ConvertPlayerColorToColor(PlayerGetColorIndex(p, false))), c_stringReplaceAll, true);
+        t = TextReplaceWord(t, StringToText("@@HN" + IntToString(p) + "@@"), TextWithColor(StringToText(h), libNtve_gf_ConvertPlayerColorToColor(PlayerGetColorIndex(p, false))), c_stringReplaceAll, true);
+    }
+    return t;
+}
+
+// 【复盘专用名字】（用户 2026-11-13）：复盘日志永远显示星际战网名，不显示随机名 / 自选名。
+//   名字取结算时按格子存下的快照，换局洗座后看上一局复盘也不会串人。
+text BOTC_RealPlayerNameText (int p) {
+    string nm;
+    text nt;
+    if (p < 1 || p > 13) {
+        return StringToText("");
+    }
+    nm = g_rpSeatName[p];
+    if (g_logRealLast) {
+        nm = g_rpLSeatName[p];
+    }
+    if (StringLength(nm) <= 0 && g_who[p] >= 1 && g_who[p] <= 13) {
+        nm = TextToString(PlayerName(g_who[p]));
+    }
+    if (StringLength(nm) <= 0) {
+        if (p == 1 || g_who[p] == g_teller) {
+            return StringToText("说书人");
+        }
+        return StringToText("玩家" + IntToString(g_lab[p]));
+    }
+    nt = StringToText(nm);
+    if (g_who[p] == g_teller || p == 1) {
+        return StringToText(BOTC_NameTag(p)) + TextWithColor(nt, libNtve_gf_ConvertPlayerColorToColor(g_seatColor[1]));
+    }
+    return StringToText(BOTC_NameTag(p)) + TextWithColor(nt, libNtve_gf_ConvertPlayerColorToColor(g_seatColor[p]));
+}
+
+// 与 BOTC_LogNameSubstText 相同的占位符替换，但名字强制走星际名（复盘专用）。
+text BOTC_RealNameSubstText (text t) {
+    int p;
+    int q;
+    int seat;
+    string h;
+    for (p = 13; p >= 2; p -= 1) {
+        t = TextReplaceWord(t, StringToText("玩家" + IntToString(p)), StringToText("@@" + IntToString(p) + "@@"), c_stringReplaceAll, true);
+        t = TextReplaceWord(t, StringToText("玩家" + IntToString(p - 1)), StringToText("@@" + IntToString(p) + "@@"), c_stringReplaceAll, true);
+    }
+    t = TextReplaceWord(t, StringToText("说书人："), StringToText("@@0@@"), c_stringReplaceAll, true);
+    for (p = 13; p >= 2; p -= 1) {
+        t = TextReplaceWord(t, StringToText("@@" + IntToString(p) + "@@"), BOTC_RealPlayerNameText(p), c_stringReplaceAll, true);
+    }
+    t = TextReplaceWord(t, StringToText("@@0@@"), BOTC_RealPlayerNameText(1) + StringToText("："), c_stringReplaceAll, true);
+    for (p = 1; p <= 13; p += 1) {
+        t = TextReplaceWord(t, StringToText(BOTC_SayToken(p)), BOTC_RealPlayerNameText(BOTC_PosOf(p)), c_stringReplaceAll, true);
+    }
+    for (p = 1; p <= 13; p += 1) {
+        // 【防报错】（用户 2026-11-13）：PlayerHandle 对电脑 / 空 / 已退出座位没有 gameUser，
+        //   直接调用会让整条渲染触发器报错中断（表现成全场按钮和聊天无响应），必须先判真人。
+        h = "";
+        if (PlayerType(p) == 1 && PlayerStatus(p) != 2) {
+            h = PlayerHandle(p);
+        }
         if (StringLength(h) <= 0) {
             h = TextToString(PlayerName(p));
         }
@@ -4464,7 +4603,11 @@ text BOTC_LogLineText (int viewer, string line, int who) {
     if (who == 0) {
         t = BOTC_KeyColor(t);
     }
-    if (viewer == g_teller) {
+    // 【复盘强制星际名】（用户 2026-11-13）：复盘日志一律显示真实战网名，不显示昵称。
+    if (g_logRealName) {
+        t = BOTC_RealNameSubstText(t);
+    }
+    else if (viewer == g_teller) {
         t = BOTC_LogNameSubstText(t);
     }
     else {
@@ -5063,7 +5206,7 @@ void BOTC_PubLogStore (string s) {
                     if (rolled) {
                         DialogControlRemoveItem(g_logList, PlayerGroupSingle(p), 0);
                     }
-                    DialogControlAddItem(g_logList, PlayerGroupSingle(p), BOTC_LogLineText(p, s, g_chatWhoNow));
+                    BOTC_LogAddLine(p, s, g_chatWhoNow);
                 }
             }
             else if (g_logViewWho[p] > 0) {
@@ -5075,14 +5218,14 @@ void BOTC_PubLogStore (string s) {
                     if (rolled) {
                         DialogControlRemoveItem(g_logList, PlayerGroupSingle(p), 0);
                     }
-                    DialogControlAddItem(g_logList, PlayerGroupSingle(p), BOTC_LogLineText(p, s, g_chatWhoNow));
+                    BOTC_LogAddLine(p, s, g_chatWhoNow);
                 }
             }
             else {
                 if (rolled) {
                     DialogControlRemoveItem(g_logList, PlayerGroupSingle(p), 0);
                 }
-                DialogControlAddItem(g_logList, PlayerGroupSingle(p), BOTC_LogLineText(p, s, g_chatWhoNow));
+                BOTC_LogAddLine(p, s, g_chatWhoNow);
             }
         }
     }
@@ -5156,7 +5299,7 @@ void BOTC_VoteLogAdd (string s) {
             if (rolled) {
                 DialogControlRemoveItem(g_logList, PlayerGroupSingle(p), 0);
             }
-            DialogControlAddItem(g_logList, PlayerGroupSingle(p), BOTC_LogLineText(p, s, 0));   // 投票统计：名字也换成真名
+            BOTC_LogAddLine(p, s, 0);   // 投票统计：名字也换成真名
         }
     }
 }
@@ -5228,7 +5371,7 @@ void BOTC_PmStoreRaw (int p, string s) {
                 if (rolled) {
                     DialogControlRemoveItem(g_logList, PlayerGroupSingle(p), 0);
                 }
-                DialogControlAddItem(g_logList, PlayerGroupSingle(p), BOTC_LogLineText(p, s, 0));
+                BOTC_LogAddLine(p, s, 0);
             }
         }
         else if (g_logViewWho[p] > 0) {
@@ -5240,7 +5383,7 @@ void BOTC_PmStoreRaw (int p, string s) {
                     if (rolled) {
                         DialogControlRemoveItem(g_logList, PlayerGroupSingle(p), 0);
                     }
-                    DialogControlAddItem(g_logList, PlayerGroupSingle(p), BOTC_LogLineText(p, s, g_chatWhoNow));
+                    BOTC_LogAddLine(p, s, g_chatWhoNow);
                 }
             }
         }
@@ -5250,7 +5393,7 @@ void BOTC_PmStoreRaw (int p, string s) {
                 if (rolled) {
                     DialogControlRemoveItem(g_logList, PlayerGroupSingle(p), 0);
                 }
-                DialogControlAddItem(g_logList, PlayerGroupSingle(p), BOTC_LogLineText(p, s, g_chatWhoNow));
+                BOTC_LogAddLine(p, s, g_chatWhoNow);
             }
         }
     }
@@ -5505,54 +5648,10 @@ void BOTC_PmBoxRender (int p) {
     }
 }
 
-// 【全部私聊 · 渲染拆行】（2026-11-09）：跟 BOTC_PmStore 同一套可见宽度口径，
-//   把存档里的原始消息拆成能放进日志列表框的固定高度行。
+// 【全部私聊 · 渲染拆行】（2026-11-09）：跟日志列表共用一个拆行入口，
+//   按日志列表框的可见宽度把存档里的原始消息拆成固定高度行。
 void BOTC_LogWrapAdd (int p, string s, int who) {
-    int n;
-    int pos;
-    int end;
-    int pref;
-    int prefW;
-    int cap;
-    string part;
-    n = StringLength(s);
-    if (n <= 0) {
-        return;
-    }
-    cap = BOTC_ChatWrapWidthPm();
-    pref = BOTC_PrefixEnd(s, n);
-    prefW = 0;
-    if (pref > 0) {
-        prefW = BOTC_TextWidth(StringSub(s, 1, pref));
-        cap = BOTC_ChatWrapWidthPm() - prefW;
-        if (cap < 12) { cap = 12; }
-    }
-    pos = BOTC_WrapSkipSpace(s, pref + 1, n);
-    if (pos > n) {
-        DialogControlAddItem(g_logList, PlayerGroupSingle(p), BOTC_LogLineText(p, s, who));
-        return;
-    }
-    end = BOTC_WrapCut(s, pos, cap, n);
-    if (pref > 0) {
-        if (pos == pref + 1) {
-            DialogControlAddItem(g_logList, PlayerGroupSingle(p), BOTC_LogLineText(p, StringSub(s, 1, end), who));
-        }
-        else {
-            DialogControlAddItem(g_logList, PlayerGroupSingle(p), BOTC_LogLineText(p, StringSub(s, 1, pref) + StringSub(s, pos, end), who));
-        }
-    }
-    else {
-        DialogControlAddItem(g_logList, PlayerGroupSingle(p), BOTC_LogLineText(p, StringSub(s, pos, end), who));
-    }
-    pos = end + 1;
-    while (pos <= n) {
-        pos = BOTC_WrapSkipSpace(s, pos, n);
-        if (pos > n) { break; }
-        end = BOTC_WrapCut(s, pos, cap, n);
-        part = StringSub(s, pos, end);
-        DialogControlAddItem(g_logList, PlayerGroupSingle(p), BOTC_LogLineText(p, BOTC_Spaces(prefW) + part, who));
-        pos = end + 1;
-    }
+    BOTC_LogAddLine(p, s, who);
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -5578,6 +5677,7 @@ void BOTC_RpSaveLast () {
         g_rpLEndRole[i] = g_rpEndRole[i];
         g_rpLEndSeen[i] = g_rpEndSeen[i];
         g_rpLEndAlign[i] = g_rpEndAlign[i];
+        g_rpLSeatName[i] = g_rpSeatName[i];   // 【复盘星际名快照】上一局备份（用户 2026-11-13）
     }
     for (i = 0; i < 1600; i += 1) {
         g_rpLLog[i] = g_rpLog[i];
@@ -5609,6 +5709,7 @@ void BOTC_RpClear () {
         g_rpEndRole[i] = -1;
         g_rpEndSeen[i] = -1;
         g_rpEndAlign[i] = -1;
+        g_rpSeatName[i] = "";                 // 【复盘星际名快照】新局清空（用户 2026-11-13）
     }
 }
 
@@ -5726,6 +5827,12 @@ void BOTC_RpCapture (bool opening) {
             else {
                 g_rpEndAlign[q] = -1;
             }
+            // 【复盘星际名快照】（用户 2026-11-13）：结算时记下每格真实战网名，
+            //   复盘日志渲染直接用这份快照，不依赖届时的随机名。
+            g_rpSeatName[q] = "";
+            if (g_who[q] >= 1 && g_who[q] <= 13) {
+                g_rpSeatName[q] = TextToString(PlayerName(g_who[q]));
+            }
         }
     }
 }
@@ -5747,7 +5854,7 @@ void BOTC_RpPmPut (int p, bool save, string t, int who) {
         }
         return;
     }
-    DialogControlAddItem(g_logList, PlayerGroupSingle(p), BOTC_LogLineText(p, t, who));
+    BOTC_LogAddLine(p, t, who);
 }
 
 // 把某个座位「每个白天与说书人的私聊」整段列出来。
@@ -5825,19 +5932,24 @@ void BOTC_RpRender (int p) {
     bool last;
     string s;
     DialogControlRemoveAllItems(g_logList, PlayerGroupSingle(p));
+    // 【复盘一律显示星际名】（用户 2026-11-13）：渲染期间强制真实战网名；说书人也不例外。
+    g_logRealName = true;
+    g_logRealLast = false;
     // 结算后看本局；本局进行中则看上一局结算留下的复盘（用户 2026-11-11）。
     last = false;
     if (!g_rpOn) {
         if (g_rpHasLast) {
             last = true;
+            g_logRealLast = true;
         }
         else {
-            DialogControlAddItem(g_logList, PlayerGroupSingle(p), BOTC_LogLineText(p, "本局尚未结算，暂时没有复盘。", 0));
+            BOTC_LogAddLine(p, "本局尚未结算，暂时没有复盘。", 0);
+            g_logRealName = false;
             return;
         }
     }
     // ① 开局真实身份
-    DialogControlAddItem(g_logList, PlayerGroupSingle(p), BOTC_LogLineText(p, "---- 开局真实身份 ----", 0));
+    BOTC_LogAddLine(p, "---- 开局真实身份 ----", 0);
     for (q = 2; q <= 13; q += 1) {
         r = BOTC_RpV(last, 0, q);
         if (r < 0 || r > 163) {
@@ -5852,19 +5964,19 @@ void BOTC_RpRender (int p) {
             s = BOTC_NameStr(q) + "：" + g_roleName[r];
         }
         s = s + "（" + BOTC_TeamName(g_roleTeam[r]) + "·" + BOTC_AlignName(BOTC_RpV(last, 2, q)) + "）";
-        DialogControlAddItem(g_logList, PlayerGroupSingle(p), BOTC_LogLineText(p, s, 0));
+        BOTC_LogAddLine(p, s, 0);
     }
     // ② 过程记录
-    DialogControlAddItem(g_logList, PlayerGroupSingle(p), BOTC_LogLineText(p, "---- 过程记录 ----", 0));
+    BOTC_LogAddLine(p, "---- 过程记录 ----", 0);
     n = BOTC_RpN(last);
     for (i = 0; i < n; i += 1) {
-        DialogControlAddItem(g_logList, PlayerGroupSingle(p), BOTC_LogLineText(p, BOTC_RpL(last, i), 0));
+        BOTC_LogAddLine(p, BOTC_RpL(last, i), 0);
     }
     // ③ 白天咨询说书人的角色：把每天与说书人的私聊整段列出来
     //   本局结算 → 直接读当前私聊日志；本局进行中 → 读换局时备份的上一局白天私聊。
     if (last) {
         for (i = 0; i < g_rpLPmN; i += 1) {
-            DialogControlAddItem(g_logList, PlayerGroupSingle(p), BOTC_LogLineText(p, g_rpLPm[i], g_rpLPmWho[i]));
+            BOTC_LogAddLine(p, g_rpLPm[i], g_rpLPmWho[i]);
         }
     }
     else {
@@ -5879,7 +5991,7 @@ void BOTC_RpRender (int p) {
         }
     }
     // ④ 结束真实身份
-    DialogControlAddItem(g_logList, PlayerGroupSingle(p), BOTC_LogLineText(p, "---- 结束真实身份 ----", 0));
+    BOTC_LogAddLine(p, "---- 结束真实身份 ----", 0);
     for (q = 2; q <= 13; q += 1) {
         r = BOTC_RpV(last, 3, q);
         if (r < 0 || r > 163) {
@@ -5899,8 +6011,9 @@ void BOTC_RpRender (int p) {
         if (BOTC_RpV(last, 2, q) >= 0 && BOTC_RpV(last, 5, q) >= 0 && BOTC_RpV(last, 2, q) != BOTC_RpV(last, 5, q)) {
             s = s + "  【阵营改变】" + BOTC_AlignName(BOTC_RpV(last, 2, q)) + "→" + BOTC_AlignName(BOTC_RpV(last, 5, q));
         }
-        DialogControlAddItem(g_logList, PlayerGroupSingle(p), BOTC_LogLineText(p, s, 0));
+        BOTC_LogAddLine(p, s, 0);
     }
+    g_logRealName = false;
 }
 
 void BOTC_LogRender (int p) {
@@ -5973,13 +6086,13 @@ void BOTC_LogRender (int p) {
                     }
                 }
             }
-            DialogControlAddItem(g_logList, PlayerGroupSingle(p), BOTC_LogLineText(p, g_pubLog[i], g_pubWho[i]));
+            BOTC_LogAddLine(p, g_pubLog[i], g_pubWho[i]);
         }
     }
     else {
         if (g_logMode[p] == 2) {
             for (i = 0; i < g_voteLogCount; i += 1) {
-                DialogControlAddItem(g_logList, PlayerGroupSingle(p), BOTC_LogLineText(p, g_voteLog[i], 0));   // 投票统计：名字换成真名
+                BOTC_LogAddLine(p, g_voteLog[i], 0);   // 投票统计：名字换成真名
             }
             return;
         }
@@ -5988,7 +6101,7 @@ void BOTC_LogRender (int p) {
         if (g_logMode[p] == 3) {
             for (i = 0; i < g_pubLogCount; i += 1) {
                 if (g_pubWho[i] <= 0) {
-                    DialogControlAddItem(g_logList, PlayerGroupSingle(p), BOTC_LogLineText(p, g_pubLog[i], g_pubWho[i]));
+                    BOTC_LogAddLine(p, g_pubLog[i], g_pubWho[i]);
                 }
             }
             for (i = 0; i < g_pmLogCount[p]; i += 1) {
@@ -5996,7 +6109,7 @@ void BOTC_LogRender (int p) {
                     continue;
                 }
                 if (g_pmWho[(p * 600) + i] == 0) {
-                    DialogControlAddItem(g_logList, PlayerGroupSingle(p), BOTC_LogLineText(p, g_pmLog[(p * 600) + i], 0));
+                    BOTC_LogAddLine(p, g_pmLog[(p * 600) + i], 0);
                 }
             }
             return;
@@ -6027,7 +6140,7 @@ void BOTC_LogRender (int p) {
                     }
                 }
             }
-            DialogControlAddItem(g_logList, PlayerGroupSingle(p), BOTC_LogLineText(p, g_pmLog[(p * 600) + i], g_pmWho[(p * 600) + i]));
+            BOTC_LogAddLine(p, g_pmLog[(p * 600) + i], g_pmWho[(p * 600) + i]);
         }
     }
 }
@@ -7154,6 +7267,133 @@ int BOTC_TextWidth (string s) {
         i = end + 1;
     }
     return w;
+}
+
+// 日志列表框宽 980 像素 → 约 86 个半角；留 1 格给行尾悬挂标点。
+int BOTC_ChatWrapWidthLog () { return 86; }
+
+// 【日志里名字多出的宽度】（用户 2026-11-13）：说书人看日志时名字会变成「[编号] 显示名（战网ID）」，
+//   比聊天窗预拆行时算的宽度更长；这里把每个名字占位符多出来的部分加起来，拆行时预留掉。
+int BOTC_LogNameExtra (string s) {
+    int i;
+    int n;
+    int end;
+    int v;
+    int pos;
+    int w;
+    n = StringLength(s);
+    i = 1;
+    w = 0;
+    while (i <= n) {
+        end = BOTC_TextUnitEnd(s, i, n);
+        if (end < i) { end = i; }
+        pos = 0;
+        if (end - i + 1 >= 4 && StringSub(s, i, i + 1) == "@@" && StringSub(s, end - 1, end) == "@@") {
+            v = StringToInt(StringSub(s, i + 2, end - 2));
+            if (v >= 100 && v <= 113) {
+                pos = BOTC_PosOf(v - 100);
+            }
+            else if (v >= 1 && v <= 13) {
+                pos = v;
+            }
+        }
+        else {
+            if (StringSub(s, i, i + 5) == "玩家" && end >= i + 6) {
+                v = StringToInt(StringSub(s, i + 6, end));
+                if (v >= 1 && v <= 13) {
+                    pos = v + 1;
+                    if (pos > 13) { pos = 13; }
+                }
+            }
+        }
+        if (pos >= 1 && pos <= 13) {
+            // 【复盘星际名】（用户 2026-11-13）：复盘渲染用真实战网名，按星际名宽度预留。
+            if (g_logRealName) {
+                w = w + BOTC_PlainWidth(TextToString(BOTC_RealPlayerNameText(pos))) - BOTC_NameWidth(pos);
+            }
+            else {
+                w = w + BOTC_PlainWidth(TextToString(BOTC_LogPlayerNameText(pos))) - BOTC_NameWidth(pos);
+            }
+        }
+        i = end + 1;
+    }
+    if (w < 0) { w = 0; }
+    return w;
+}
+
+// 【日志自动换行】（用户 2026-11-13）：日志列表框里放不下的整行会被裁成省略号。
+//   这里按列表框宽度重新拆行：放得下就原样加一行；放不下才按标点 / 可见宽度拆成续行，
+//   续行沿用原来的说话人缩进。投票统计、复盘、说书人带战网 ID 的名字都走这里。
+void BOTC_LogAddLine (int p, string s, int who) {
+    int n;
+    int pos;
+    int end;
+    int pref;
+    int prefW;
+    int cap;
+    int extra;
+    string part;
+    n = StringLength(s);
+    if (n <= 0) {
+        DialogControlAddItem(g_logList, PlayerGroupSingle(p), BOTC_LogLineText(p, s, who));
+        return;
+    }
+    extra = 0;
+    // 【复盘星际名】（用户 2026-11-13）：复盘对所有玩家都显示星际名，名字比占位名长，
+    //   拆行时也要给所有人预留这段多出来的宽度。
+    if (p == g_teller || g_logRealName) {
+        extra = BOTC_LogNameExtra(s);
+    }
+    pref = BOTC_PrefixEnd(s, n);
+    prefW = 0;
+    if (pref > 0) {
+        prefW = BOTC_TextWidth(StringSub(s, 1, pref));
+    }
+    else {
+        // 续行缩进：把行首空格也算进前缀，拆行后保持原来的对齐
+        while (pref < n && StringSub(s, pref + 1, pref + 1) == " ") {
+            pref = pref + 1;
+        }
+        prefW = pref;
+    }
+    // 整行放得下：保持原样，不重新拆散
+    if (BOTC_TextWidth(s) <= BOTC_ChatWrapWidthLog() - extra) {
+        DialogControlAddItem(g_logList, PlayerGroupSingle(p), BOTC_LogLineText(p, s, who));
+        return;
+    }
+    cap = BOTC_ChatWrapWidthLog() - prefW - extra;
+    if (cap < 12) { cap = 12; }
+    pos = BOTC_WrapSkipSpace(s, pref + 1, n);
+    if (pos > n) {
+        DialogControlAddItem(g_logList, PlayerGroupSingle(p), BOTC_LogLineText(p, s, who));
+        return;
+    }
+    end = BOTC_WrapCut(s, pos, cap, n);
+    if (pref > 0) {
+        if (pos == pref + 1) {
+            DialogControlAddItem(g_logList, PlayerGroupSingle(p), BOTC_LogLineText(p, StringSub(s, 1, end), who));
+        }
+        else {
+            DialogControlAddItem(g_logList, PlayerGroupSingle(p), BOTC_LogLineText(p, StringSub(s, 1, pref) + StringSub(s, pos, end), who));
+        }
+    }
+    else {
+        DialogControlAddItem(g_logList, PlayerGroupSingle(p), BOTC_LogLineText(p, StringSub(s, pos, end), who));
+    }
+    pos = end + 1;
+    while (pos <= n) {
+        pos = BOTC_WrapSkipSpace(s, pos, n);
+        if (pos > n) { break; }
+        end = BOTC_WrapCut(s, pos, cap, n);
+        part = StringSub(s, pos, end);
+        if (prefW > 0) {
+            DialogControlAddItem(g_logList, PlayerGroupSingle(p), BOTC_LogLineText(p, BOTC_Spaces(prefW) + part, who));
+        }
+        else {
+            DialogControlAddItem(g_logList, PlayerGroupSingle(p), BOTC_LogLineText(p, part, who));
+        }
+        pos = end + 1;
+    }
 }
 
 // 聊天窗每行标签宽 872 像素、20 号粗体：半角约 10.9 像素 → 80 个半角。
@@ -13583,6 +13823,11 @@ void BOTC_ChatModeSet (int m) {
         BOTC_Notice(g_teller, "剧本开始前只能公聊，私聊频道暂未开放。");
         return;
     }
+    // 【结算后固定公聊】（用户 2026-11-13）：胜负已分就不能再切回私聊阶段。
+    if (g_gameOver && m != 2) {
+        BOTC_Notice(g_teller, "游戏已结算：只能公聊，不能再切换到私聊阶段。");
+        return;
+    }
     // 夜里固定公聊：**不能切成私聊 / 自由**（用户 2026-09-17 要求）。
     //   夜里说书人的【聊天：...】按钮已经收起来了，这里再兜一层，防止聊天指令绕过去。
     if (g_isNight && m != 2) {
@@ -13672,6 +13917,13 @@ void BOTC_SayToggle (int p) {
     if (BOTC_PmOff()) {
         g_chatSay[p] = 0;
         BOTC_SayRender(p);
+        return;
+    }
+    // 【结算后固定公聊】（用户 2026-11-13）：结算画面不允许切到个人私聊输入
+    if (g_gameOver) {
+        g_chatSay[p] = 0;
+        BOTC_SayRender(p);
+        BOTC_Notice(p, "游戏已结算：只能公聊。");
         return;
     }
     // 私聊阶段：非说书人被锁定成私聊，点按钮也切不回公聊（用户 2026-09-30）
@@ -16028,6 +16280,14 @@ void BOTC_NightGo () {
         //   现在挪到天亮这一支的末尾（天亮结算 + 猎手测试之后）：天一亮，全场每个人的魔典都会自己弹出来。
         DialogSetVisible(g_grimDlg, PlayerGroupAll(), true);
         BOTC_GrimFlagAll(true);
+        // 【保住的阅读弹窗别被魔典盖住】（用户 2026-11-13）：正式开局后日志 / 剧本角色表 /
+        //   游戏帮助 / 夜序还开着的人，天亮不自动弹魔典（跟提名阶段 BOTC_NomPop_Func 同一套判断）。
+        for (q = 1; q <= 13; q += 1) {
+            if (g_logOpen[q] || g_abOpen[q] || g_tipOpen[q] || g_noOpen[q]) {
+                DialogSetVisible(g_grimDlg, PlayerGroupSingle(q), false);
+                g_grimOn[q] = false;
+            }
+        }
     }
     else {
         g_isNight = true;
@@ -17298,6 +17558,7 @@ void BOTC_ResetGameVars () {
     g_innA = 0;
     g_innB = 0;
     g_innNight = 0;
+    g_innFrom = 0;
     g_monkA = 0;
     g_monkNight = 0;
     g_exoJinxSeat = 0;
@@ -17647,6 +17908,7 @@ void BOTC_ResetGameVars () {
         // 【声称/猜测】（用户 2026-11-04）：新一局两个猜测重新可用
         g_guessKind[i] = 0;
         g_pedantGuessUsed[i] = false;
+        g_pedantUsed = false;            // 新一局：恶魔共享的猜书生机会重新给
         g_puzzleGuessUsed[i] = false;
         g_guessRoleDay[i] = -1;          // 全员追忆 · 猜角色：新局重置日期戳
         g_guessRoleDone[i] = false;      // 全员追忆 · 猜角色：新局重置"已猜对"标记
@@ -27776,7 +28038,7 @@ g_jinxCount = 139;
     // 死亡类型表：**大类** = kind（1 夜间 / 2 白天 / 3 处决）+ byDemon（是不是恶魔造成）；
     //   **小类** = 每条自己的 token 槽（面板上那一格）。大类决定判定（守鸦人 / 贤者看 kind + byDemon），
     //   小类决定「具体是哪一种死」（自刀传位只认 g_deathImp 的那一条）。
-    g_deathN = 24;    // 道士的专属死因走角色专属 token 143，不塞进大类表；牙噶巴卜 / 奥赫 / 卡扎力 / 书生 / 饕餮 / 典狱长 / 精神病患者见末几条
+    g_deathN = 25;    // 道士的专属死因走角色专属 token 143，不塞进大类表；牙噶巴卜 / 奥赫 / 卡扎力 / 书生 / 饕餮 / 典狱长 / 精神病患者 / 魔像见末几条
     // 大类：死亡[夜间/恶魔]
     g_deathTok[0] = 16;   g_deathKind[0] = 1;   g_deathByDemon[0] = 1;   g_deathImp[0] = 1;   // 死亡（小恶魔）---- 自刀传位只认这一条
     g_deathTok[1] = 21;   g_deathKind[1] = 1;   g_deathByDemon[1] = 1;   g_deathImp[1] = 0;   // 死亡（普卡）---- 同样夜间 / 恶魔杀，但不传位
@@ -27810,6 +28072,8 @@ g_deathTok[8] = 67;   g_deathKind[8] = 1;   g_deathByDemon[8] = 1;   g_deathImp[
     g_deathTok[22] = 204; g_deathKind[22] = 1; g_deathByDemon[22] = 1; g_deathImp[22] = 0;  // 死亡（典狱长）：夜间、恶魔能力
     // 【精神病患者（84）】（用户 2026-11-11）：白天击杀的专属死因，用精神病患者自己的头像
     g_deathTok[23] = 210; g_deathKind[23] = 2; g_deathByDemon[23] = 0; g_deathImp[23] = 0;  // 死亡（精神病患者）：白天、非恶魔杀
+    // 【魔像（81）】（用户 2026-11-13）：提名击杀用魔像自己的死亡标记，不再借用精神病患者 / 猎手那一格
+    g_deathTok[24] = 211; g_deathKind[24] = 2; g_deathByDemon[24] = 0; g_deathImp[24] = 0;  // 死亡（魔像）：白天、非恶魔杀
     // 【角色 → 它专属的死亡 token】（用户 2026-09-20）：有专属死因的角色，死亡时打自己那一格；
     //   没有的（例如镇长替死）继续用大类 token（死亡（夜间·其他）这种）。
     for (i = 0; i <= 163; i += 1) {
@@ -27819,6 +28083,7 @@ g_deathTok[8] = 67;   g_deathKind[8] = 1;   g_deathByDemon[8] = 1;   g_deathImp[
     g_roleDeathTok[44] = 21;   // 普卡
     g_roleDeathTok[10] = 19;   // 猎手
     g_roleDeathTok[84] = 210;  // 精神病患者（白天击杀）
+    g_roleDeathTok[81] = 211;  // 魔像（提名击杀，用户 2026-11-13）
     g_roleDeathTok[28] = 32;   // 造谣者
     g_roleDeathTok[27] = 33;   // 赌徒
     g_roleDeathTok[35] = 34;   // 修补匠
@@ -28077,6 +28342,8 @@ g_tokName[119] = "即将被处决（军团）"; g_tokShort[119] = "即将被处�
     g_tokName[209] = "今晚茶会（帽匠）";      g_tokShort[209] = "今晚茶会";    g_tokIcon[209] = "botc_tk120.dds"; g_tokRole[209] = 120;
     // 【精神病患者（84）· 白天击杀死亡】（用户 2026-11-11）：专属死亡标记，用角色自己的 token 图标
     g_tokName[210] = "死亡（精神病患者）";    g_tokShort[210] = "死亡";        g_tokIcon[210] = "botc_tk84.dds"; g_tokRole[210] = 84;
+    // 【魔像（81）· 提名击杀死亡】（用户 2026-11-13）：专属死亡标记，用角色自己的 token 图标
+    g_tokName[211] = "死亡（魔像）";          g_tokShort[211] = "死亡";        g_tokIcon[211] = "botc_tk81.dds"; g_tokRole[211] = 81;
 
 
     // 【暴风捕手（113）】（用户 2026-10-10）：默认保护异教领袖（何方教众那张板子的口径；自定义剧本自己选）
@@ -29087,7 +29354,10 @@ g_noAllOther[102] = 28;     // 恐惧之灵（其他夜第 28）
     g_musicPendPrio = 0;
     g_musicPending = "";                           // 换局时把「等着要放的那首」也清掉
     g_dealConfirmed = false;
-    g_kickBtnCd = 0;                               // 换局清空【踢出玩家】共用冷却
+    for (i = 0; i < 14; i += 1) {
+        g_kickTarCd[i] = 0;                        // 换局清空【踢出玩家】按目标的冷却
+        g_kickTarN[i] = 0;                         // 换局清空【踢出玩家】对同一目标的重复次数
+    }
     g_tellKickQuiet = false;                       // 换局清空【踢出说书人】静默交接标记
     for (i = 0; i < 14; i += 1) {
         g_kickQuiet[i] = false;                    // 换局清空【踢出玩家】静默离场标记
@@ -29265,6 +29535,8 @@ void BOTC_SkillRetractAll () {
 //   「全部关闭」= 静默收起，不结算、不发消息、不执行还没提交的能力：
 //   玩家侧收技能面板和身份网格，说书人侧收信息答题框 / 贵族 / 工程师 / 农夫 /
 //   多重能力 / 街头风琴手 / 修行者 / 赌徒 / 饕餮等夜间弹窗，并清掉唤醒状态。
+//   【月之子 / 呆瓜】（用户 2026-11-14）：进入夜晚时只强制关掉这两个角色还在等选择的面板，
+//   其他页面（日志 / 魔典 / 剧本角色表 / 游戏帮助 / 笔记）一律不动，交给跨阶段收尾统一处理。
 void BOTC_WakePopupsCloseAll () {
     int q;
     for (q = 1; q <= 13; q += 1) {
@@ -29388,7 +29660,10 @@ void BOTC_PhaseUiForceClose () {
     }
     BOTC_HdHide();
     BOTC_ManualDeathCancel();
-    // ③ 按玩家清：私聊请求 / 选人模式 / 声称 / 日志 / 帮助 / 笔记 / 夜序 / 赌徒杂耍戏法师
+    // ③ 按玩家清：私聊请求 / 选人模式 / 声称 / 夜序 / 赌徒杂耍戏法师
+    //   【已正式开始后保留阅读类弹窗】（用户 2026-11-13）：正式开局以后再切公聊 / 私聊 /
+    //   提名 / 夜晚 / 白天，日志、魔典、剧本角色表、游戏帮助和笔记不再强制关闭，由玩家自己收；
+    //   开局前（配板 / 准备阶段）以及取消正式开始仍然照旧全部收起。
     for (q = 1; q <= 13; q += 1) {
         if (g_gambleWait[q]) {
             BOTC_GambleCancel(q);
@@ -29401,21 +29676,31 @@ void BOTC_PhaseUiForceClose () {
             BOTC_PmPickEnd(q);
         }
         if (g_logOpen[q] || g_logPickOn[q] || g_logPick[q]) {
-            BOTC_LogClose(q);
+            if (!g_started) {
+                BOTC_LogClose(q);
+            }
         }
         if (g_abOpen[q]) {
-            BOTC_AbClose(q);
+            if (!g_started) {
+                BOTC_AbClose(q);
+            }
         }
         if (g_noOpen[q]) {
             BOTC_NightOrderClose(q);
         }
         if (g_tipOpen[q]) {
-            BOTC_TipClose(q);
+            if (!g_started) {
+                BOTC_TipClose(q);
+            }
         }
         if (g_noteOn[q]) {
-            BOTC_NoteClose(q);
+            if (!g_started) {
+                BOTC_NoteClose(q);
+            }
         }
-        BOTC_RsClose(q);
+        if (!g_started) {
+            BOTC_RsClose(q);
+        }
         if (g_reqFrom[q] != 0 || g_reqJoinSess[q] != 0 || g_reqSec[q] > 0 || g_invSess[q] != 0) {
             g_reqFrom[q] = 0;
             g_reqJoinSess[q] = 0;
@@ -29549,6 +29834,54 @@ void BOTC_PhaseUiForceClose () {
     if (g_teller >= 1 && g_teller <= 13) {
         BOTC_GrimRender(g_teller);
     }
+}
+
+// 【弹窗选择时清场】（用户 2026-11-14）：轮到某名玩家的夜序、需要他本人弹窗选目标 / 作答时，
+//   或者轮到说书人弹窗选择时，先把开着的日志 / 剧本角色表 / 游戏帮助 / 笔记收掉，
+//   再把魔典摊开，避免阅读类窗口盖住技能面板和选人网格。ob 是物理玩家号。
+void BOTC_ReadFocusFor (int ob) {
+    if (ob < 1 || ob > 13) {
+        return;
+    }
+    if (g_logOpen[ob] || g_logPickOn[ob] || g_logPick[ob]) {
+        BOTC_LogClose(ob);
+    }
+    if (g_abOpen[ob]) {
+        BOTC_AbClose(ob);
+    }
+    if (g_noOpen[ob]) {
+        BOTC_NightOrderClose(ob);      // 跟剧本角色表同一个窗口的夜序视图
+    }
+    if (g_tipOpen[ob]) {
+        BOTC_TipClose(ob);
+    }
+    if (g_noteOn[ob]) {
+        BOTC_NoteClose(ob);
+    }
+    BOTC_GrimRender(ob);
+    DialogSetVisible(g_grimDlg, PlayerGroupSingle(ob), true);
+    g_grimOn[ob] = true;
+}
+
+// 玩家本人要操作：q 是逻辑格，操作的是格里的物理玩家
+void BOTC_WakePlayerFocus (int q) {
+    int ob;
+    if (q < 1 || q > 13) {
+        return;
+    }
+    ob = g_who[q];
+    if (ob < 2 || ob > 13) {
+        return;                        // 说书人格 / 空座：不动
+    }
+    BOTC_ReadFocusFor(ob);
+}
+
+// 说书人本人要操作：按物理玩家号处理，说书人换到哪个座位都适用
+void BOTC_TellerFocus () {
+    if (g_teller < 1 || g_teller > 13) {
+        return;
+    }
+    BOTC_ReadFocusFor(g_teller);
 }
 
 // 不参与游戏的位置会被挪到画面外并隐藏。
@@ -29905,7 +30238,7 @@ void BOTC_BuildFakeGrim () {
             libNtve_gf_SetDialogItemAcceptMouse(g_fakeChipImg[(i * 4) + t], false, PlayerGroupAll());
             libNtve_gf_SetDialogItemImage(g_fakeChipImg[(i * 4) + t], "botc_blank.dds", PlayerGroupAll());
             DialogControlSetVisible(g_fakeChipImg[(i * 4) + t], PlayerGroupAll(), false);
-            g_fakeChip[(i * 4) + t] = BOTC_NewLabel(g_fakeDlg, 68, 18, BOTC_Lerp(g_seatX[i], 515, f + (t * 20), 100) - 34, BOTC_Lerp(g_seatY[i], 468, f + (t * 20), 100) + 14, StringToText(""));
+            g_fakeChip[(i * 4) + t] = BOTC_NewLabel(g_fakeDlg, 84, 18, BOTC_Lerp(g_seatX[i], 515, f + (t * 20), 100) - 34, BOTC_Lerp(g_seatY[i], 468, f + (t * 20), 100) + 14, StringToText(""));
             libNtve_gf_SetDialogItemStyle(g_fakeChip[(i * 4) + t], "ModLeftSize16Bold", PlayerGroupAll());
             libNtve_gf_SetDialogItemAcceptMouse(g_fakeChip[(i * 4) + t], false, PlayerGroupAll());
             DialogControlSetVisible(g_fakeChip[(i * 4) + t], PlayerGroupAll(), false);
@@ -30574,6 +30907,8 @@ void BOTC_SpecOpen () {
     libNtve_gf_SetDialogItemText(g_specTitle, StringToText("说书人工具"), PlayerGroupAll());
     libNtve_gf_SetDialogItemText(g_specHint, StringToText("前三种方式需要先点一名玩家作为收件人；快捷发送互认直接自动发给全场恶魔和爪牙；使用技能只能在夜间由说书人发动一个本剧本角色；赋予能力可给任意玩家附加一份角色能力。"), PlayerGroupAll());
     libNtve_gf_SetDialogItemText(g_specClose, StringToText("关闭"), PlayerGroupAll());
+    // 【说书人弹窗选择工具：先收阅读窗口、摊开魔典】（用户 2026-11-14）
+    BOTC_TellerFocus();
     DialogSetVisible(g_specDlg, PlayerGroupSingle(g_teller), true);
 }
 
@@ -31872,7 +32207,7 @@ void BOTC_BuildGrim () {
         libNtve_gf_SetDialogItemImage(g_sayChipImg[i], "botc_blank.dds", PlayerGroupAll());
         DialogControlSetPosition(g_sayChipImg[i], PlayerGroupAll(), c_anchorTopLeft, 676 + (i * 48), 46);
         DialogControlSetVisible(g_sayChipImg[i], PlayerGroupAll(), false);
-        g_sayChip[i] = BOTC_NewLabel(g_grimDlg, 68, 18, 664 + (i * 48), 89, StringToText(""));
+        g_sayChip[i] = BOTC_NewLabel(g_grimDlg, 84, 18, 664 + (i * 48), 89, StringToText(""));
         libNtve_gf_SetDialogItemStyle(g_sayChip[i], "ModLeftSize16Bold", PlayerGroupAll());
         libNtve_gf_SetDialogItemAcceptMouse(g_sayChip[i], false, PlayerGroupAll());
         DialogControlSetVisible(g_sayChip[i], PlayerGroupAll(), false);
@@ -31962,7 +32297,7 @@ void BOTC_BuildGrim () {
             libNtve_gf_SetDialogItemAcceptMouse(g_chipImg[(i * 4) + t], false, PlayerGroupAll());
             libNtve_gf_SetDialogItemImage(g_chipImg[(i * 4) + t], "botc_blank.dds", PlayerGroupAll());
             DialogControlSetVisible(g_chipImg[(i * 4) + t], PlayerGroupAll(), false);
-            g_chip[(i * 4) + t] = BOTC_NewLabel(g_grimDlg, 68, 18, BOTC_Lerp(g_seatX[i], 515, f + (t * 20), 100) - 34, BOTC_Lerp(g_seatY[i], 468, f + (t * 20), 100) + 14, StringToText(""));
+            g_chip[(i * 4) + t] = BOTC_NewLabel(g_grimDlg, 84, 18, BOTC_Lerp(g_seatX[i], 515, f + (t * 20), 100) - 34, BOTC_Lerp(g_seatY[i], 468, f + (t * 20), 100) + 14, StringToText(""));
             libNtve_gf_SetDialogItemStyle(g_chip[(i * 4) + t], "ModLeftSize16Bold", PlayerGroupAll());
             libNtve_gf_SetDialogItemAcceptMouse(g_chip[(i * 4) + t], false, PlayerGroupAll());
             DialogControlSetVisible(g_chip[(i * 4) + t], PlayerGroupAll(), false);
@@ -33244,6 +33579,10 @@ void BOTC_PickOpen (int ob, int who) {
     }
     else {
         DialogControlSetVisible(g_kickBtnPick, PlayerGroupSingle(ob), true);
+    }
+    // 【说书人弹窗选身份：先收阅读窗口、摊开魔典】（用户 2026-11-14）
+    if (ob == g_teller) {
+        BOTC_TellerFocus();
     }
     DialogSetVisible(g_pickDlg, PlayerGroupSingle(ob), true);
 }
@@ -35059,6 +35398,7 @@ void BOTC_SeatStateSync () {
     BOTC_NoDashiiSync();
     BOTC_VortoxSync();
     BOTC_SailorSync();
+    BOTC_InnkeeperSync();
     BOTC_FoolSync();
     BOTC_TeaLadySync();
     BOTC_StormSync();
@@ -36059,6 +36399,12 @@ void BOTC_PsyRpsAdvance () {
     BOTC_PsyRpsClear();
     if (res == 0) {
         BOTC_PmStore(g_teller, "【精神病患者猜拳】" + BOTC_NameStr(q) + " 落败 → 进入正常处决。");
+        // 【和平主义者 × 善良的精神病患者】（用户 2026-11-14）：精神病患者默认邪恶，但场上可能出现
+        //   登记为善良的精神病患者（麻脸巫婆改造等）。猜拳输掉后仍要按普通处决走和平主义者判定，
+        //   不能因为 BOTC_ExecToggleAt 里先做了猜拳就直接进 BOTC_ExecAfterRps 把他跳过。
+        if (BOTC_PacifistAsk(q)) {
+            return;
+        }
         BOTC_ExecAfterRps(q);
         return;
     }
@@ -36930,7 +37276,7 @@ void BOTC_SourceGoneCleanup (int q, bool dying) {
     if (r == 23) { BOTC_SailorDrunkClear("水手离场"); }
     if (r == 7) { g_monkA = 0; g_monkNight = 0; }
     if (r == 25) { g_exoJinxSeat = 0; g_exoJinxNight = 0; }
-    if (r == 26) { BOTC_DrunkClear("旅店老板离场"); g_innA = 0; g_innB = 0; g_innNight = 0; }
+    if (r == 26) { BOTC_DrunkClear("旅店老板离场"); g_innA = 0; g_innB = 0; g_innNight = 0; g_innFrom = 0; }
     // 【借来的旅店老板能力】（用户 2026-11-08）：哲学家 / 食人族 / 炼金术士 / 说书人赋予的能力持有者
     //   死亡 / 离场时，按 g_drunkFrom 收掉他放的那份醉酒（token 60 / 24），不能只认真身 26。
     if (r != 26 && g_drunkFrom == q) { BOTC_DrunkClear("旅店老板能力持有者离场"); }
@@ -38662,6 +39008,44 @@ void BOTC_SailorSync () {
     BOTC_GrimRender(g_teller);            // 标记变了就刷一次魔典（圆桌上那 4 个小格跟着更新）
 }
 
+// ■ 旅店老板（26）的「不会死亡」：能力一旦失效就当场收回（用户 2026-11-14）。
+//   官方口径：旅店老板中毒 / 醉酒 / 提线木偶时能力失效；失效发生在选完人之后时，
+//   他给两名目标打的「不会死亡」立即作废。他让别人「醉酒」的那一枚已经生效，保留到黄昏，
+//   只有他给自己上了醉酒（选自己）时，这条失效同样会把另一名目标身上的免死收回。
+//   黎明本来就会清掉 token 25；这里只处理「本夜由 g_innFrom 放下的保护」。
+void BOTC_InnkeeperSync () {
+    bool on;
+    if (g_innFrom < 1 || g_innFrom > 13) {
+        return;
+    }
+    on = false;
+    if (g_innA >= 2 && g_innA <= 13) {
+        if (g_tokOn[(((g_teller * 14) + g_innA) * 256) + 25]) {
+            on = true;
+        }
+    }
+    if (g_innB >= 2 && g_innB <= 13) {
+        if (g_tokOn[(((g_teller * 14) + g_innB) * 256) + 25]) {
+            on = true;
+        }
+    }
+    if (!on || BOTC_SkillWorks(g_innFrom)) {
+        return;
+    }
+    if (g_innA >= 2 && g_innA <= 13) {
+        g_tokOn[(((g_teller * 14) + g_innA) * 256) + 25] = false;
+    }
+    if (g_innB >= 2 && g_innB <= 13) {
+        g_tokOn[(((g_teller * 14) + g_innB) * 256) + 25] = false;
+    }
+    BOTC_PmStore(g_teller, "【旅店老板】" + BOTC_NameStr(g_innFrom) + " 中毒 / 醉酒 / 提线木偶 → 能力立即失效，已收回两名目标身上的「不会死亡」标记。");
+    g_innA = 0;
+    g_innB = 0;
+    g_innNight = 0;
+    g_innFrom = 0;
+    BOTC_GrimRender(g_teller);
+}
+
 // 【通用中毒（不含「中毒（痢蛭）120」）】（用户 2026-10-11 修传教士不认中毒时拆出来的）：
 //   通用「中毒」7（投毒者 / 说书人手动打的）+ 普卡 63 + 舞蛇人 85 + 诺-达鲺 80 + 亡骨魔 81 + **寡妇 96**。
 //   （用户 2026-10-14 补 96：寡妇的毒是「一直挂到她死」，可 7 那一格会被投毒者换目标 / 黄昏收掉 → 只认 7 会漏掉她那份毒。）
@@ -39862,6 +40246,8 @@ void BOTC_OrganOpen (int q) {
         BOTC_OrganChoose(0);
         return;
     }
+    // 【本人要弹窗作答：先收阅读窗口、摊开魔典】（用户 2026-11-14）
+    BOTC_WakePlayerFocus(q);
     libNtve_gf_SetDialogItemText(g_organTitle, StringToText("是否发动能力（选择自己是否醉酒）"), PlayerGroupSingle(g_who[q]));
     DialogControlSetVisible(g_organYes, PlayerGroupAll(), false);
     DialogControlSetVisible(g_organNo, PlayerGroupAll(), false);
@@ -43539,6 +43925,8 @@ void BOTC_DClaimOpen (int p) {
     if (p < 1 || p > 13) {
         return;
     }
+    // 【死后声称（月之子 / 呆瓜）：先收阅读窗口、摊开魔典】（用户 2026-11-14）
+    BOTC_ReadFocusFor(p);
     // 【失忆者（73）】在板子上时，死后声称也开放全部死亡声称身份（月之子 / 呆瓜等）。
     amne = BOTC_BoardHasRole(73);
     g_pickMode[p] = 3;
@@ -43966,6 +44354,14 @@ void BOTC_GuessPedant (int p, int q) {
         BOTC_GrimRender(g_teller);     // 假声称：不给说书人私聊提醒（用户 2026-11-04）
         return;
     }
+    // 【机会统一消耗】（用户 2026-11-13）：多名恶魔共享一次猜书生机会。只要恶魔用过一次，
+    //   无论书生是否中毒/醉酒、这次猜没猜中，机会都算用掉；之后其他恶魔再猜不结算。
+    if (g_pedantUsed) {
+        BOTC_PmStore(g_teller, "【书生猜测】" + BOTC_NameStr(p) + " 猜 " + BOTC_NameStr(q) + " → 已有恶魔用过这一次机会，本次猜测不结算。");
+        BOTC_GrimRender(g_teller);
+        return;
+    }
+    g_pedantUsed = true;
     if (!BOTC_SkillWorks(p)) {
         BOTC_PmStore(g_teller, "【书生猜测】" + BOTC_NameStr(p) + " 猜 " + BOTC_NameStr(q) + " → 他是恶魔，但中毒/醉酒/提线木偶 → 无效猜测。");
         BOTC_GrimRender(g_teller);
@@ -44203,8 +44599,8 @@ void BOTC_DeclareSlay (int p, int q) {
 //--------------------------------------------------------------------------------------------------
 void BOTC_BuildSlayAsk () {
     // 【2026-09-16】去掉黑底、去掉正文与参考两行：只留标题（谁猎杀谁 + 是否击杀）和按钮
-    // 【技能框往右挪 200】（用户 2026-09-23）：猎手「是否让他击杀」那个框
-    DialogCreate(684, 153, c_anchorRight, 185, -70, false);
+    // 【判定框统一居中】（用户 2026-11-14）：放在魔典正中，不再挤在画面右侧
+    DialogCreate(684, 153, c_anchorCenter, 0, 0, false);
     g_slayDlg = DialogLastCreated();
     DialogSetVisible(g_slayDlg, PlayerGroupAll(), false);
     g_slayTitle = BOTC_NewLabel(g_slayDlg, 666, 44, 18, 13, StringToText("猎手声称：是否让他击杀？"));
@@ -44220,10 +44616,10 @@ void BOTC_BuildSlayAsk () {
     // 弹窗只有说书人（玩家1）看得到、点得到 ---- 其它玩家连按钮都没有
     DialogControlSetVisible(g_slayYes, PlayerGroupAll(), false);
     DialogControlSetVisible(g_slayNo, PlayerGroupAll(), false);
-    DialogControlSetVisible(g_slayX, PlayerGroupAll(), false);
     DialogControlSetVisible(g_slayYes, PlayerGroupSingle(g_teller), true);
     DialogControlSetVisible(g_slayNo, PlayerGroupSingle(g_teller), true);
-    DialogControlSetVisible(g_slayX, PlayerGroupSingle(g_teller), true);
+    // 【右上角 X 保持默认可见】（用户 2026-11-14）：父弹窗只对说书人显示，X 不再按建图时的
+    //   g_teller 单独隐藏，避免说书人不是物理玩家 1 时 X 消失。
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -44232,7 +44628,8 @@ void BOTC_BuildSlayAsk () {
 //   只有说书人看得到、点得到，其它玩家连按钮都没有。
 //--------------------------------------------------------------------------------------------------
 void BOTC_BuildLevRecluse () {
-    DialogCreate(684, 153, c_anchorRight, 185, -70, false);
+    // 【判定框统一居中】（用户 2026-11-14）：和教父框错开一点，两个框可以同时出现
+    DialogCreate(684, 153, c_anchorCenter, 0, -90, false);
     g_levRecDlg = DialogLastCreated();
     DialogSetVisible(g_levRecDlg, PlayerGroupAll(), false);
     g_levRecTitle = BOTC_NewLabel(g_levRecDlg, 666, 44, 18, 13, StringToText("【利维坦】陌客处决：是否按善良阵营计入？"));
@@ -44255,7 +44652,8 @@ void BOTC_BuildLevRecluse () {
 //   故意放在利维坦判定框下面一点，两个弹窗同时出现时不会互相盖住。
 //--------------------------------------------------------------------------------------------------
 void BOTC_BuildGfRecluse () {
-    DialogCreate(684, 153, c_anchorRight, 185, 30, false);
+    // 【判定框统一居中】（用户 2026-11-14）：和利维坦框错开一点，两个框可以同时出现
+    DialogCreate(684, 153, c_anchorCenter, 0, 90, false);
     g_gfRecDlg = DialogLastCreated();
     DialogSetVisible(g_gfRecDlg, PlayerGroupAll(), false);
     g_gfRecTitle = BOTC_NewLabel(g_gfRecDlg, 666, 44, 18, 13, StringToText("【教父】陌客白天死亡：是否算作外来者？"));
@@ -44293,10 +44691,12 @@ void BOTC_BuildPolitician () {
 //--------------------------------------------------------------------------------------------------
 // 【和平主义者（33）· 处决弹窗】（用户 2026-11-06）：处决善良角色时弹窗让说书人决定是否触发。
 //   【是】= 不死；【否】/ 右上角 X = 照常处决。
-//   放在教父判定框下面，三个弹窗同时出现时不会互相盖住。
+//   【居中 + 按钮固定可见】（用户 2026-11-14）：固定在魔典正中；不再按建图时的 g_teller 逐控件
+//     隐藏 / 显示（说书人是大厅「队伍1」的其他玩家时按钮会被错误地隐藏），改成整块弹窗只对
+//     当前说书人显示，按钮保持默认可见。
 //--------------------------------------------------------------------------------------------------
 void BOTC_BuildPacifistAsk () {
-    DialogCreate(684, 153, c_anchorRight, 185, 130, false);
+    DialogCreate(684, 153, c_anchorCenter, 0, 0, false);
     g_pacAskDlg = DialogLastCreated();
     DialogSetVisible(g_pacAskDlg, PlayerGroupAll(), false);
     g_pacAskTitle = BOTC_NewLabel(g_pacAskDlg, 666, 44, 18, 13, StringToText("【和平主义者】处决：是否让他不死？"));
@@ -44305,12 +44705,7 @@ void BOTC_BuildPacifistAsk () {
     g_pacAskYes = BOTC_NewButton(g_pacAskDlg, 306, 50, 27, 81, "是：不死");
     g_pacAskNo = BOTC_NewButton(g_pacAskDlg, 306, 50, 351, 81, "否：照常处决");
     g_pacAskX = BOTC_NewButton(g_pacAskDlg, 30, 26, 640, 6, "X");
-    DialogControlSetVisible(g_pacAskYes, PlayerGroupAll(), false);
-    DialogControlSetVisible(g_pacAskNo, PlayerGroupAll(), false);
-    DialogControlSetVisible(g_pacAskX, PlayerGroupAll(), false);
-    DialogControlSetVisible(g_pacAskYes, PlayerGroupSingle(g_teller), true);
-    DialogControlSetVisible(g_pacAskNo, PlayerGroupSingle(g_teller), true);
-    DialogControlSetVisible(g_pacAskX, PlayerGroupSingle(g_teller), true);
+    DialogSetVisible(g_pacAskDlg, PlayerGroupSingle(g_teller), false);
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -44319,7 +44714,8 @@ void BOTC_BuildPacifistAsk () {
 //   放在和平主义者判定框下面，和其它判定框不会互相盖住。
 //--------------------------------------------------------------------------------------------------
 void BOTC_BuildBarberAsk () {
-    DialogCreate(684, 183, c_anchorRight, 185, 330, false);
+    // 【判定框统一居中】（用户 2026-11-14）
+    DialogCreate(684, 183, c_anchorCenter, 0, 0, false);
     g_barAskDlg = DialogLastCreated();
     DialogSetVisible(g_barAskDlg, PlayerGroupAll(), false);
     g_barAskTitle = BOTC_NewLabel(g_barAskDlg, 666, 80, 18, 10, StringToText("【理发师】恶魔要把自己和死者互换：是否允许？"));
@@ -44340,10 +44736,10 @@ void BOTC_BuildBarberAsk () {
 // 【异教领袖（106）· 夜间改阵营弹窗】（用户 2026-11-07）：夜间不唤醒他、也不私聊他；
 //   到他的夜序时弹窗，让说书人选择把他变成「哪一名相邻存活玩家」的阵营。
 //   相邻只算活人（死人跳过）；右上角 X = 今晚不改变阵营。
-//   放在和平主义者判定框下面，白天 / 夜晚的其它判定框不会互相盖住。
+//   固定在魔典正中，避免和其它判定框挤在右侧互相遮挡（用户 2026-11-14）。
 //--------------------------------------------------------------------------------------------------
 void BOTC_BuildCultChoice () {
-    DialogCreate(684, 153, c_anchorRight, 185, 230, false);
+    DialogCreate(684, 153, c_anchorCenter, 0, 0, false);
     g_cultChDlg = DialogLastCreated();
     DialogSetVisible(g_cultChDlg, PlayerGroupAll(), false);
     g_cultChTitle = BOTC_NewLabel(g_cultChDlg, 666, 44, 18, 13, StringToText("【异教领袖】选择相邻存活玩家的阵营"));
@@ -44536,6 +44932,7 @@ void BOTC_PsyAsk (int p, int q) {
         DialogControlSetVisible(g_slayYes, PlayerGroupSingle(g_teller), true);
         DialogControlSetPosition(g_slayYes, PlayerGroupSingle(g_teller), c_anchorTopLeft, 27, 81);
         DialogControlSetPosition(g_slayNo, PlayerGroupSingle(g_teller), c_anchorTopLeft, 351, 81);
+        BOTC_TellerFocus();
         DialogSetVisible(g_slayDlg, PlayerGroupSingle(g_teller), true);
         // 【让发起人知道球在说书人手里】（用户 2026-11-11）：否则看起来像点了没反应
         BOTC_Notice(g_who[p], "已把精神病患者请求发给说书人：" + BOTC_NameStr(q) + "。等他说书人决定。");
@@ -44637,27 +45034,30 @@ void BOTC_DamselGuess (int p, int q) {
     BOTC_DeclareRender();
     BOTC_PubAnnounce("【落难少女】" + BOTC_NameStr(p) + " 公开猜测 " + BOTC_NameStr(q) + " 是落难少女。");
     BOTC_DeclareCdSet(g_who[p]);
-    if (g_damselFailed) {
-        BOTC_PmStore(g_teller, "【落难少女】已经有爪牙猜错过 → 这一次猜测按规则无效。");
+    // 【假声称不提醒说书人】（用户 2026-11-13）：不是真爪牙的猜测只公屏播报，不再私聊提醒说书人。
+    if (BOTC_RoleTeam(BOTC_SeatTrueRole(p)) != 2) {
         return;
     }
-    if (BOTC_RoleTeam(BOTC_SeatTrueRole(p)) != 2) {
-        return;                        // 假声称（不是爪牙）：不给说书人私聊提醒（用户 2026-11-04）
+    // 【机会统一消耗】（用户 2026-11-13）：只要真爪牙公开猜过，无论猜没猜中、落难少女是否中毒/醉酒，
+    //   这一次机会都算用掉；之后其他爪牙再猜都不能靠落难少女获胜。
+    if (g_damselFailed) {
+        BOTC_PmStore(g_teller, "【落难少女】已经有爪牙用掉这一次机会 → 这一次猜测按规则无效。");
+        return;
     }
+    g_damselFailed = true;
     if (BOTC_SeatImpaired(p)) {
-        BOTC_PmStore(g_teller, "【落难少女】" + BOTC_NameStr(p) + " 中毒/醉酒 → 能力失效，这次猜测不结算。");
+        BOTC_PmStore(g_teller, "【落难少女】" + BOTC_NameStr(p) + " 中毒/醉酒 → 能力失效，这次猜测不结算；但这一次机会已经用掉。");
         return;
     }
     if (BOTC_HasAbility(q, 82) && !BOTC_SeatDead(q)) {
-        // 【中毒 / 醉酒适配】（用户 2026-09-26）：她中毒 / 酒鬼时能力失效 → 猜中也不判邪恶胜（这次猜测算用掉了）
+        // 【中毒 / 醉酒适配】（用户 2026-09-26）：她中毒 / 酒鬼时能力失效 → 猜中也不判邪恶胜
         if (!BOTC_AbilityWorks(q, 82)) {
-            BOTC_PmStore(g_teller, "【落难少女】" + BOTC_NameStr(q) + " 中毒/酒鬼 → 能力失效：这次猜中不判邪恶胜。");
+            BOTC_PmStore(g_teller, "【落难少女】" + BOTC_NameStr(q) + " 中毒/酒鬼 → 能力失效：这次猜中不判邪恶胜；但这一次机会已经用掉。");
             return;
         }
         BOTC_ShowWin(1 - BOTC_SeatAlign(q), "镇民们没能保护好" + BOTC_NameStr(q) + "，", "真是可悲！");
         return;
     }
-    g_damselFailed = true;
     ds = BOTC_DamselSeat();
     if (ds >= 2) {
         g_tokOn[(((g_teller * 14) + ds) * 256) + 102] = true;
@@ -44735,7 +45135,8 @@ void BOTC_BuildHd (int p) {
 //   ⚠ 面板**不显示脚本算好的答案**（口径照 2026-10-03「正确答案不显示」）---- 说书人自己看魔典判。
 //--------------------------------------------------------------------------------------------------
 void BOTC_BuildShugenja () {
-    DialogCreate(560, 200, c_anchorRight, 320, -70, false);
+    // 【判定框统一居中】（用户 2026-11-14）
+    DialogCreate(560, 200, c_anchorCenter, 0, 0, false);
     g_sgDlg = DialogLastCreated();
     g_sgTitle = BOTC_NewLabelC(g_sgDlg, 540, 52, 10, 8, StringToText("【修行者】距离最近的邪恶玩家在哪一侧？"));
     libNtve_gf_SetDialogItemStyle(g_sgTitle, "ModLeftSize16Bold", PlayerGroupAll());
@@ -44787,7 +45188,8 @@ void BOTC_SgClose () {
 //   目标登记成陌客 / 爪牙 / 恶魔（或间谍 / 镇民 / 外来者）时，对错由说书人自己判。
 //--------------------------------------------------------------------------------------------------
 void BOTC_BuildGambleDecide () {
-    DialogCreate(720, 210, c_anchorRight, 320, -70, false);
+    // 【判定框统一居中】（用户 2026-11-14）
+    DialogCreate(720, 210, c_anchorCenter, 0, 0, false);
     g_gblDlg = DialogLastCreated();
     DialogSetVisible(g_gblDlg, PlayerGroupAll(), false);
     g_gblLbl = BOTC_NewLabel(g_gblDlg, 640, 30, 14, 10, StringToText(""));
@@ -44805,7 +45207,8 @@ void BOTC_BuildGambleDecide () {
 
 // 【说书人判定 · 是 / 否】（用户 2026-11-12）
 void BOTC_BuildJudgeDecide () {
-    DialogCreate(720, 210, c_anchorRight, 320, -70, false);
+    // 【判定框统一居中】（用户 2026-11-14）
+    DialogCreate(720, 210, c_anchorCenter, 0, 0, false);
     g_judgeDlg = DialogLastCreated();
     DialogSetVisible(g_judgeDlg, PlayerGroupAll(), false);
     g_judgeTitle = BOTC_NewLabel(g_judgeDlg, 640, 60, 14, 14, StringToText(""));
@@ -44829,6 +45232,7 @@ void BOTC_GblOpen (int p, int guess) {
     libNtve_gf_SetDialogItemText(g_gblLbl, StringToText(s), PlayerGroupSingle(g_teller));
     s = "登记的是「" + BOTC_RoleNameSafe(real) + "」。判定他是否死亡？";
     libNtve_gf_SetDialogItemText(g_gblAsk, StringToText(s), PlayerGroupSingle(g_teller));
+    BOTC_TellerFocus();
     DialogSetVisible(g_gblDlg, PlayerGroupSingle(g_teller), true);
     BOTC_PmStore(g_teller, s + "（已在面板上让你选）");
 }
@@ -45133,6 +45537,7 @@ void BOTC_SlayAsk (int p, int q) {
         DialogControlSetVisible(g_slayYes, PlayerGroupSingle(g_teller), true);
         DialogControlSetPosition(g_slayYes, PlayerGroupSingle(g_teller), c_anchorTopLeft, 27, 81);
         DialogControlSetPosition(g_slayNo, PlayerGroupSingle(g_teller), c_anchorTopLeft, 351, 81);
+        BOTC_TellerFocus();
         DialogSetVisible(g_slayDlg, PlayerGroupSingle(g_teller), true);
         // 发起人那边给个提示：让他知道球在说书人手里
         BOTC_Notice(g_who[p], "已把猎杀请求发给说书人：" + BOTC_NameStr(q) + "。等他说书人决定。");
@@ -45829,7 +46234,7 @@ void BOTC_BuildGossip () {
     DialogCreate(684, 198, c_anchorRight, 185, -70, false);
     g_gossipDlg = DialogLastCreated();
     DialogSetVisible(g_gossipDlg, PlayerGroupAll(), false);
-    g_gossipTitle = BOTC_NewLabel(g_gossipDlg, 648, 30, 18, 13, StringToText("公开声明一句话（最多约 40 个汉字；今晚如果它是真的，一名玩家会死亡）"));
+    g_gossipTitle = BOTC_NewLabel(g_gossipDlg, 648, 30, 18, 13, StringToText("公开声明一句话（最多 20 个汉字；今晚如果它是真的，一名玩家会死亡）"));
     libNtve_gf_SetDialogItemStyle(g_gossipTitle, "ModLeftSize16Bold", PlayerGroupAll());
     libNtve_gf_SetDialogItemAcceptMouse(g_gossipTitle, false, PlayerGroupAll());
     g_gossipEdit = BOTC_NewEdit(g_gossipDlg, 630, 41, 27, 50);
@@ -45853,12 +46258,12 @@ void BOTC_GossipOpen (int p) {
         return;
     }
     g_gossipRole = 28;
-    libNtve_gf_SetDialogItemText(g_gossipTitle, StringToText("公开声明一句话（最多约 40 个汉字；今晚如果它是真的，一名玩家会死亡）"), PlayerGroupSingle(p));
+    libNtve_gf_SetDialogItemText(g_gossipTitle, StringToText("公开声明一句话（最多 20 个汉字；今晚如果它是真的，一名玩家会死亡）"), PlayerGroupSingle(p));
     libNtve_gf_SetDialogItemText(g_gossipOk, StringToText("确定（公开声明）"), PlayerGroupSingle(p));
     libNtve_gf_SetDialogItemText(g_gossipEdit, StringToText(""), PlayerGroupSingle(p));
     DialogSetVisible(g_gossipDlg, PlayerGroupSingle(p), true);
     BOTC_DeclareRender();              // 按钮文字切到「声称中」
-    BOTC_Notice(p, "在输入框里写下你要公开声明的话（最多约 40 个汉字），然后点【确定】。（这个版本没有回车提交，请用按钮）");
+    BOTC_Notice(p, "在输入框里写下你要公开声明的话（最多 20 个汉字），然后点【确定】。（这个版本没有回车提交，请用按钮）");
 }
 
 // 【杂耍艺人】（58）的公开猜测面板（用户 2026-09-21）：5 组「座位号 + 选身份」，按钮做小才放得下。
@@ -46614,10 +47019,11 @@ void BOTC_GossipSubmit (int p) {
         BOTC_Notice(p, "输入框是空的：先写下内容，再点【确定】。");
         return;
     }
-    // 【声明长度限制】（用户 2026-11-03）：避免有人借造谣者声明夹带只有少数人看得懂的暗号。
-    //   最多约 40 个汉字（120 字节）；超长直接退回去让他缩短，不静默截断（截断可能切在半个汉字上）。
-    if (StringLength(msg) > 120) {
-        BOTC_Notice(p, "声明太长：最多约 40 个汉字（120 字节），请缩短后再点【确定】。");
+    // 【声明长度限制】（用户 2026-11-03，2026-11-14 收紧到 20 个汉字）：避免有人借造谣者声明夹带暗号。
+    //   按渲染宽度判定：全角 2 / 半角 1，最多 40 个宽度单位（即 20 个汉字）；超长直接退回去让他缩短，
+    //   不静默截断（截断可能切在半个汉字上）。
+    if (BOTC_TextWidth(msg) > 40) {
+        BOTC_Notice(p, "声明太长：最多 20 个汉字，请缩短后再点【确定】。");
         return;
     }
     DialogSetVisible(g_gossipDlg, PlayerGroupSingle(p), false);
@@ -46727,8 +47133,8 @@ void BOTC_BuildManInfo () {
     DialogControlSetVisible(g_nobleOk, PlayerGroupAll(), false);
     // 【右上角 X】（用户 2026-11-01）：直接关掉，什么都不发
     g_nobleX = BOTC_NewButton(g_nobleDlg, 30, 26, 640, 6, "X");
-    DialogControlSetVisible(g_nobleX, PlayerGroupAll(), false);
-    DialogControlSetVisible(g_nobleX, PlayerGroupSingle(g_teller), true);
+    // 【右上角 X 保持默认可见】（用户 2026-11-14）：父弹窗只对说书人显示，X 不再按建图时的
+    //   g_teller 单独隐藏，避免说书人不是物理玩家 1 时 X 消失。
     DialogCreate(684, 216, c_anchorRight, 185, -70, false);
     g_engDlg = DialogLastCreated();
     DialogSetVisible(g_engDlg, PlayerGroupAll(), false);
@@ -46741,8 +47147,8 @@ void BOTC_BuildManInfo () {
     g_engClose = BOTC_NewButton(g_engDlg, 300, 40, 27, 155, "关闭");
     // 【右上角 X】（用户 2026-11-01）：等同点【关闭】
     g_engX = BOTC_NewButton(g_engDlg, 30, 26, 640, 6, "X");
-    DialogControlSetVisible(g_engX, PlayerGroupAll(), false);
-    DialogControlSetVisible(g_engX, PlayerGroupSingle(g_teller), true);
+    // 【右上角 X 保持默认可见】（用户 2026-11-14）：父弹窗只对打开它的玩家显示，X 不再按建图时的
+    //   g_teller 单独隐藏，避免说书人不是物理玩家 1 时 X 消失。
     DialogCreate(684, 216, c_anchorRight, 185, -70, false);
     g_farmDlg = DialogLastCreated();
     DialogSetVisible(g_farmDlg, PlayerGroupAll(), false);
@@ -46754,8 +47160,8 @@ void BOTC_BuildManInfo () {
     DialogControlSetVisible(g_farmOk, PlayerGroupAll(), false);
     // 【右上角 X】（用户 2026-11-01）：直接关掉，什么都不发
     g_farmX = BOTC_NewButton(g_farmDlg, 30, 26, 640, 6, "X");
-    DialogControlSetVisible(g_farmX, PlayerGroupAll(), false);
-    DialogControlSetVisible(g_farmX, PlayerGroupSingle(g_teller), true);
+    // 【右上角 X 保持默认可见】（用户 2026-11-14）：父弹窗只对说书人显示，X 不再按建图时的
+    //   g_teller 单独隐藏，避免说书人不是物理玩家 1 时 X 消失。
     g_miSeat = 0;
     g_miRole = -1;
     g_miExtra = "";
@@ -46782,6 +47188,7 @@ void BOTC_ManInfoOpen (int seat, int role, string extra) {
     if (seat < 1 || seat > 13) {
         return;
     }
+    BOTC_TellerFocus();
     BOTC_MiSeatFieldsReset();
     // 【取消键】（用户 2026-09-21）：除非特殊说明，技能面板不给取消
     DialogControlSetVisible(g_miCancel, PlayerGroupSingle(g_teller), false);
@@ -47138,6 +47545,7 @@ void BOTC_MiFnOpen (int seat, int role) {
     if (seat < 1 || seat > 13) {      // 允许 1：说书人自己那一格（-t 试技能用，用户 2026-09-21）
         return;
     }
+    BOTC_TellerFocus();
     BOTC_MiSeatFieldsReset();
     g_miSeat = seat;
     g_miRole = 60 + role;
@@ -47509,6 +47917,7 @@ void BOTC_ManInfoOpenDreamer (int seat, int target) {
     if (seat < 2 || seat > 13) {
         return;
     }
+    BOTC_TellerFocus();
     BOTC_MiSeatFieldsReset();
     g_miSeat = seat;
     g_miRole = 42;
@@ -47994,6 +48403,13 @@ void BOTC_PedantResolve (int p, int target) {
         BOTC_Notice(g_teller, "书生本次行动需要先给该玩家放置「已猜测」token。");
         return;
     }
+    // 【书生失能】（用户 2026-11-13）：当晚书生中毒/醉酒 → 能力不生效，不能额外杀人。
+    if (BOTC_AbilitySeat(152) < 2) {
+        g_tokOn[(((g_teller * 14) + p) * 256) + 171] = false;
+        BOTC_GrimRender(g_teller);
+        BOTC_Notice(g_teller, "当晚书生中毒/醉酒：「已猜测」作废，不能额外杀人。");
+        return;
+    }
     g_pedantDoneNight = g_nightNum;
     BOTC_MarkDeathQuietSrc(target, 1, 0, 152);
     BOTC_GrimRender(g_teller);
@@ -48269,6 +48685,14 @@ void BOTC_PhiloPick (int p, int role) {
     if (g_grantRoleBy[p] == 57 || g_faceShow[p] == 57 || g_bnestActing[p] || g_boffinActing[p]) {
         BOTC_AttachGrantOrNest(p, role);
         BOTC_PmStore(g_teller, "【哲学家】" + BOTC_NameStr(p) + " 用的是借来的哲学家能力：只获得「" + g_roleName[role] + "」能力，说书人魔典上的角色标记和原有标记都不变。");
+        // 【借来的哲学家 → 失忆者（73）】（用户 2026-11-13）：与真哲学家一样，选到失忆者后
+        //   立刻让说书人再挑一项真正生效的能力，否则只有一层空白的失忆者能力。
+        if (role == 73 && p >= 2 && p <= 13) {
+            if (g_amneDoneNight < g_nightNum) {
+                g_amneDoneNight = g_nightNum;
+            }
+            BOTC_AmnePickOpen(p);
+        }
         return;
     }
     BOTC_TellRoleChoice(p, role);
@@ -48330,6 +48754,15 @@ void BOTC_PhiloPick (int p, int role) {
     BOTC_PmStore(g_teller, "【哲学家】" + BOTC_NameStr(p) + " 获得了 " + g_roleName[role] + " 的能力（说书人魔典标记已换成该角色并放置「是哲学家」标记，本人魔典仍显示哲学家）。");
     BOTC_GrimRender(g_teller);
     BOTC_GrimRender(g_who[p]);
+    // 【哲学家 → 失忆者（73）】（用户 2026-11-13）：失忆者本身是白板，真身换成 73 之后必须立刻
+    //   按「失忆者首夜」那套让说书人再挑一项真正生效的能力；同时记下这次选择已经做过，
+    //   避免下次点【唤醒下一个】时 BOTC_PreGrantStep 又把他当成首夜失忆者弹一遍。
+    if (role == 73 && p >= 2 && p <= 13) {
+        if (g_amneDoneNight < g_nightNum) {
+            g_amneDoneNight = g_nightNum;
+        }
+        BOTC_AmnePickOpen(p);
+    }
 }
 // 【哲学家让人醉：谁该带「醉酒（哲学家）」】（用户 2026-09-21）
 //   哲学家活着 + 清醒 + 已经选过角色 → 他选的那个角色真正的持有者醉酒
@@ -48553,6 +48986,7 @@ void BOTC_NobleOpen (int seat) {
     if (seat < 2 || seat > 13) {
         return;
     }
+    BOTC_TellerFocus();
     g_nobleSeat = seat;
     // 【中毒 / 醉酒适配】（用户 2026-09-26）：他中毒/酒鬼时能力失效 → 提醒说书人这条信息可以随便给
     if (BOTC_SeatImpaired(seat)) {
@@ -48654,6 +49088,7 @@ void BOTC_EngOpen (int seat) {
     if (seat < 2 || seat > 13) {
         return;
     }
+    BOTC_TellerFocus();
     BOTC_EngReset();
     g_engSeat = seat;
     g_engStage = 0;
@@ -49061,6 +49496,7 @@ void BOTC_FarmerOpen (int seat, bool viaLevi) {
     if (seat < 2 || seat > 13) {
         return;
     }
+    BOTC_TellerFocus();
     if (!viaLevi) {
         g_farmPending[seat] = false;
     }
@@ -50410,6 +50846,7 @@ void BOTC_JudgeAsk (int kind, string title, int a, int b, int c) {
     g_judgeA = a;
     g_judgeB = b;
     g_judgeC = c;
+    BOTC_TellerFocus();
     libNtve_gf_SetDialogItemText(g_judgeYes, StringToText(yl), PlayerGroupSingle(g_teller));
     libNtve_gf_SetDialogItemText(g_judgeNo, StringToText(nl), PlayerGroupSingle(g_teller));
     libNtve_gf_SetDialogItemText(g_judgeTitle, StringToText(title), PlayerGroupSingle(g_teller));
@@ -52755,6 +53192,10 @@ void BOTC_BarberAskOpen (int p, int a, int b) {
     g_skillPicking[p] = false;
     DialogSetVisible(g_skillDlg[p], PlayerGroupSingle(g_who[p]), false);
     libNtve_gf_SetDialogItemText(g_barAskTitle, StringToText("【理发师】" + BOTC_NameStr(p) + " 要与已死亡的 " + BOTC_NameStr(other) + " 互换：互换后恶魔会是死的（天亮可能判善良胜），是否允许？"), PlayerGroupSingle(g_teller));
+    // 【换说书人后的说书人也要有按钮】（用户 2026-11-14）：控件建图时按当时 g_teller 绑定，这里按当前说书人重发。
+    DialogControlSetVisible(g_barAskYes, PlayerGroupSingle(g_teller), true);
+    DialogControlSetVisible(g_barAskNo, PlayerGroupSingle(g_teller), true);
+    DialogControlSetVisible(g_barAskX, PlayerGroupSingle(g_teller), true);
     DialogSetVisible(g_barAskDlg, PlayerGroupSingle(g_teller), true);
     BOTC_PmStore(g_teller, "【理发师】" + BOTC_NameStr(p) + " 要把自己和已死亡的 " + BOTC_NameStr(other) + " 互换 → 允许后恶魔会处于死亡状态（僵怖也一样，不会在尸体上活着），之后可能判善良胜；请选择【是：允许】或【否：让他重新选】。");
 }
@@ -53411,8 +53852,8 @@ void BOTC_BuildWakeChoice () {
     DialogControlSetVisible(g_wakeChoiceCancel, PlayerGroupAll(), true);
     // 【右上角 X】（用户 2026-11-01）：等同点【取消】
     g_wakeChoiceX = BOTC_NewButton(g_wakeChoiceDlg, 30, 26, 1316, 6, "X");
-    DialogControlSetVisible(g_wakeChoiceX, PlayerGroupAll(), false);
-    DialogControlSetVisible(g_wakeChoiceX, PlayerGroupSingle(g_teller), true);
+    // 【右上角 X 保持默认可见】（用户 2026-11-14）：父弹窗只对说书人显示，X 不再按建图时的
+    //   g_teller 单独隐藏，避免说书人不是物理玩家 1 时 X 消失。
 }
 
 void BOTC_WakeAbilityChoicePick (int idx) {
@@ -53482,6 +53923,7 @@ void BOTC_WakeAbilityChoiceOpen (int q) {
     if (n <= 1) {
         return;
     }
+    BOTC_TellerFocus();
     if (g_wakeChoiceDlg == 0) {
         BOTC_BuildWakeChoice();
     }
@@ -53761,6 +54203,7 @@ void BOTC_ManInfoOpenText (int seat, string title, string msg) {
     if (seat < 2 || seat > 13) {
         return;
     }
+    BOTC_TellerFocus();
     BOTC_MiSeatFieldsReset();
     g_miSeat = seat;
     // 【中毒 / 醉酒适配】（用户 2026-09-26）：他中毒/酒鬼时能力失效 → 提醒说书人这段信息可以随便给
@@ -53817,6 +54260,7 @@ void BOTC_ManInfoOpenSeats (int seat, string title, int kind) {
     if (seat < 2 || seat > 13) {
         return;
     }
+    BOTC_TellerFocus();
     BOTC_MiSeatFieldsReset();
     g_miSeat = seat;
     g_miRole = 41;
@@ -56011,18 +56455,34 @@ bool BOTC_NonWakeOrderStep (int beforeOrd) {
 
 int BOTC_PedantWakeSeat () {
     int q;
+    int any;
     if (!g_started || !g_isNight || g_pedantDoneNight == g_nightNum) {
         return 0;
     }
+    any = 0;
     for (q = 2; q <= 13; q += 1) {
         if (!g_seatOn[q] || BOTC_SeatDead(q)) {
             continue;
         }
         if (g_tokOn[(((g_teller * 14) + q) * 256) + 171]) {
-            return q;
+            any = q;
+            break;
         }
     }
-    return 0;
+    if (any == 0) {
+        return 0;
+    }
+    // 【书生失能】（用户 2026-11-13）：按角色说明，当晚书生中毒/醉酒时恶魔不能使用书生的能力攻击，
+    //   「已猜测」视作移到魔典正中央；恶魔只会以为自己猜错了。
+    if (BOTC_AbilitySeat(152) < 2) {
+        for (q = 2; q <= 13; q += 1) {
+            g_tokOn[(((g_teller * 14) + q) * 256) + 171] = false;
+        }
+        BOTC_PmStore(g_teller, "【书生】当晚书生中毒/醉酒 → 「已猜测」移到魔典正中央，恶魔不能借此额外杀人。");
+        BOTC_GrimRender(g_teller);
+        return 0;
+    }
+    return any;
 }
 
 // 【唤醒下一个 / 结束手动唤醒】按钮（用户 2026-11-08）：手动唤醒的人还醒着时点它 =
@@ -57587,6 +58047,13 @@ void BOTC_SkillBtnRender () {
 
 void BOTC_SkillOpen (int p) {
     int r;
+    // 【本人要弹窗选目标：先收阅读窗口、摊开魔典】（用户 2026-11-14）
+    if (p == 1 || (p >= 1 && p <= 13 && g_who[p] == g_teller)) {
+        BOTC_TellerFocus();
+    }
+    else {
+        BOTC_WakePlayerFocus(p);
+    }
     if (g_choiceOrigOn && g_choiceOrigBy == p) {
         g_choiceOrigOn = false;
         g_choiceOrigBy = 0;
@@ -60184,7 +60651,12 @@ void BOTC_LevRecluseAsk (int q) {
         BOTC_LevRecluseAnswer(0);
     }
     g_levRecSeat = q;
+    BOTC_TellerFocus();
     libNtve_gf_SetDialogItemText(g_levRecTitle, StringToText("【利维坦】" + BOTC_NameStr(q) + " 是陌客：这次处决是否按善良阵营计入？"), PlayerGroupSingle(g_teller));
+    // 【换说书人后的说书人也要有按钮】（用户 2026-11-14）：控件建图时按当时 g_teller 绑定，这里按当前说书人重发。
+    DialogControlSetVisible(g_levRecYes, PlayerGroupSingle(g_teller), true);
+    DialogControlSetVisible(g_levRecNo, PlayerGroupSingle(g_teller), true);
+    DialogControlSetVisible(g_levRecX, PlayerGroupSingle(g_teller), true);
     DialogSetVisible(g_levRecDlg, PlayerGroupSingle(g_teller), true);
     BOTC_PmStore(g_teller, "【利维坦】" + BOTC_NameStr(q) + " 是陌客 → 请选择【是：按善良计入】或【否：不计入】。");
 }
@@ -60269,6 +60741,10 @@ void BOTC_GfRecluseAsk (int q) {
     }
     g_gfRecSeat = q;
     libNtve_gf_SetDialogItemText(g_gfRecTitle, StringToText("【教父】" + BOTC_NameStr(q) + " 是陌客：这次白天死亡是否算作外来者？"), PlayerGroupSingle(g_teller));
+    // 【换说书人后的说书人也要有按钮】（用户 2026-11-14）：控件建图时按当时 g_teller 绑定，这里按当前说书人重发。
+    DialogControlSetVisible(g_gfRecYes, PlayerGroupSingle(g_teller), true);
+    DialogControlSetVisible(g_gfRecNo, PlayerGroupSingle(g_teller), true);
+    DialogControlSetVisible(g_gfRecX, PlayerGroupSingle(g_teller), true);
     DialogSetVisible(g_gfRecDlg, PlayerGroupSingle(g_teller), true);
     BOTC_PmStore(g_teller, "【教父】" + BOTC_NameStr(q) + " 是陌客 → 请选择【是：算作外来者】或【否：不算】。");
 }
@@ -60548,6 +61024,10 @@ bool BOTC_PacifistAsk (int q) {
         BOTC_PacifistAnswer(0);
     }
     g_pacAskSeat = q;
+    // 【先收掉说书人的阅读面板】（用户 2026-11-14）：和别的判定框一样，弹窗前把日志 / 角色表 /
+    //   帮助 / 笔记收起来，避免盖住弹窗；按钮本身不再逐控件控制显隐（建图时的 g_teller 可能不是
+    //   当前说书人，会导致是 / 否按钮整片消失）。
+    BOTC_TellerFocus();
     libNtve_gf_SetDialogItemText(g_pacAskTitle, StringToText("【和平主义者】" + BOTC_NameStr(q) + " 即将被处决：是否让他不死？"), PlayerGroupSingle(g_teller));
     DialogSetVisible(g_pacAskDlg, PlayerGroupSingle(g_teller), true);
     BOTC_PmStore(g_teller, "【和平主义者】" + BOTC_NameStr(q) + " 即将被处决，请选择【是：不死】或【否：照常处决】。");
@@ -61974,12 +62454,13 @@ if (r == 49) {
             g_innA = g_skillT1[p];
             g_innB = g_skillT2[p];
             g_innNight = g_nightNum;
+            g_innFrom = p;
             g_drunkFrom = p;
             BOTC_GrimRender(g_teller);
             BOTC_DrunkPickOpen(1, p, g_skillT1[p], g_skillT2[p]);
         }
         else {
-            BOTC_PmStore(g_teller, "【旅店老板】" + BOTC_NameStr(p) + " 中毒/醉酒，这一次能力无效：不保护、也不放醉酒标记。");
+            BOTC_PmStore(g_teller, "【旅店老板】" + BOTC_NameStr(p) + " 中毒 / 醉酒 / 提线木偶，这一次能力无效：不保护、也不放醉酒标记。");
         }
     }
     // ■ 混沌（121）（用户 2026-10-16）：跟其它恶魔一样刀人；杀了「离他最近的两名镇民之一」→ 除旅行者外的全体善良中毒到下个黄昏。
@@ -63275,6 +63756,8 @@ void BOTC_CerenOpen (int p) {
     if (p < 1 || p > 13) {             // 允许 1：说书人自己那一格（-t 试技能，用户 2026-09-21）
         return;
     }
+    // 【本人要弹窗选角色：先收阅读窗口、摊开魔典】（用户 2026-11-14）
+    BOTC_WakePlayerFocus(p);
     g_cerenPick = true;
     g_pickMode[g_who[p]] = 14;
     g_pickWho[g_who[p]] = p;
@@ -63493,6 +63976,8 @@ void BOTC_HagOpen (int p) {
     if (p < 1 || p > 13) {             // 允许 1：说书人自己那一格（-t 试技能，用户 2026-09-21）
         return;
     }
+    // 【本人要弹窗选角色：先收阅读窗口、摊开魔典】（用户 2026-11-14）
+    BOTC_WakePlayerFocus(p);
     g_hagPick = true;
     g_hagActor = p;
     g_hagAsk = 0;
@@ -63820,7 +64305,8 @@ void BOTC_HagBelieve (int role) {
 //   说书人拒绝 → 她重新选择。
 //==================================================================================================
 void BOTC_BuildHagAsk () {
-    DialogCreate(684, 153, c_anchorRight, 185, -10, false);
+    // 【判定框统一居中】（用户 2026-11-14）
+    DialogCreate(684, 153, c_anchorCenter, 0, 0, false);
     g_hagAskDlg = DialogLastCreated();
     DialogSetVisible(g_hagAskDlg, PlayerGroupAll(), false);
     g_hagAskTitle = BOTC_NewLabel(g_hagAskDlg, 666, 44, 18, 13, StringToText("【麻脸巫婆】确认这次身份改造？"));
@@ -66543,8 +67029,8 @@ bool BOTC_MayorInterceptTok (int q, int t) {
 }
 
 void BOTC_BuildMayorAsk () {
-    // 【技能框往右挪 200】（用户 2026-09-23）：镇长弹刀那个框
-    DialogCreate(684, 153, c_anchorRight, 185, -70, false);
+    // 【判定框统一居中】（用户 2026-11-14）
+    DialogCreate(684, 153, c_anchorCenter, 0, 0, false);
     g_mayorDlg = DialogLastCreated();
     DialogSetVisible(g_mayorDlg, PlayerGroupAll(), false);
     g_mayorTitle = BOTC_NewLabel(g_mayorDlg, 666, 44, 18, 13, StringToText("镇长夜里要死了：要不要让别人替他死？"));
@@ -67076,15 +67562,35 @@ void BOTC_ShowWin (int side, string why1, string why2) {
 // 【政客（97）】（用户 2026-11-10）：胜负封盘 —— 原 BOTC_ShowWin 的收尾部分。
 //   政客判定问完（或者根本不需要问）之后才走到这里，全图仍然只有这一个封盘出口。
 void BOTC_WinFinalize (int side, string why1, string why2) {
+    int p;
+    int q;
     g_gameOver = true;
     // 【复盘】（用户 2026-11-11）：结算那一刻拍下结束身份 / 认知偏差 / 阵营，之后才允许在日志里查看
     BOTC_RpCapture(false);
     g_rpOn = true;
     // 【场次统计】（用户 2026-10-20）：唯一胜负出口只记一次；此时阵营 / 说书人座位都已经确定。
     BOTC_StatsRecord(side);
+    // 【结算日志昵称快照】（用户 2026-11-13）：BOTC_ResetPlayerNames() 会清空随机名 / 自选名，
+    //   说书人日志在结算后仍要显示「昵称（星际名）」，所以清名前先把各格昵称留一份。
+    for (p = 0; p <= 13; p += 1) {
+        g_logNameKeep[p] = "";
+    }
+    for (p = 2; p <= 13; p += 1) {
+        q = g_who[p];
+        if (q >= 1 && q <= 13 && q != g_teller) {
+            g_logNameKeep[p] = BOTC_ChatNoColor(g_dispName[q]);
+        }
+    }
     // 【结算即恢复战网名】（用户 2026-11-12）：复盘仍已由上一行之前拍下；
     //   桌面和魔典从结算这一刻起显示各人的真实战网名。
     BOTC_ResetPlayerNames();
+    // 【结算日志名字刷新】（用户 2026-11-13）：正开着日志的玩家立即按新口径重画
+    //   （玩家日志转星际名，说书人日志保持「昵称（星际名）」）。
+    for (p = 1; p <= 13; p += 1) {
+        if (g_logOpen[p]) {
+            BOTC_LogRender(p);
+        }
+    }
     // 【中途退出的座位要留到重新开始】（用户 2026-11-03）：结算期间玩家还要复盘看全场身份和 token，
     //   所以这里不再移除；等说书人点【重新开始】时才由 BOTC_WinRestart() 调用 BOTC_ClearLeftSeats()。
     // 【胜负那一刻也清投票状态】（用户 2026-10-10）：白天可能正停在提名 / 投票中间就分出了胜负 ——
@@ -67093,6 +67599,13 @@ void BOTC_WinFinalize (int side, string why1, string why2) {
     BOTC_NomReset();
     g_cultOn = false;          // 【教派投票】：胜负已定就把这一轮投票收掉
     DialogSetVisible(g_cultDlg, PlayerGroupAll(), false);
+    // 【结算固定公聊】（用户 2026-11-13）：如果正处在私聊阶段，先自动切回公聊；
+    //   并把所有人残留的【私聊】输入模式拨回公聊，之后不能再切回私聊 / 提名阶段。
+    BOTC_ChatModeSet(2);
+    for (p = 1; p <= 13; p += 1) {
+        g_chatSay[p] = 0;
+        BOTC_SayRender(p);
+    }
     g_winSide = side;
     g_winChat1 = why1;
     g_winChat2 = why2;
@@ -67302,6 +67815,11 @@ void BOTC_ShowWinNow () {
     }
     // 分胜负了：邪恶小窗也一起关掉（免得盖在结算面板上）
     BOTC_EvilClose();
+    // 【结算固定公聊】（用户 2026-11-13）：进入夜晚 / 进入提名环节 / 切换聊天阶段三颗按钮收起来，
+    //   结算画面只能待在公聊阶段复盘。
+    DialogSetVisible(g_nightBtnDlg, PlayerGroupAll(), false);
+    DialogSetVisible(g_nomBtnDlg, PlayerGroupAll(), false);
+    DialogSetVisible(g_chatBtnDlg, PlayerGroupAll(), false);
     libNtve_gf_SetDialogItemText(g_winSub, BOTC_NameSubst(g_winReason), PlayerGroupAll());   // 结算面板的正文：名字换成真名
     DialogSetVisible(g_winDlg, PlayerGroupAll(), true);
     BOTC_RateShowAll();             // 【说书人评分】结算面板下方的打分行发给除说书人以外的玩家
@@ -68375,7 +68893,7 @@ void BOTC_BuildBoard () {
     // 【选板页右下角开始按钮】：先选剧本打钩，再点开始走 10 秒准备倒计时。
     g_boardStartBtn = BOTC_NewButton(g_boardDlg, 280, 50, 1600, 930, "开始说书");
     libNtve_gf_SetDialogItemStyle(g_boardStartBtn, "CustomMenuBarButton", PlayerGroupAll());
-    DialogSetVisible(g_boardStartBtn, PlayerGroupAll(), false);
+    DialogControlSetVisible(g_boardStartBtn, PlayerGroupAll(), false);
     // 【私聊可见性】选板子页右上角，仅说书人可见；状态不随切换板子重置。
     //   【下移一行】（用户 2026-11-11）：右上角第一行留给【竞选角色】【菜单】，这里挪到第二行。
     g_pmVisBtn = BOTC_NewButton(g_boardDlg, 360, 48, 1520, 60, "私聊可见性：关闭");
@@ -68598,9 +69116,9 @@ void BOTC_ShowAllUI () {
     BOTC_WakeRender();
     BOTC_SkillBtnRender();
     // 这三条也在 NomUI 里管：正式开始之前不出现（用户 2026-09-17）
-    DialogSetVisible(g_nightBtnDlg, PlayerGroupSingle(g_teller), g_started);
-    DialogSetVisible(g_nomBtnDlg, PlayerGroupSingle(g_teller), (g_started && !g_isNight));
-    DialogSetVisible(g_chatBtnDlg, PlayerGroupSingle(g_teller), (g_started && !g_isNight));
+    DialogSetVisible(g_nightBtnDlg, PlayerGroupSingle(g_teller), (g_started && !g_gameOver));
+    DialogSetVisible(g_nomBtnDlg, PlayerGroupSingle(g_teller), (g_started && !g_isNight && !g_gameOver));
+    DialogSetVisible(g_chatBtnDlg, PlayerGroupSingle(g_teller), (g_started && !g_isNight && !g_gameOver));
     BOTC_ChatBtnRender();
 
     // 【计时器】（用户 2026-10-04）：选板子期间被 HideAllUI 收掉了，这里恢复成**建完时的初始状态**
@@ -68725,6 +69243,10 @@ string BOTC_DayTrackName () {
 //   delay：昼夜切换（天亮）传 4.0；白天里的时段切换传 2.5
 void BOTC_DayMusicRefresh (fixed delay) {
     if (!g_started) {
+        return;
+    }
+    // 【结算后不再起白天音乐】（用户 2026-11-13）：结算时切公聊会走到这里，别盖掉结算音效。
+    if (g_gameOver) {
         return;
     }
     if (g_isNight) {
@@ -69571,9 +70093,10 @@ void BOTC_AfterSeatChange (int who) {
     if (g_who[1] >= 1 && g_who[1] <= 13) {
         g_teller = g_who[1];
     }
-    // 【随机名字兜底】（用户 2026-11-11）：换说书人 / 换座位后，旧说书人变成普通玩家、
-    //   新说书人隐藏自己的随机名；这里给所有非说书人真人补齐名字，保证换位后仍不暴露战网名。
-    if (g_started) {
+    // 【随机名字兜底】（用户 2026-11-11 / 2026-11-13）：换说书人 / 换座位后，旧说书人变成普通玩家、
+    //   新说书人恒用战网名；这里给所有非说书人真人补齐名字，保证换位后仍不暴露战网名。
+    //   不再只在 g_started 时补：换座位本来只允许正式开始前用，旧条件会让被换下来的旧说书人一直没名字。
+    if (!g_boardOpen && !g_introOn) {
         for (p = 1; p <= 13; p += 1) {
             if ((PlayerType(p) == 1 || PlayerType(p) == 2) && PlayerStatus(p) != 2) {
                 BOTC_RandomNameEnsure(p);
@@ -70002,9 +70525,11 @@ void BOTC_GateCdTick () {
             g_spamWin[p] = g_spamWin[p] - 1;
         }
     }
-    // 【踢出玩家】共用冷却（所有人共用一个计时器，不按玩家分开）
-    if (g_kickBtnCd > 0) {
-        g_kickBtnCd = g_kickBtnCd - 1;
+    // 【踢出玩家】冷却按被踢目标分开：对同一个人每重复一次 +60 秒
+    for (p = 1; p <= 13; p += 1) {
+        if (g_kickTarCd[p] > 0) {
+            g_kickTarCd[p] = g_kickTarCd[p] - 1;
+        }
     }
 }
 
@@ -70178,6 +70703,12 @@ void BOTC_SwapPerSeatRuntime (int x, int y) {
     b = g_klutzDone[x];      g_klutzDone[x] = g_klutzDone[y];  g_klutzDone[y] = b;
     b = g_klutzClaimed[x];   g_klutzClaimed[x] = g_klutzClaimed[y]; g_klutzClaimed[y] = b;
     t = g_klutzPick[x];      g_klutzPick[x] = g_klutzPick[y];  g_klutzPick[y] = t;
+    // 【月之子 / 呆瓜 待结算格号】（用户 2026-11-14）：g_moonBy / g_klutzBy 存的是格号，
+    //   换位后必须跟着对调，否则天亮 BOTC_MoonChildResolve 会按旧格号读 g_moonPick。
+    if (g_moonBy == x) { g_moonBy = y; }
+    else { if (g_moonBy == y) { g_moonBy = x; } }
+    if (g_klutzBy == x) { g_klutzBy = y; }
+    else { if (g_klutzBy == y) { g_klutzBy = x; } }
 
     // 只保存单一格号的光标也要跟着那一格搬家，不能留下旧格号。
     if (g_lastDeadSeat == x) { g_lastDeadSeat = y; }
@@ -70840,7 +71371,7 @@ void BOTC_BoardTick () {
 }
 
 void BOTC_BoardStartBtnRender () {
-    DialogSetVisible(g_boardStartBtn, PlayerGroupAll(), false);
+    DialogControlSetVisible(g_boardStartBtn, PlayerGroupAll(), false);
     if (!g_boardOpen || g_boardFade < 4 || g_cOpen) {
         return;
     }
@@ -70850,7 +71381,7 @@ void BOTC_BoardStartBtnRender () {
     else {
         libNtve_gf_SetDialogItemText(g_boardStartBtn, StringToText("开始说书"), PlayerGroupSingle(g_teller));
     }
-    DialogSetVisible(g_boardStartBtn, PlayerGroupSingle(g_teller), true);
+    DialogControlSetVisible(g_boardStartBtn, PlayerGroupSingle(g_teller), true);
 }
 
 void BOTC_BoardStartCdRender () {
@@ -84905,7 +85436,7 @@ void BOTC_BuildCustom () {
 
 void BOTC_CustomShowEditor () {
     int i;
-    DialogSetVisible(g_boardStartBtn, PlayerGroupAll(), false);
+    DialogControlSetVisible(g_boardStartBtn, PlayerGroupAll(), false);
     DialogControlSetVisible(g_boardTitle, PlayerGroupAll(), false);
     DialogControlSetVisible(g_boardHint, PlayerGroupAll(), false);
     DialogControlSetVisible(g_boardTime, PlayerGroupAll(), false);
@@ -86475,6 +87006,10 @@ void BOTC_TokOpen (int ob, int who) {
         }
     }
     g_tokFake = false;              // 正常打开的 token 面板操作真实魔典
+    // 【说书人弹窗选 token：先收阅读窗口、摊开魔典】（用户 2026-11-14）
+    if (ob == g_teller) {
+        BOTC_TellerFocus();
+    }
     g_tokWho[ob] = who;
     g_tokPage[ob] = 1;             // 每次打开都从第 1 页开始（用户 2026-09-20）
     libNtve_gf_SetDialogItemText(g_tokTitle, BOTC_PlayerNameText(who) + StringToText(" 的 token"), PlayerGroupSingle(ob));
@@ -86721,6 +87256,7 @@ void BOTC_TokToggleAt (int ob, int seat, int t) {
     }
     if (ob == g_teller) {
         BOTC_VizierSync();          // 中毒 / 醉酒 / 死亡 / 复活 / 换身份后立即校正维齐尔免死 token
+        BOTC_InnkeeperSync();       // 旅店老板中毒 / 醉酒后立即收回「不会死亡」标记
         BOTC_SkinSourceCheck();     // 画皮来源中毒 / 醉酒 / 死亡后按昼夜处理仍在场的活尸
         BOTC_BartenderSync();       // 酒保自身失能或目标改变阵营时立即撤掉酒保醉酒
         BOTC_BrokerSync();          // 掮客：手动改阵营 token 后熟客立即失效并移除标记
@@ -87962,6 +88498,7 @@ void BOTC_Deal () {
         g_declareUsed[i] = false;      // 新一局：声称次数重新给
         g_guessKind[i] = 0;
         g_pedantGuessUsed[i] = false;
+        g_pedantUsed = false;            // 新一局：恶魔共享的猜书生机会重新给
         g_puzzleGuessUsed[i] = false;
         g_guessRoleDay[i] = -1;          // 全员追忆 · 猜角色：新局重置日期戳
         g_guessRoleDone[i] = false;      // 全员追忆 · 猜角色：新局重置"已猜对"标记
@@ -91020,9 +91557,9 @@ void BOTC_NomUI () {
     // 发起提名：阶段 1，且今天还没发起过
     DialogControlSetVisible(g_nomStart, PlayerGroupAll(), false);
     // 【进入夜晚】【进入提名环节】【聊天：...】这三个：**正式开局（10 秒倒数走完）之前一律藏起来**（用户 2026-09-17）
-    DialogSetVisible(g_nightBtnDlg, PlayerGroupSingle(g_teller), g_started);
-    DialogSetVisible(g_nomBtnDlg, PlayerGroupSingle(g_teller), (g_started && !g_isNight));
-    DialogSetVisible(g_chatBtnDlg, PlayerGroupSingle(g_teller), (g_started && !g_isNight));
+    DialogSetVisible(g_nightBtnDlg, PlayerGroupSingle(g_teller), (g_started && !g_gameOver));
+    DialogSetVisible(g_nomBtnDlg, PlayerGroupSingle(g_teller), (g_started && !g_isNight && !g_gameOver));
+    DialogSetVisible(g_chatBtnDlg, PlayerGroupSingle(g_teller), (g_started && !g_isNight && !g_gameOver));
     // 【邪恶小窗】：只有「正式开局之后的白天」给说书人看（入夜会自动关、按钮也收起来）
     DialogSetVisible(g_evilBtnDlg, PlayerGroupSingle(g_teller), (g_started && !g_isNight && g_evilEnable));
     BOTC_EvilBtnRender();
@@ -91306,6 +91843,11 @@ void BOTC_NomFreeSet (int sec) {
 
 void BOTC_NomOpen () {
     int ob;
+    // 【结算后不能再开提名】（用户 2026-11-13）：胜负已定，提名阶段按钮也一并收起。
+    if (g_gameOver) {
+        BOTC_Notice(g_teller, "游戏已结算：不能再进入提名阶段。");
+        return;
+    }
     // 【进入提名前强制收尾】（用户 2026-11-08）：取消所有人还开着的弹窗和正在选座位的状态
     BOTC_PhaseUiForceClose();
     // 【教派投票兜底】（用户 2026-11-08）：万一教派投票还挂着，先作废再开提名，
@@ -92386,6 +92928,13 @@ void BOTC_KickStart (int by, int q) {
         BOTC_Notice(by, "那个人已经离开游戏了。");
         return;
     }
+    // 【踢出玩家】冷却按被踢目标累计：首次 60 秒，对同一人每重复一次 +60 秒（不看发起人）
+    if (g_kickTarCd[q] > 0) {
+        BOTC_Notice(by, "【踢出玩家】对 " + BOTC_NameStr(q) + " 的冷却中：还需 " + IntToString((g_kickTarCd[q] + 1) / 2) + " 秒。");
+        return;
+    }
+    g_kickTarCd[q] = 120 * (g_kickTarN[q] + 1);
+    g_kickTarN[q] = g_kickTarN[q] + 1;
     g_kickTar = q;
     g_kickBy = by;
     for (i = 0; i <= 13; i += 1) {
@@ -92410,14 +92959,10 @@ void BOTC_KickStart (int by, int q) {
 // 【踢出玩家按钮】（用户 2026-11-07）：身份面板底部【屏蔽】右边的按钮。
 //   · 身份标记面板里点 = 直接对正在查看的那名玩家发起已有的投票踢人（BOTC_KickStart）。
 //   · 其他面板（比如声称面板）里点 = 退回原来的「点一个座位」入口（BOTC_KickPickStart）。
-//   · 所有人共用一个冷却：任意一人用掉之后 1 分钟（120 拍）内谁都不能再点。
+//   · 冷却按被踢目标累计：首次 60 秒，对同一人每重复一次 +60 秒，换局重置（见 BOTC_KickStart）。
 void BOTC_KickBtnPickDo (int p) {
     int q;
     if (p < 1 || p > 13) {
-        return;
-    }
-    if (g_kickBtnCd > 0) {
-        BOTC_Notice(p, "【踢出玩家】冷却中：还需 " + IntToString((g_kickBtnCd + 1) / 2) + " 秒。");
         return;
     }
     if (g_kickTar >= 1) {
@@ -92427,9 +92972,6 @@ void BOTC_KickBtnPickDo (int p) {
     q = g_pickWho[p];
     if (g_pickMode[p] != 0 || q < 2 || q > 13 || q == BOTC_PosOf(p)) {
         // 不是从「某个人的身份面板」点进来的：沿用原来的点座位选人。
-        if (g_kickMode == 0) {
-            g_kickBtnCd = 120;
-        }
         BOTC_KickPickStart(p);
         return;
     }
@@ -92441,7 +92983,6 @@ void BOTC_KickBtnPickDo (int p) {
         BOTC_Notice(p, "那个人已经离开游戏了。");
         return;
     }
-    g_kickBtnCd = 120;
     BOTC_KickStart(p, q);
 }
 
@@ -92691,6 +93232,7 @@ bool BOTC_Tick_Func (bool testConds, bool runActions) {
     BOTC_LeftCheck();              // 【玩家离开游戏】检测 → 公聊播一句（用户 2026-10-02）
     BOTC_StatsSaveTick();          // 【延后保存】结算后的场次 / 积分逐拍落盘（用户 2026-11-11）
     BOTC_VizierSync();             // 维齐尔免死 token 跟随中毒 / 醉酒 / 死亡 / 离场状态
+    BOTC_InnkeeperSync();          // 旅店老板能力失效后立即收回两名目标身上的「不会死亡」
     BOTC_OgreFriendSync();         // 【食人魔（148）· 挚友】阵营跟随被标记玩家（用户 2026-11-11）
     BOTC_HolySoulMarkSync();       // 【圣洁之魂（89）】「禁止邪恶」提示标记自动放置 / 移除（用户 2026-11-11）
     // 【界面自愈】（用户 2026-10-07 报「换位之后有时候渲染不对、第二遍才对」）：每 0.5 秒重画一次
@@ -93057,6 +93599,10 @@ void BOTC_Init () {
         if (g_seatColor[i] < 1) {
             g_seatColor[i] = 1;
         }
+        // 【空串初始化】（用户 2026-11-13）：Galaxy 的全局字符串数组默认是 0，
+        //   取名阶段（随机名还没分配）走到 BOTC_SeatNameText 的 StringLength 会直接报错。
+        g_dispName[i] = "";
+        g_introName[i] = "";
     }
     // 【说书人那一格固定用「深粉」】（用户 2026-10-14）：**色号 15 = 深粉**（用户实测：8 是淡粉、太淡）----
     //   下面所有按位置取色的地方（魔典名字行、座位面板…）都会跟着走，换成别色只改这一行。
