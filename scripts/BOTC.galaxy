@@ -420,6 +420,7 @@ bool[14]    g_goblinClaim;      // 今天这个座位声明过哥布林（同一
 int         g_fearTarget;       // 【恐惧之灵(102)】他当前公开选中的那个座位（0 = 没选）
 int         g_lleechHost;       // 【痢蛭(100)】首夜他选的宿主座位（0 = 还没选）
 int         g_lleechEval;       // 【防死循环】BOTC_LleechPoisonOn 正在求值时的重入深度（>0 表示已进入）
+int         g_lleechRecover;    // 【防重入】BOTC_LleechRecoverCheck 正在结算「恢复清醒后宿主已死」
 bool        g_fearPending;      // 【恐惧之灵(102)】今晚换了新目标 -> 等白天再播报（用户 2026-10-03）
 int         g_alcGuess;         // 猜中的座位（0 = 没猜中）
 int         g_alcDay;           // 猜过的那一天（用于只强制当晚 / 每天处决后开放）
@@ -1255,9 +1256,10 @@ int         g_monkA;          // 【僧侣×利维坦相克】上一夜保护的
 int         g_monkNight;      // 【僧侣×利维坦相克】上一夜保护记录对应的夜号
 bool        g_promoteOpen;    // 小恶魔自刀后临时解锁说书人的身份编辑（传位用）
 int         g_demonKind;      // 这一局死掉的那只恶魔是什么（红唇女郎 / 传位：接位的人变成**同一只**恶魔，用户 2026-09-21）
-int         g_nightPoison;    // 投毒者今晚毒的座位（0 = 今晚没毒；毒持续到下一个黄昏）
-int         g_poisonFrom;     // 这次毒是谁下的（投毒者的座位，0 = 没有）---- 他死了 / 换身份就要把毒收回来
-int         g_poisonDay;      // 这次投毒是在第几天对应的夜晚设置的；黄昏只在跨天后清除
+// 【投毒者能力：按来源座位独立记账】（用户 2026-11-13）：投毒者、炼金术士借到投毒者等多个
+//   拥有投毒者能力的角色各自维护自己的一份毒，互不覆盖；某个来源离场只收回他自己那一份。
+int[14]     g_poisonAt;       // 来源座位 → 当前毒的目标座位（0 = 该来源今晚没毒；毒持续到下一个黄昏）
+int[14]     g_poisonDayBy;    // 来源座位 → 这次投毒是在第几天对应的夜晚设置的；黄昏只在跨天后清除
 // 【醉酒状态】（用户 2026-09-19）：跟中毒一模一样的一套（照搬），只是换一个 token 槽（24）
 int         g_nightDrunk;     // 今晚被醉的座位（0 = 没有；醉酒持续到下一个黄昏）
 int         g_drunkFrom;      // 这次醉酒是谁施的（0 = 没有）---- 他死了 / 换身份就要把醉酒收回来
@@ -2926,6 +2928,8 @@ void   BOTC_TestSelfRole (int r);              // 【测试】说书人自己拿
 void   BOTC_TestSelfOpen ();                   // 【测试】弹身份网格让说书人挑一个身份
 bool   BOTC_SailorImmune (int q);              // 水手（23）：清醒时不会死亡
 bool   BOTC_LleechImmune (int q);              // 痢蛭（100）：宿主活着时不会死亡（跟水手同一种「现算」写法）
+bool   BOTC_LleechHostMode (int p);            // 痢蛭（100）：今晚该「选宿主」（首夜 / 中途被创造还没有宿主）
+void   BOTC_LleechRecoverCheck ();             // 痢蛭（100）：恢复清醒健康时宿主已死 → 立即死亡
 void   BOTC_SailorDrunkClear (string why);     // 水手醉的那一份醉酒收回来
 void   BOTC_SailorSync ();                     // 水手：维护「不会死亡（水手）」标记
 
@@ -3007,6 +3011,7 @@ string BOTC_TeamName (int t);
 string BOTC_AlignName (int a);
 string BOTC_RoleTagStr (int idx);
 int    BOTC_SeatTrueRole (int q);
+int    BOTC_SeatRealRole (int q);            // 【变脸师】还原临时借来的角色后，真正的真身（在场判定用）
 int    BOTC_SeatTeam (int q);
 int    BOTC_SeatAlign (int q);
 int    BOTC_EvilTotalAll ();                // 【圣洁之魂（89）】全场邪恶玩家总数（含死亡）
@@ -3283,6 +3288,7 @@ int    BOTC_NoFirstOf (int r);         // 【官方夜序表】首夜列的行�
 int    BOTC_NoOtherOf (int r);         // 【官方夜序表】其他夜晚列的行号（0 = 这一夜不唤醒）
 void   BOTC_DuskResolve ();
 void   BOTC_PoisonClear (string why);
+void   BOTC_PoisonClearSource (int src, string why);
 void   BOTC_DrunkClear (string why);
 string BOTC_DeathBlocker (int q, int kind, int byDemon, bool ignoreProtect);
 bool   BOTC_ProtectTokOn (int q, int t);
@@ -16173,7 +16179,14 @@ void BOTC_GameStart () {
             return;
         }
     }
-    // 步骤二：必须由说书人点过【确认发放】---- 不然玩家自己那份魔典里不会有身份，
+    // 步骤二（用户 2026-11-13）：互为克星的角色不能同时在场 —— 异端分子（101）× 痢蛭（100）。
+    //   不符合就只私聊提醒说书人，不正式开始游戏（玩家那边看不到任何提示）。
+    if (BOTC_RoleInPlay(100) && BOTC_RoleInPlay(101)) {
+        BOTC_PmStore(g_teller, "【克星互斥】本局同时有「异端分子」和「痢蛭」：这两个角色互为克星，同一时间只能有其中一个在场。请把其中一个换掉，再点【游戏正式开始】。");
+        BOTC_Notice(g_teller, "异端分子与痢蛭互为克星，不能同时在场：已拦下正式开始。");
+        return;
+    }
+    // 步骤三：必须由说书人点过【确认发放】---- 不然玩家自己那份魔典里不会有身份，
     //   却不能正式开始，这是之前漏掉的校验（原来这里会自动确认一次）。
     if (!g_dealConfirmed) {
         BOTC_Notice(g_teller, "还没【确认发放】：先点魔典下面的【确认发放】（让每位玩家在自己魔典里看到身份），再点【游戏正式开始】。");
@@ -17304,9 +17317,10 @@ void BOTC_ResetGameVars () {
     g_sailorDrunk = 0;             // 水手（23）
     g_nightDrunk = 0;
     g_drunkFrom = 0;
-    g_nightPoison = 0;
-    g_poisonFrom = 0;
-    g_poisonDay = 0;
+    for (i = 0; i <= 13; i += 1) {
+        g_poisonAt[i] = 0;
+        g_poisonDayBy[i] = 0;
+    }
     g_minstrelDay = 0;             // 吟游诗人（31）
     for (i = 0; i <= 13; i += 1) {
         g_minstrelDrunk[i] = false;
@@ -17444,6 +17458,8 @@ void BOTC_ResetGameVars () {
     g_lmSess = 0;                  // 【小怪宝】恶人频道那条会话号：换局清零
     g_philoDrunkManual = false;    // 【哲学家醉酒 90】换局清零：手动优先交还给自动同步
     g_lleechEval = 0;              // 【防死循环】换局清零，避免异常中断后残留重入标记
+    g_lleechHost = 0;              // 【痢蛭】换局清零：宿主记录（用户 2026-11-13）
+    g_lleechRecover = 0;
     for (i = 0; i <= 13; i += 1) {
         g_hatDone[i] = false;          // 【帽匠（120）】换局清零：茶会开的记录
         g_hatParty[i] = false;         // 换局清零：待开的茶会
@@ -28930,9 +28946,10 @@ g_noAllOther[102] = 28;     // 恐惧之灵（其他夜第 28）
     g_evilStep = 0;
     BOTC_NightSkillReset();
     g_promoteOpen = false;
-    g_nightPoison = 0;
-    g_poisonFrom = 0;
-    g_poisonDay = 0;
+    for (i = 0; i <= 13; i += 1) {
+        g_poisonAt[i] = 0;
+        g_poisonDayBy[i] = 0;
+    }
     g_gblSeat = 0;                 // 【赌徒 · 判定面板】（用户 2026-11-01）：换局关掉
     for (i = 0; i <= 13; i += 1) {
         g_bountySetupDone[i] = false;   // 【赏金猎人 · 首夜设置调整】（用户 2026-11-01）：换局重来
@@ -33344,10 +33361,10 @@ void BOTC_RsOpen (int p) {
         g_gfPlus = (RandomInt(1, 2) == 1);
         g_gfPlusSeeded = true;
         if (g_gfPlus) {
-            BOTC_PmStore(g_teller, "【教父】这一局的配比方向：**外来者 +1、镇民 -1**。");
+            BOTC_PmStore(g_teller, "【教父】这一局的配比方向：外来者 +1、镇民 -1。");
         }
         else {
-            BOTC_PmStore(g_teller, "【教父】这一局的配比方向：**外来者 -1、镇民 +1**。");
+            BOTC_PmStore(g_teller, "【教父】这一局的配比方向：外来者 -1、镇民 +1。");
         }
     }
     // 【哨兵（88）】（用户 2026-11-08）：手动配板也按这一局掷到的 -1 / 0 / +1 算名额
@@ -33468,6 +33485,13 @@ void BOTC_RsRandom (int p) {
                     continue;
                 }
                 if (g_rsPick[g_gridCatRole[(t * 128) + k]]) {
+                    continue;
+                }
+                // 【克星互斥 · 异端分子 × 痢蛭】（用户 2026-11-13）：随机配板不会同时抽到这两个
+                if (g_gridCatRole[(t * 128) + k] == 101 && g_rsPick[100]) {
+                    continue;
+                }
+                if (g_gridCatRole[(t * 128) + k] == 100 && g_rsPick[101]) {
                     continue;
                 }
                 n = n + 1;
@@ -34913,7 +34937,8 @@ void BOTC_VillageSync () {
         if (!g_seatOn[i] || BOTC_SeatDead(i)) {
             continue;
         }
-        if (BOTC_SeatTrueRole(i) != 105) {
+        // 【变脸师】临时借来的「村夫」不算现场村夫（用户 2026-11-13）。
+        if (BOTC_SeatRealRole(i) != 105) {
             continue;
         }
         n = n + 1;
@@ -34970,7 +34995,7 @@ void BOTC_HalfOrcSync () {
     for (i = 2; i <= 13; i += 1) {
         if (!g_seatOn[i] || BOTC_SeatDead(i)) { continue; }
         if (BOTC_SeatAlign(i) != 0) { continue; }
-        if (BOTC_SeatTrueRole(i) == 107) { continue; }
+        if (BOTC_SeatRealRole(i) == 107) { continue; }
         n = n + 1;
     }
     pick = 0;
@@ -34979,7 +35004,7 @@ void BOTC_HalfOrcSync () {
         for (i = 2; i <= 13; i += 1) {
             if (!g_seatOn[i] || BOTC_SeatDead(i)) { continue; }
             if (BOTC_SeatAlign(i) != 0) { continue; }
-            if (BOTC_SeatTrueRole(i) == 107) { continue; }
+            if (BOTC_SeatRealRole(i) == 107) { continue; }
             k = k - 1;
             if (k <= 0) { pick = i; break; }
         }
@@ -35211,8 +35236,8 @@ void BOTC_SetSeatRole (int ob, int seat, int roleIdx) {
     // 投毒者换了身份（被改掉 / 传位 / 重新发牌...）→ 他这次下的毒收回来
     // 【只认真值行】（用户 2026-11-11）：玩家在自己那份魔典上给别的座位标「声称身份」也会走这里，
     //   以前没拦 ob / oldR，标到投毒者那一格就会把全场的中毒 token 一起清掉（白天突然消失）。
-    if (g_started && ob == g_teller && oldR >= 0 && oldR != roleIdx && g_poisonFrom == seat) {
-        BOTC_PoisonClear("投毒者换了身份");
+    if (g_started && ob == g_teller && oldR >= 0 && oldR != roleIdx && g_poisonAt[seat] >= 2) {
+        BOTC_PoisonClearSource(seat, "投毒者换了身份");
     }
     // 【确认下发之后改标记不算取消下发】（用户 2026-11-10）：不再把 g_dealConfirmed 清掉，
     //   已下发状态保持，下面按「已下发」直接把新身份实时同步到玩家自己那份魔典。
@@ -36787,11 +36812,13 @@ void BOTC_SourceGoneCleanup (int q, bool dying) {
             }
         }
     }
-    // 【炼金术士（95）死亡 → 真值行还原】（用户 2026-11-11）：借到爪牙能力后真值行写的是借来的爪牙，
-    //   死亡时还原成 96（炼金术士），说书人魔典不再显示那只爪牙。
-    //   「是炼金术士」123 仍按原口径保留（真身判定靠它，BOTC_SeatTrueRole 返回 95），只还原显示；
+    // 【炼金术士（95）死亡 → 收掉「是炼金术士」并把真值行还原成 96】（用户 2026-11-13）：
+    //   借到爪牙能力后真值行写的是借来的爪牙，死亡时删除 123、还原成 96（炼金术士），
+    //   说书人魔典不再显示那只爪牙；g_alcBorrow 一并清空，避免借来的能力残留。
     //   换身份由 BOTC_SetSeatRole 自己清 123 并写入新身份，不走这里。
     if (dying && g_tokOn[(((g_teller * 14) + q) * 256) + 123]) {
+        g_tokOn[(((g_teller * 14) + q) * 256) + 123] = false;
+        g_alcBorrow = 0;
         g_mark[(g_teller * 14) + q] = 96;
         BOTC_GrimRender(g_teller);
     }
@@ -36865,11 +36892,10 @@ void BOTC_SourceGoneCleanup (int q, bool dying) {
         }
     }
     // 配套的全局记录：token 没了就把「记着的那个座位」也清掉，免得黄昏 / 天亮还按旧记录结算
-    if (r == 17) {
-        // 【只有他本人离场才收毒】（用户 2026-11-01）：别的格子被改成投毒者时不能把这一份毒也收掉
-        if (g_poisonFrom == q) {
-            BOTC_PoisonClear("投毒者离场");
-        }
+    if (g_poisonAt[q] >= 2) {
+        // 【按来源独立】（用户 2026-11-13）：借到投毒者能力的炼金术士等同样按自己的记录收毒，
+        //   不按真身 17 判断；其他来源的毒不受影响。
+        BOTC_PoisonClearSource(q, "投毒者离场");
     }
     if (r == 23) { BOTC_SailorDrunkClear("水手离场"); }
     if (r == 7) { g_monkA = 0; g_monkNight = 0; }
@@ -37368,6 +37394,7 @@ void BOTC_LleechHostCheck (int deadSeat) {
     int i;
     int leech;
     int mm;
+    bool works;
     if (deadSeat < 2 || deadSeat > 13) {
         return;
     }
@@ -37377,7 +37404,15 @@ void BOTC_LleechHostCheck (int deadSeat) {
     leech = 0;
     for (i = 2; i <= 13; i += 1) {
         // 【相克 · 痢蛭 × 主谋】已经「失去能力」（内部记账槽 18）的痢蛭 → 不再算这条「宿主死我也死」
-        if (g_seatOn[i] && BOTC_AbilityWorks(i, 100) && !BOTC_SeatDead(i) && !g_tokOn[(((g_teller * 14) + i) * 256) + 18]) {
+        works = BOTC_AbilityWorks(i, 100);
+        if (!works && BOTC_HasAbility(deadSeat, 37)) {
+            // 【莽夫首日被处决】（用户 2026-11-13，官方 FAQ）：莽夫一死，他给痢蛭的那份
+            //   「醉酒（莽夫）」也随之消失 → 原本被它挡下的「宿主死我也死」当场照常结算。
+            if (BOTC_GoonDrunkOnly(i)) {
+                works = true;
+            }
+        }
+        if (g_seatOn[i] && works && !BOTC_SeatDead(i) && !g_tokOn[(((g_teller * 14) + i) * 256) + 18]) {
             leech = i;
         }
     }
@@ -37417,6 +37452,67 @@ void BOTC_LleechHostCheck (int deadSeat) {
     //      同一个调用里先把恶魔算死，BOTC_CheckWin 不会再出现「先判了邪恶胜利」的先后问题。
     BOTC_MarkDeadPlain(leech);
     BOTC_PmStore(g_teller, "【痢蛭】宿主 " + BOTC_NameStr(deadSeat) + " 已死 → 痢蛭 " + BOTC_NameStr(leech) + " 立刻死亡（红叉，已先撤掉他的「不会死亡」）。");
+}
+
+// 【痢蛭 · 恢复清醒健康后宿主已死 → 立即死亡】（用户 2026-11-13，官方规则）：
+//   他中毒 / 醉酒期间宿主死亡时，BOTC_LleechHostCheck 会按规则放过他（宿主死也不受影响）；
+//   等他恢复清醒 / 健康，宿主已经是一具尸体 —— 这时必须当场死亡。
+//   0.5 秒 tick 每拍检查一次，保证「一恢复就结算」；带重入保护，避免打红叉时再绕回来。
+void BOTC_LleechRecoverCheck () {
+    int i;
+    int q;
+    int host;
+    bool hostAlive;
+    if (g_lleechRecover > 0) {
+        return;
+    }
+    if (!g_started || g_gameOver) {
+        return;
+    }
+    host = 0;
+    for (q = 2; q <= 13; q += 1) {
+        if (g_tokOn[(((g_teller * 14) + q) * 256) + 120]) {
+            host = q;
+        }
+    }
+    if (host < 2) {
+        return;                            // 场上没有宿主标记（还没选过 / 已经收掉）
+    }
+    g_lleechRecover = 1;
+    for (i = 2; i <= 13; i += 1) {
+        if (!g_seatOn[i] || BOTC_SeatDead(i)) {
+            continue;
+        }
+        if (!BOTC_HasAbility(i, 100)) {
+            continue;
+        }
+        if (g_tokOn[(((g_teller * 14) + i) * 256) + 18]) {
+            continue;                      // 相克 · 主谋：失去能力，不再算这条
+        }
+        if (!BOTC_AbilityWorks(i, 100)) {
+            continue;                      // 还在中毒 / 醉酒：先放过，恢复后再结算
+        }
+        host = 0;
+        hostAlive = false;
+        for (q = 2; q <= 13; q += 1) {
+            if (!g_tokOn[(((g_teller * 14) + q) * 256) + 120]) {
+                continue;
+            }
+            host = q;
+            if (!BOTC_SeatDead(q)) {
+                hostAlive = true;
+            }
+        }
+        if (host < 2 || hostAlive) {
+            continue;                      // 宿主还活着 / 已经没有宿主
+        }
+        g_tokOn[(((g_teller * 14) + i) * 256) + 122] = false;      // 先撤「不会死亡（痢蛭）」
+        BOTC_GrimRender(g_teller);
+        BOTC_PmStore(g_teller, "【痢蛭】" + BOTC_NameStr(i) + " 恢复清醒 / 健康时，宿主 " + BOTC_NameStr(host) + " 已经死亡 → 痢蛭立即死亡。");
+        BOTC_MarkDeadPlain(i);
+        break;                             // 宿主标记会随痢蛭离场一起收掉，这一拍只结一个
+    }
+    g_lleechRecover = 0;
 }
 void BOTC_MarkDeathQuietSrc (int q, int kind, int byDemon, int srcRole) {
     int row;
@@ -37938,6 +38034,20 @@ int BOTC_SeatTrueRole (int q) {
     return g_mark[(g_teller * 14) + q] - 1;
 }
 
+// 【变脸师（117）临时改写的角色不算真身在场】（用户 2026-11-13）：
+//   变脸师夜里把说书人真值行的角色标记临时改成借到的角色，并打上「是变脸师」205，
+//   g_faceBase 备份着原来的标记值（角色索引 + 1）。判断「这个角色在不在场」时必须还原成
+//   变脸师本人，否则他借来的那张牌会被误当成真的在场（哲学家选角、麻脸巫婆 / 舞蛇人的
+//   在场判定都会受影响）。其余身份仍直接走 BOTC_SeatTrueRole。
+int BOTC_SeatRealRole (int q) {
+    if (q >= 2 && q <= 13) {
+        if (g_tokOn[(((g_teller * 14) + q) * 256) + 205] && g_faceBase[q] > 0) {
+            return g_faceBase[q] - 1;
+        }
+    }
+    return BOTC_SeatTrueRole(q);
+}
+
 // 【无神论者（83）可以被醉酒/中毒】（用户 2026-11-12 改回）：
 //   无神论者一旦中毒 / 醉酒，他的能力不再生效，场上又没有恶魔 → 善良直接获胜。
 //   这是官网口径（侍臣 / 旅店老板 / 吟游诗人 / 解谜大师 / 水手 / 心上人等正常对其生效）。
@@ -38225,8 +38335,8 @@ bool BOTC_SeatIsDrunkRaw (int q) {
     if (q < 1 || q > 13) {
         return false;                     // 允许 1：说书人自己那一格
     }
-    if (BOTC_SeatTrueRole(q) == 14) {
-        return true;
+    if (BOTC_SeatRealRole(q) == 14) {
+        return true;                      // 【变脸师】临时显示的「酒鬼」不算真身（用户 2026-11-13）
     }
     if (g_tokOn[(((g_teller * 14) + q) * 256) + 24]) {
         return true;
@@ -38254,6 +38364,12 @@ bool BOTC_SeatIsDrunkRaw (int q) {
     }
     // 街头风琴手自己选择的醉酒，持续到下一个黄昏。
     if (g_tokOn[(((g_teller * 14) + q) * 256) + 164]) {
+        return true;
+    }
+    // 【心上人（61）82 / 酒保（160）196】（用户 2026-11-13）：这两份醉酒以前只写进了
+    //   BOTC_SeatIsDrunk，没进这里的「raw」判定，导致哲学家被它们弄醉时
+    //   BOTC_SeatImpairedRaw 仍认为他清醒 → 持续检测不会收掉「醉酒（哲学家）」90。
+    if (g_tokOn[(((g_teller * 14) + q) * 256) + 82] || g_tokOn[(((g_teller * 14) + q) * 256) + 196]) {
         return true;
     }
     return false;
@@ -38429,18 +38545,36 @@ bool BOTC_SailorImmune (int q) {
     return false;
 }
 
+// 【痢蛭这一夜该不该「选宿主」】（用户 2026-11-13）：首夜一定选；游戏中途被创造出来的痢蛭
+//   （麻脸巫婆 / 说书人赋予能力）还没有任何宿主标记时，也先把「选宿主」这个进场能力结算掉，
+//   之后才按每夜刀人走。疯子以为自己是痢蛭只走首夜那一次，之后照常「刀人」。
+bool BOTC_LleechHostMode (int p) {
+    int i;
+    if (BOTC_ActingIsFirstNight(p)) {
+        return true;
+    }
+    if (BOTC_IsLunatic(p)) {
+        return false;
+    }
+    for (i = 2; i <= 13; i += 1) {
+        if (g_tokOn[(((g_teller * 14) + i) * 256) + 120]) {
+            return false;                  // 已经有宿主：按每夜刀人走
+        }
+    }
+    return true;                           // 还没有宿主 → 先补选一次
+}
+
 // ■ 痢蛭（100）：「宿主活着 → 他不会死亡」---- 照**水手 / 茶艺师**那种「每次现算」的写法，
 //   不依赖「不会死亡（痢蛭）122」这个标记有没有被正确打上（痢蛭中途被创造时也能生效）。
-//   · 说书人手动打的「不会死亡（痢蛭）122」仍然以他为准（跟水手那条一致）；
+//   【用户 2026-11-13 按官方标记口径】「中毒（痢蛭）」标记在首夜一定会放到宿主身上，
+//   但痢蛭自己中毒 / 醉酒时它等同「倒转放置」、没有任何效果 —— 此时这条免死同样不生效；
+//   恢复清醒健康后，只要宿主还活着就自动恢复。
 //   · 自己算的条件：他有「痢蛭」这个能力（真身 / 借来的都算）、在场、活着、没中毒没醉酒，
 //     而且他的宿主（带着「中毒（痢蛭）120」的那个座位）还活着。
 bool BOTC_LleechImmune (int q) {
     int i;
     if (q < 2 || q > 13) {
         return false;
-    }
-    if (g_tokOn[(((g_teller * 14) + q) * 256) + 122]) {
-        return true;                       // 说书人手动打的标记：以他为准
     }
     // 【相克 · 痢蛭 × 主谋】（用户 2026-10-07）：失去能力的痢蛭连「不会死亡」也没了
     if (g_tokOn[(((g_teller * 14) + q) * 256) + 18]) {
@@ -38494,7 +38628,7 @@ bool BOTC_SeatIsPoisonedOther (int q) {
     if (q < 1 || q > 13) {
         return false;                     // 允许 1：说书人自己那一格
     }
-    return (g_tokOn[(((g_teller * 14) + q) * 256) + 7] || g_tokOn[(((g_teller * 14) + q) * 256) + 63] || g_tokOn[(((g_teller * 14) + q) * 256) + 85] || g_tokOn[(((g_teller * 14) + q) * 256) + 80] || g_tokOn[(((g_teller * 14) + q) * 256) + 81] || g_tokOn[(((g_teller * 14) + q) * 256) + 96] || g_tokOn[(((g_teller * 14) + q) * 256) + 169] || g_tokOn[(((g_teller * 14) + q) * 256) + 178] || g_tokOn[(((g_teller * 14) + q) * 256) + 198]);
+    return (g_tokOn[(((g_teller * 14) + q) * 256) + 7] || g_tokOn[(((g_teller * 14) + q) * 256) + 63] || g_tokOn[(((g_teller * 14) + q) * 256) + 85] || g_tokOn[(((g_teller * 14) + q) * 256) + 80] || g_tokOn[(((g_teller * 14) + q) * 256) + 81] || g_tokOn[(((g_teller * 14) + q) * 256) + 96] || g_tokOn[(((g_teller * 14) + q) * 256) + 138] || g_tokOn[(((g_teller * 14) + q) * 256) + 169] || g_tokOn[(((g_teller * 14) + q) * 256) + 178] || g_tokOn[(((g_teller * 14) + q) * 256) + 198]);
 }
 
 // 【「中毒（痢蛭）120」现在算不算数】（用户 2026-10-11）：官网口径 ——
@@ -38535,9 +38669,14 @@ bool BOTC_SeatIsPoisoned (int q) {
     if (BOTC_SeatIsPoisonedOther(q)) {
         return true;
     }
-    // 【中毒（痢蛭）120】（用户 2026-10-11）：宿主真的算中毒 —— 前提是那名痢蛭现在清醒（见 BOTC_LleechPoisonOn）
+    // 【中毒（痢蛭）120】（用户 2026-10-11；2026-11-13 按官方标记口径重写）：
+    //   首夜他选的玩家身上一定带着这枚标记；但只有「那名痢蛭现在清醒」且「这名玩家能因
+    //   痢蛭而中毒」时才算真的中毒。士兵 11 / 莽夫 37 不会因痢蛭中毒 —— 那两枚标记等同
+    //   官方规则的「倒转放置」：只提示「被痢蛭选择过」，没有任何效果（但宿主死亡时痢蛭仍会死）。
     if (g_tokOn[(((g_teller * 14) + q) * 256) + 120] && BOTC_LleechPoisonOn()) {
-        return true;
+        if (BOTC_SeatRealRole(q) != 11 && BOTC_SeatRealRole(q) != 37) {
+            return true;
+        }
     }
     // 【混沌（121）】（用户 2026-10-16）：他那一刀杀了邻近镇民 → 所有善良玩家中毒；
     //   这枚 token 面板上就叫「中毒」---- 带着它就算中毒（用户 2026-10-16 简化，不再按阵营现算）
@@ -38863,7 +39002,8 @@ bool BOTC_RoleInPlay (int idx) {
     BOTC_BuildSeatList();
     for (i = 0; i < g_seatN; i += 1) {
         q = g_seatList[i];
-        if (BOTC_SeatTrueRole(q) == idx) {
+        // 【变脸师】临时借来的那张牌不算在场，这里用还原过的真身判定（用户 2026-11-13）。
+        if (BOTC_SeatRealRole(q) == idx) {
             return true;
         }
     }
@@ -38896,6 +39036,27 @@ bool BOTC_RoleEffInPlay (int r) {
 // 【统一口径】（用户 2026-11-13）：BOTC_RoleInPlay 现在也只看真身，这里直接复用，避免两套逻辑分叉。
 bool BOTC_RoleTrueInPlay (int idx) {
     return BOTC_RoleInPlay(idx);
+}
+
+// 【除某个座位之外，还有没有这个角色】（用户 2026-11-13）：麻脸巫婆把「克星」改造成另一个时，
+//   如果那个克星就是被改造者本人，改完之后场上只剩一个，应当允许 —— 所以要排除目标座位。
+bool BOTC_RoleInPlayOther (int idx, int exceptSeat) {
+    int i;
+    int q;
+    if (idx < 0) {
+        return false;
+    }
+    BOTC_BuildSeatList();
+    for (i = 0; i < g_seatN; i += 1) {
+        q = g_seatList[i];
+        if (q == exceptSeat) {
+            continue;
+        }
+        if (BOTC_SeatRealRole(q) == idx) {
+            return true;
+        }
+    }
+    return false;
 }
 
 // 【有没有人「以为自己是」这个角色】（用户 2026-11-13）：酒鬼 / 疯子 / 提线木偶 / 悟道者
@@ -42290,8 +42451,12 @@ bool BOTC_CanWakeAt (int q) {
         return false;
     }
     // 驱魔人（25）点名的恶魔：当晚**不能因其自身能力被唤醒**（用户 2026-09-20）
+    //   【痢蛭 · 进场能力】（用户 2026-11-13，官方规则）：游戏中途被创造、还没有宿主的痢蛭，
+    //   「选宿主」属于进场能力而不是夜间能力 —— 驱魔人拦不住它，否则会出现「痢蛭没有宿主」。
     if (g_exoBlock >= 2 && q == g_exoBlock && g_nightNum == g_exoNight) {
-        return false;
+        if (!(BOTC_HasAbility(q, 100) && BOTC_LleechHostMode(q))) {
+            return false;
+        }
     }
     if (!g_started) {
         return true;
@@ -42701,10 +42866,10 @@ void BOTC_WakeListHint () {
         q = g_seatList[i];
         if (BOTC_HasAbility(q, 39)) {
             if (BOTC_GodfatherCanKill()) {
-                BOTC_WakeHintSend("【教父】" + IntToString(q - 1) + " 今晚**可以**动手（今天有外来者死亡）。", 1);
+                BOTC_WakeHintSend("【教父】" + IntToString(q - 1) + " 今晚可以动手（今天有外来者死亡）。", 1);
             }
             else {
-                BOTC_WakeHintSend("【教父】" + IntToString(q - 1) + " 今晚**不能**动手（今天没有外来者死亡）。", 1);
+                BOTC_WakeHintSend("【教父】" + IntToString(q - 1) + " 今晚不能动手（今天没有外来者死亡）。", 1);
             }
         }
     }
@@ -45079,9 +45244,9 @@ bool BOTC_SlayCanKill (int p) {
     return true;
 }
 
-// 【相克 · 猎手 × 痢蛭】（用户 2026-11-11）：猎手选中痢蛭的宿主 → 宿主死亡。
-//   宿主身上带着「中毒（痢蛭）120」，而且那名痢蛭现在真的清醒（BOTC_LleechPoisonOn）才算数；
-//   宿主一死，BOTC_LleechHostCheck 会在同一步里让痢蛭跟着死。
+// 【相克 · 猎手 × 痢蛭】（用户 2026-11-11；2026-11-13 改为只看宿主标记）：猎手选中痢蛭的宿主 → 宿主死亡。
+//   是否为宿主只看「中毒（痢蛭）120」（首夜选过就一直是他，倒转放置也算）；
+//   宿主一死，BOTC_LleechHostCheck 会在同一步里按痢蛭当时的状态结算他会不会跟着死。
 bool BOTC_SlayLeechHost (int q) {
     if (q < 2 || q > 13) {
         return false;
@@ -45089,7 +45254,10 @@ bool BOTC_SlayLeechHost (int q) {
     if (BOTC_SeatDead(q)) {
         return false;
     }
-    return (g_tokOn[(((g_teller * 14) + q) * 256) + 120] && BOTC_LleechPoisonOn());
+    // 【相克 · 猎手 × 痢蛭】（用户 2026-11-13）：只要这名玩家是痢蛭首夜选过的宿主
+    //   （「中毒（痢蛭）」120 一直在），猎手就能打他；痢蛭自己中毒 / 醉酒只影响
+    //   「宿主死他会不会跟着死」，不影响「他是不是宿主」。
+    return g_tokOn[(((g_teller * 14) + q) * 256) + 120];
 }
 
 // 【只给说书人看的参考】他到底是不是真猎手、现在能不能杀（玩家看不到这一段）
@@ -46555,6 +46723,11 @@ void BOTC_MiSeatFieldsReset () {
     DialogControlSetSize(g_miEdit2, PlayerGroupSingle(g_teller), 162, 41);
     DialogControlSetVisible(g_miEdit3, PlayerGroupSingle(g_teller), false);
     DialogControlSetVisible(g_miEdit4, PlayerGroupSingle(g_teller), false);
+    // 【每次弹窗清空输入框】（用户 2026-11-13）：上一个玩家的答案不能留在下一个弹窗里。
+    libNtve_gf_SetDialogItemText(g_miEdit, StringToText(""), PlayerGroupSingle(g_teller));
+    libNtve_gf_SetDialogItemText(g_miEdit2, StringToText(""), PlayerGroupSingle(g_teller));
+    libNtve_gf_SetDialogItemText(g_miEdit3, StringToText(""), PlayerGroupSingle(g_teller));
+    libNtve_gf_SetDialogItemText(g_miEdit4, StringToText(""), PlayerGroupSingle(g_teller));
 }
 
 // 把答题框弹给说书人：seat = 发给谁，role = 3 / 4 / 5，extra = 标题里补的信息（占卜师填他验的两个座位）
@@ -46578,7 +46751,7 @@ void BOTC_ManInfoOpen (int seat, int role, string extra) {
         t = "【占卜师】" + BOTC_NameStr(seat) + " 验的 " + extra + "：里面有恶魔吗？";
     }
     if (role == 24) {
-        t = "【侍女】" + BOTC_NameStr(seat) + " 选的是 " + extra + "：其中几个被唤醒？";
+        t = "【侍女】" + BOTC_NameStr(seat) + " 选的是 " + extra + "：其中几个被唤醒？（只能填 0 / 1 / 2）";
     }
     if (role == 47) {
         t = "【钟表匠】" + BOTC_NameStr(seat) + " 得知的距离（填数字：紧挨着是 1）";
@@ -46602,7 +46775,7 @@ void BOTC_ManInfoOpen (int seat, int role, string extra) {
         t = "【女裁缝】" + BOTC_NameStr(seat) + " 选的 " + extra + "：他们是不是同一阵营？";
     }
     if (role == 58) {
-        t = "【杂耍艺人】" + BOTC_NameStr(seat) + "：他今天猜对了几个？（填数字）";
+        t = "【杂耍艺人】" + BOTC_NameStr(seat) + "：他今天猜对了几个？（填数字 0~5）";
     }
     // 【气球驾驶员（72）】（用户 2026-09-23）：跟共情者一样是数字题，说书人填「要给他看的座位号」
     if (role == 72) {
@@ -46683,7 +46856,7 @@ void BOTC_ManInfoOpen (int seat, int role, string extra) {
         // 【杂耍艺人】（用户 2026-11-04）：不再自动数猜对几个，由说书人自行判断；
         //   只有「干扰」(91) 仍作为提醒，带干扰的算不算对同样由说书人判。
         if (role == 58) {
-            libNtve_gf_SetDialogItemText(g_miNote, StringToText("已按他白天的猜测预填（带「干扰」的 " + IntToString(BOTC_CountTok(91)) + " 个也算过），可改。"), PlayerGroupSingle(g_teller));
+            libNtve_gf_SetDialogItemText(g_miNote, StringToText("只填 0~5 的整数（带「干扰」的 " + IntToString(BOTC_CountTok(91)) + " 个也算过）。"), PlayerGroupSingle(g_teller));
             DialogControlSetVisible(g_miNote, PlayerGroupSingle(g_teller), true);
         }
         else {
@@ -47159,7 +47332,7 @@ void BOTC_MiFnSend () {
         return;
     }
     if (g_miFnRole <= 0) {
-        BOTC_Notice(g_teller, "先点【选...】挑一个身份。");
+        BOTC_Notice(g_teller, "请选择一个角色。");
         return;
     }
     DialogSetVisible(g_miDlg, PlayerGroupSingle(g_teller), false);
@@ -47425,11 +47598,12 @@ int BOTC_ClockmakerDist () {
 }
 
 // 某个身份坐在哪（真身 = r 的第一个座位；没有 = 0）
+// 【变脸师】临时借来的那张牌不算真身（用户 2026-11-13）。
 int BOTC_SeatOfRole (int r) {
     int i;
     for (i = 2; i <= 13; i += 1) {
         if (!g_seatOn[i]) { continue; }
-        if (BOTC_SeatTrueRole(i) == r) { return i; }
+        if (BOTC_SeatRealRole(i) == r) { return i; }
     }
     return 0;
 }
@@ -47444,7 +47618,8 @@ int BOTC_SeatOfRoleNot (int r, int skip) {
         if (i == skip) {
             continue;
         }
-        if (BOTC_SeatTrueRole(i) == r) {
+        // 【变脸师】临时借来的那张牌不算在场，否则哲学家的醉酒会落到变脸师身上（用户 2026-11-13）。
+        if (BOTC_SeatRealRole(i) == r) {
             return i;
         }
     }
@@ -49670,6 +49845,22 @@ void BOTC_ManInfoOk () {
     if (n < 0) {
         return;
     }
+    // 【杂耍艺人】（用户 2026-11-13）：白天最多猜 5 组，猜对个数只能是 0~5，超出范围不收。
+    if (role == 58 && n > 5) {
+        BOTC_Notice(g_teller, "杂耍艺人一天最多猜 5 次：猜对个数只能填 0~5。");
+        return;
+    }
+    // 【侍女（24）】（用户 2026-11-13）：选的是两名玩家，结果只能是 0 / 1 / 2，超出范围不收。
+    if (role == 24 && n > 2) {
+        BOTC_Notice(g_teller, "侍女查询的是选中两人中今晚被唤醒的人数：只能填 0、1 或 2。");
+        return;
+    }
+    // 【女祭司（125）】（用户 2026-11-13）：填的是座位号（1~12），不是计数：超范围要当场拒绝，
+    //   不能走下面的 n>12→9 兜底，否则填 13 会被静默当成 9 号座位发出去。
+    if (role == 125 && (n < 1 || n > 12)) {
+        BOTC_Notice(g_teller, "女祭司要给一个 1~12 的玩家座位号。");
+        return;
+    }
     if (n > 12) {
         n = 9;
     }
@@ -49710,10 +49901,6 @@ void BOTC_ManInfoOk () {
         BOTC_PmInfo(g_who[seat], "【信息】你得知" + IntToString(n));
     }
     if (role == 125) {
-        if (n < 1 || n > 12) {
-            BOTC_Notice(g_teller, "女祭司要给一个 1~12 的玩家座位号。");
-            return;
-        }
         BOTC_PmInfo(g_who[seat], "【信息】你得知" + BOTC_NameStr(n + 1) + " 是说书人认为你最应该与其交流的玩家。");
         BOTC_PmStore(g_teller, "【女祭司】已告诉 " + BOTC_NameStr(seat) + "：" + BOTC_NameStr(n + 1) + " 是最应该交流的玩家。");
     }
@@ -52646,6 +52833,14 @@ bool BOTC_GoonDrunkOnly (int p) {
     if (g_tokOn[(((g_teller * 14) + p) * 256) + 126] || g_tokOn[(((g_teller * 14) + p) * 256) + 129]) {
         return false;                      // 醉酒（村夫 126 / 解谜大师 129）
     }
+    // 【漏判补全】（用户 2026-11-13）：店小二 136 / 道士 142 / 鸩 144 / 街头风琴手 164 / 酒保 196
+    //   之前这五份醉酒没有列进来，被莽夫那一下的刺客 / 沙巴洛斯等会被误判成「只有莽夫那一份」，照常生效。
+    if (g_tokOn[(((g_teller * 14) + p) * 256) + 136] || g_tokOn[(((g_teller * 14) + p) * 256) + 142] || g_tokOn[(((g_teller * 14) + p) * 256) + 144]) {
+        return false;                      // 醉酒（店小二 136 / 道士 142 / 鸩 144）
+    }
+    if (g_tokOn[(((g_teller * 14) + p) * 256) + 164] || g_tokOn[(((g_teller * 14) + p) * 256) + 196]) {
+        return false;                      // 醉酒（街头风琴手 164 / 酒保 196）
+    }
     if (p == BOTC_PhiloDrunkSeat()) {
         return false;                      // 哲学家选中的那个角色的持有者（token 还没同步过来也算，跟 BOTC_SeatIsDrunk 一致）
     }
@@ -52673,7 +52868,7 @@ void BOTC_GoonTouch (int chooser, int target) {
     g_tokOn[(((g_teller * 14) + chooser) * 256) + 61] = true;  // 醉酒（莽夫）：选他的人醉酒（到明天黄昏，黄昏自动清）
     BOTC_GrimRender(g_teller);
     BOTC_PmStore(g_teller, "【莽夫】今夜第一个用夜间技能选中莽夫（" + BOTC_NameStr(g) + "）的是 " + BOTC_NameStr(chooser) + " → 他醉酒到明天黄昏。");
-    BOTC_PmStore(g_teller, "【莽夫】这一下是**当场结算**的：他这一夜的能力立刻失效，所以别再把他的技能效果算进去。");
+    BOTC_PmStore(g_teller, "【莽夫】这一下是**当场结算**的：他这一夜的能力立刻失效（刺客的「刺杀莽夫」那一刀除外，仍会杀死莽夫并让他转邪恶），别再把他的技能效果算进去。");
     // 【莽夫记的是「今夜第一个选他那个人的阵营」】（用户 2026-09-20）：
     //   这里直接按那个人的阵营算（不再回头读登记层缓存 ---- 之前读缓存会拿到旧值，
     //   所以「自动打邪恶 token」永远走不到，反而把 token 撤掉）。
@@ -58390,8 +58585,8 @@ bool BOTC_EnvoyMaybePrompt (int p) {
     if (p < 1 || p > 13 || (p == 1 && !g_testSelfOn)) {
         return false;
     }
-    // 【痢蛭 × 使节】首夜选择的宿主不能被改指。
-    if (BOTC_ActRoleOf(p) == 100 && BOTC_ActingIsFirstNight(p)) {
+    // 【痢蛭 × 使节】首夜 / 中途补选的宿主不能被改指。
+    if (BOTC_ActRoleOf(p) == 100 && BOTC_LleechHostMode(p)) {
         return false;
     }
     if (BOTC_IsLunatic(p)) {
@@ -58546,8 +58741,8 @@ bool BOTC_HalfImmortalMaybePrompt (int p) {
     if (p < 2 || p > 13 || BOTC_IsLunatic(p)) {
         return false;
     }
-    // 【痢蛭 × 半仙】首夜选择的宿主不能被改指。
-    if (BOTC_ActRoleOf(p) == 100 && BOTC_ActingIsFirstNight(p)) {
+    // 【痢蛭 × 半仙】首夜 / 中途补选的宿主不能被改指。
+    if (BOTC_ActRoleOf(p) == 100 && BOTC_LleechHostMode(p)) {
         return false;
     }
     half = 0;
@@ -58769,8 +58964,8 @@ bool BOTC_BrokerRedirect (int p) {
     if (!BOTC_BrokerActive()) {
         return false;
     }
-    // 【痢蛭 × 掮客】首夜选择的宿主不能被改指。
-    if (BOTC_ActRoleOf(p) == 100 && BOTC_ActingIsFirstNight(p)) {
+    // 【痢蛭 × 掮客】首夜 / 中途补选的宿主不能被改指。
+    if (BOTC_ActRoleOf(p) == 100 && BOTC_LleechHostMode(p)) {
         return false;
     }
     a = g_skillT1[p];
@@ -61030,6 +61225,17 @@ void BOTC_SkillConfirmCore (int p) {
             return;
         }
     }
+    // 【莽夫（37）】（用户 2026-09-20 / 2026-11-13）：这次确认的夜间目标里有没有莽夫。
+    //   放在这里（角色分支之前）才能覆盖所有用夜间技能选人的角色；此前这段被移走后漏了，
+    //   普通恶魔 / 刺客选莽夫都不会让他醉酒。莽夫自己「今夜只算第一个」的保护在 BOTC_GoonTouch 里。
+    //   刺客那一路需要它：选莽夫 → 刺客醉酒，但 goonHit 仍让「刺杀莽夫」这一刀照常结算（莽夫死亡并转邪恶）。
+    BOTC_GoonTouch(p, g_skillT1[p]);
+    if (g_skillT2[p] >= 2) {
+        BOTC_GoonTouch(p, g_skillT2[p]);
+    }
+    if (g_skillT3[p] >= 2) {
+        BOTC_GoonTouch(p, g_skillT3[p]);
+    }
     BOTC_TellSkillChoice(p, g_skillRoleSel[p] - 1);
     s = BOTC_NameStr(p) + " 选择了 " + BOTC_NameStr(g_skillT1[p]);
     if (g_skillT2[p] >= 2) {
@@ -61041,8 +61247,8 @@ void BOTC_SkillConfirmCore (int p) {
     s = s + "。";
     BOTC_PmStore(g_teller, s);
     // 莽夫（37）：这次选的目标里有没有他 ---- ⚠ 疯子也要算（他也确实「选择」了一名玩家，用户 2026-09-20）。
-    //   ⚠ 这一段原来就在这里，用户 2026-10-16 报寡妇那条 BUG 之后已经**挪到函数最前面**了（见开头那几句），
-    //     所以这里不再重复调用（BOTC_GoonTouch 自己也有「今夜只算第一个」的保护，重复调也安全，只是没必要）。
+    //   已经在上面（BOTC_TellSkillChoice 之前）统一调用过 BOTC_GoonTouch，这里不再重复；
+    //   BOTC_GoonTouch 自己也有「今夜只算第一个」的保护。
     // ■ 疯子（38）：**他魔典上写的是「他以为自己是」的那只恶魔**，所以 r 会等于那只恶魔 ----
     //   必须放在所有真角色分支**之前**处理掉，处理完直接 return（否则会照着恶魔的分支真杀人）。
     //   用户 2026-09-20：他以为自己在杀人，其实不产生任何死亡，只打「被选择（疯子）」并把目标告诉真恶魔。
@@ -61114,7 +61320,11 @@ void BOTC_SkillConfirmCore (int p) {
         }
     }
     // ■ 痢蛭（100）（用户 2026-10-03）：**首夜**他自己选一名存活玩家当宿主（打「中毒（痢蛭）120」+ 自己获得「不会死亡122」）；
-    //   第二夜起按恶魔刀杀人。中毒/醉酒：面板照弹照选，只是这次不生效。
+    //   第二夜起按恶魔刀杀人。
+    //   【用户 2026-11-13 按官方标记口径重写】首夜无论自己是否中毒 / 醉酒、也无论宿主能不能
+    //   真的中毒，都照样把「中毒（痢蛭）」120 放到被选中的玩家身上；无效时它等同「倒转放置」
+    //   的提示标记，只记录「该玩家被痢蛭选择过」—— 因为痢蛭恢复清醒健康后，这名玩家仍然
+    //   会成为宿主。120 只在痢蛭死亡 / 离场时移除（BOTC_LleechPoisonClear）。
     if (r == 100) {
         t = g_skillT1[p];
         // 【相克 · 痢蛭 × 主谋】（用户 2026-10-07）：失去能力之后，面板照弹，但选人 / 出刀一律不生效
@@ -61124,21 +61334,36 @@ void BOTC_SkillConfirmCore (int p) {
             DialogSetVisible(g_skillDlg[p], PlayerGroupSingle(g_who[p]), false);
             return;
         }
-        if (BOTC_ActingIsFirstNight(p)) {
+        if (BOTC_LleechHostMode(p)) {
             // 【疯子假痢蛭】（用户 2026-11-12）：认知身份不放置 120 / 122 标记
             if (BOTC_SeatTrueRole(p) == 38) {
                 BOTC_PmStore(g_teller, "【痢蛭】" + BOTC_NameStr(p) + " 是疯子以为自己是痢蛭 → 这次不放置「中毒（痢蛭）」/「不会死亡」。");
             }
             else {
-                if (!BOTC_SkillWorks(p)) {
-                    BOTC_PmStore(g_teller, "【痢蛭】" + BOTC_NameStr(p) + " 中毒/酒鬼 → 这次选宿主无效（按官网口径仍然标记，但毒不生效）。");
-                }
                 if (t >= 2 && t <= 13 && !BOTC_SeatDead(t)) {
-                    g_tokOn[(((g_teller * 14) + t) * 256) + 120] = true;      // 中毒（痢蛭）：宿主
+                    for (i = 2; i <= 13; i += 1) {
+                        g_tokOn[(((g_teller * 14) + i) * 256) + 120] = false;   // 旧宿主先收回，避免同时存在两个宿主
+                    }
+                    g_tokOn[(((g_teller * 14) + t) * 256) + 120] = true;      // 中毒（痢蛭）：宿主（无效时等同倒转放置）
                     g_tokOn[(((g_teller * 14) + p) * 256) + 122] = true;      // 不会死亡（痢蛭）：宿主活着他不会死
                     g_lleechHost = t;
                     BOTC_GrimRender(g_teller);
-                    BOTC_PmStore(g_teller, "【痢蛭】" + BOTC_NameStr(p) + " 首夜选了 " + BOTC_NameStr(t) + " 当宿主（他自己暂时不会死亡）。");
+                    if (BOTC_ActingIsFirstNight(p)) {
+                        BOTC_PmStore(g_teller, "【痢蛭】" + BOTC_NameStr(p) + " 首夜选了 " + BOTC_NameStr(t) + " 当宿主（他自己暂时不会死亡）。");
+                    }
+                    else {
+                        // 【中途被创造的痢蛭】（用户 2026-11-13，官方「进场能力」口径）：
+                        //   一进场就先补选宿主，这一夜不再额外刀人。
+                        BOTC_PmStore(g_teller, "【痢蛭】" + BOTC_NameStr(p) + " 是中途成为痢蛭的（此前没有宿主）→ 按进场能力先选宿主：" + BOTC_NameStr(t) + "（他自己暂时不会死亡）。");
+                    }
+                    if (!BOTC_SkillWorks(p)) {
+                        BOTC_PmStore(g_teller, "【痢蛭】他这次中毒 / 酒鬼 → 「中毒（痢蛭）」按倒转口径放置：现在没有任何效果；他恢复清醒健康后，" + BOTC_NameStr(t) + " 仍然会成为宿主。");
+                    }
+                    else {
+                        if (BOTC_SeatRealRole(t) == 11 || BOTC_SeatRealRole(t) == 37) {
+                            BOTC_PmStore(g_teller, "【痢蛭】" + BOTC_NameStr(t) + " 是士兵 / 莽夫 → 不会因痢蛭而中毒，「中毒（痢蛭）」按倒转口径放置（没有效果）；但" + BOTC_NameStr(t) + " 死亡时痢蛭仍会跟着死亡。");
+                        }
+                    }
                 }
             }
         }
@@ -61364,14 +61589,14 @@ void BOTC_SkillConfirmCore (int p) {
             BOTC_PmStore(g_teller, "【夜间】投毒者（" + BOTC_NameStr(p) + "）中毒/酒鬼/提线木偶，这一次投毒无效，没有打标记。");
         }
         else {
-            // 换了目标：先把上一次毒的人收回来（同一个人就只刷新一下，不重复清）
-            if (g_nightPoison >= 2 && g_nightPoison != g_skillT1[p]) {
-                BOTC_PoisonClear("投毒者换了目标");
+            // 换了目标：只收回**这名投毒者自己**上一次毒的人（同一个人只刷新，不重复清）；
+            //   其他拥有投毒者能力的角色（炼金术士借毒等）各自那份毒保持不动。
+            if (g_poisonAt[p] >= 2 && g_poisonAt[p] != g_skillT1[p]) {
+                BOTC_PoisonClearSource(p, "投毒者换了目标");
             }
             g_tokOn[(((g_teller * 14) + g_skillT1[p]) * 256) + 7] = true;
-            g_nightPoison = g_skillT1[p];
-            g_poisonFrom = p;
-            g_poisonDay = g_dayNum;
+            g_poisonAt[p] = g_skillT1[p];
+            g_poisonDayBy[p] = g_dayNum;
             BOTC_PmStore(g_teller, "【夜间】" + BOTC_NameStr(g_skillT1[p]) + " 中毒（投毒者：" + BOTC_NameStr(p) + "）。");
             BOTC_BartenderSync();
         }
@@ -63143,6 +63368,18 @@ void BOTC_HagApply (int who, int role) {
     if (who < 1 || who > 13 || role < 0 || role > 163) {
         return;
     }
+    // 【克星互斥 · 异端分子 × 痢蛭】（用户 2026-11-13）：一个在场时，创造另一个失败；
+    //   只私聊提醒说书人，不向玩家透露任何结果。若被改造者本人就是那个克星，改完只剩一个 → 允许。
+    if (role == 100 && BOTC_RoleInPlayOther(101, who)) {
+        g_hagActor = 0;
+        BOTC_PmStore(g_teller, "【麻脸巫婆】场上已经有「异端分子」→ 不能创造「痢蛭」（互为克星，同一时间只能有一个在场）；这次改造失败。");
+        return;
+    }
+    if (role == 101 && BOTC_RoleInPlayOther(100, who)) {
+        g_hagActor = 0;
+        BOTC_PmStore(g_teller, "【麻脸巫婆】场上已经有「痢蛭」→ 不能创造「异端分子」（互为克星，同一时间只能有一个在场）；这次改造失败。");
+        return;
+    }
     hagSeat = g_hagActor;
     oldR = BOTC_SeatTrueRole(who);
     // 【唯一恶魔】（用户 2026-11-10）：把场上唯一一只恶魔熬成非恶魔角色 → 先问说书人要不要让她改变选择
@@ -63176,6 +63413,17 @@ void BOTC_HagApplyReal (int who, int role) {
     int oldR;
     int oldA;
     if (who < 1 || who > 13 || role < 0 || role > 163) {    // 允许 1（用户 2026-09-21）
+        return;
+    }
+    // 【克星互斥 · 异端分子 × 痢蛭】（用户 2026-11-13）：兜底再判一次（跨阵营二次确认等路径会直接走到这里）。
+    if (role == 100 && BOTC_RoleInPlayOther(101, who)) {
+        g_hagActor = 0;
+        BOTC_PmStore(g_teller, "【麻脸巫婆】场上已经有「异端分子」→ 不能创造「痢蛭」（互为克星，同一时间只能有一个在场）；这次改造失败。");
+        return;
+    }
+    if (role == 101 && BOTC_RoleInPlayOther(100, who)) {
+        g_hagActor = 0;
+        BOTC_PmStore(g_teller, "【麻脸巫婆】场上已经有「痢蛭」→ 不能创造「异端分子」（互为克星，同一时间只能有一个在场）；这次改造失败。");
         return;
     }
     oldR = BOTC_SeatTrueRole(who);
@@ -64294,7 +64542,8 @@ void BOTC_RascalSync () {
             continue;
         }
         for (q = 2; q <= 13; q += 1) {
-            if (g_seatOn[q] && BOTC_SeatTrueRole(q) == role) {
+            // 【熊孩子】只认真正持有该角色的玩家，变脸师临时借来的那张牌不算（用户 2026-11-13）。
+            if (g_seatOn[q] && BOTC_SeatRealRole(q) == role) {
                 g_tokOn[(((g_teller * 14) + q) * 256) + 170] = true;
             }
         }
@@ -65070,8 +65319,8 @@ bool BOTC_TargetMustBeLiving (int p) {
     if (r == 23 || r == 24 || r == 40 || r == 49 || r == 77 || r == 107 || r == 155 || r == 159) {
         return true;
     }
-    // 痢蛭只有首夜选宿主时要求存活；之后每夜的杀人目标可以是任意玩家。
-    if (r == 100 && BOTC_ActingIsFirstNight(p)) {
+    // 痢蛭只有「选宿主」时要求存活（首夜，或中途被创造后补选）；之后每夜的杀人目标可以是任意玩家。
+    if (r == 100 && BOTC_LleechHostMode(p)) {
         return true;
     }
     return false;
@@ -65556,31 +65805,63 @@ bool BOTC_DawnFunc (bool testConds, bool runActions) {
 // 黄昏（进入夜晚）时到期的状态：投毒者的毒只算一个夜晚 + 一个白天
 // 把「当前这次投毒」收回来：中毒 token 去掉、记录清空。why 只用来写给说书人看的日志。
 //   触发点：① 投毒者换目标（他自己点新目标时）② 黄昏到期 ③ 投毒者死亡 ④ 投毒者换了身份
-void BOTC_PoisonClear (string why) {
-    if (g_nightPoison >= 2) {
-        if (g_tokOn[(((g_teller * 14) + g_nightPoison) * 256) + 7]) {
-            // 这里只管投毒者那份（7）；普卡的毒是 63 那一格，一直挂到普卡下一次行动，不跟黄昏清
-            g_tokOn[(((g_teller * 14) + g_nightPoison) * 256) + 7] = false;
-            BOTC_GrimRender(g_teller);
-            BOTC_SailorSync();         // 中毒状态变了：水手的「不会死亡」标记跟着刷新
+// 【按来源独立】（用户 2026-11-13）：多个拥有投毒者能力的角色各自记一份，只收指定来源那一份；
+//   同一名玩家被不止一个来源毒着时，中毒标记保留，直到最后一个来源也撤掉。
+void BOTC_PoisonClearSource (int src, string why) {
+    int tgt;
+    int i;
+    bool still;
+    if (src < 1 || src > 13) {
+        return;
+    }
+    tgt = g_poisonAt[src];
+    g_poisonAt[src] = 0;
+    g_poisonDayBy[src] = 0;
+    if (tgt < 2) {
+        return;
+    }
+    still = false;
+    for (i = 1; i <= 13; i += 1) {
+        if (g_poisonAt[i] == tgt) {
+            still = true;
         }
     }
-    g_nightPoison = 0;
-    g_poisonFrom = 0;
-    g_poisonDay = 0;
+    if (still) {
+        BOTC_PmStore(g_teller, "【投毒者】" + why + "：仍有其他拥有投毒者能力的角色在毒 " + BOTC_NameStr(tgt) + "，中毒标记保留。");
+        return;
+    }
+    if (g_tokOn[(((g_teller * 14) + tgt) * 256) + 7]) {
+        // 这里只管投毒者那份（7）；普卡的毒是 63 那一格，一直挂到普卡下一次行动，不跟黄昏清
+        g_tokOn[(((g_teller * 14) + tgt) * 256) + 7] = false;
+        BOTC_GrimRender(g_teller);
+        BOTC_SailorSync();         // 中毒状态变了：水手的「不会死亡」标记跟着刷新
+    }
+}
+
+// 收掉所有投毒者能力来源的毒（换局 / 统一清理用）；黄昏到期走 BOTC_DuskResolve 里按来源判断。
+void BOTC_PoisonClear (string why) {
+    int i;
+    for (i = 1; i <= 13; i += 1) {
+        if (g_poisonAt[i] >= 2) {
+            BOTC_PoisonClearSource(i, why);
+        }
+    }
 }
 
 void BOTC_DuskResolve () {
     int q;
+    int i;
     BOTC_GudiaoDuskClear();
     BOTC_XaanPoisonClear("黄昏到期");
-    // 首夜设置的毒必须完整保留一个白天；只有跨过一天后的黄昏才到期。
-    if (g_nightPoison >= 2) {
-        if (g_poisonDay < g_dayNum) {
-            BOTC_PoisonClear("黄昏到期");
-        }
-        else {
-            BOTC_PmStore(g_teller, "【投毒者】首夜的中毒仍在本日生效，等到下一个黄昏再清除。");
+    // 首夜设置的毒必须完整保留一个白天；只有跨过一天后的黄昏才到期。每个来源分别判断。
+    for (i = 1; i <= 13; i += 1) {
+        if (g_poisonAt[i] >= 2) {
+            if (g_poisonDayBy[i] < g_dayNum) {
+                BOTC_PoisonClearSource(i, "黄昏到期");
+            }
+            else {
+                BOTC_PmStore(g_teller, "【投毒者】" + BOTC_NameStr(i) + " 首夜的中毒仍在本日生效，等到下一个黄昏再清除。");
+            }
         }
     }
     BOTC_DrunkClear("黄昏到期");           // 醉酒也只算一个夜晚 + 一个白天（暂时）
@@ -69722,12 +70003,14 @@ void BOTC_SwapPerSeatRuntime (int x, int y) {
     b = g_pedantActing[x];   g_pedantActing[x] = g_pedantActing[y]; g_pedantActing[y] = b;
     if (g_vixenSeat == x) { g_vixenSeat = y; }
     else { if (g_vixenSeat == y) { g_vixenSeat = x; } }
-    // 【投毒者的毒跟着人走】（用户 2026-11-01）：这两个记的是**座位**，换座位不改的话，
-    //   黄昏会按旧格子去清 → 投毒 token 看起来自己消失（或者该清的时候清不掉）。
-    if (g_nightPoison == x) { g_nightPoison = y; }
-    else { if (g_nightPoison == y) { g_nightPoison = x; } }
-    if (g_poisonFrom == x) { g_poisonFrom = y; }
-    else { if (g_poisonFrom == y) { g_poisonFrom = x; } }
+    // 【投毒者的毒跟着人走】（用户 2026-11-01 / 2026-11-13）：按来源座位独立记账。
+    //   来源座位整体对调（谁下的毒跟着人走），再把所有目标座位按 x↔y 换格。
+    t = g_poisonAt[x]; g_poisonAt[x] = g_poisonAt[y]; g_poisonAt[y] = t;
+    t = g_poisonDayBy[x]; g_poisonDayBy[x] = g_poisonDayBy[y]; g_poisonDayBy[y] = t;
+    for (i = 0; i <= 13; i += 1) {
+        if (g_poisonAt[i] == x) { g_poisonAt[i] = y; }
+        else { if (g_poisonAt[i] == y) { g_poisonAt[i] = x; } }
+    }
     if (g_vixenTarget == x) { g_vixenTarget = y; }
     else { if (g_vixenTarget == y) { g_vixenTarget = x; } }
     b = g_moonDone[x];       g_moonDone[x] = g_moonDone[y];    g_moonDone[y] = b;
@@ -84722,6 +85005,14 @@ void BOTC_BankInit () {
         return;
     }
     for (p = 1; p <= 13; p += 1) {
+        // 【防阻塞】（用户 2026-11-13）：`BankWait` 是阻塞等待，已经离开 / 掉线的座位
+        //   存档同步可能永远不返回，会把整条脚本线程卡住（全场按钮和聊天一起无响应）
+        //   → 普通座位直接跳过，等它重新进房时由 `BOTC_BankEnsure()` 补。
+        //   说书人本人保持原逻辑：`BOTC_MyBank()` 直接返回 `g_bank[g_teller]`，
+        //   这里跳过会让它拿到空句柄。
+        if (p != g_teller && PlayerStatus(p) == 2) {
+            continue;
+        }
         if (p == g_teller || PlayerType(p) == 1) {          // 1 号位一定抓；其它真人座位也抓
             // 直接用 `BankLoad` 的返回值当句柄（我们实测：这样写出来的文件确实落盘了）。
             //   参考图用的是「BankLoad 之后紧跟 BankLastCreated()」，两种写法等价；
@@ -84750,6 +85041,12 @@ void BOTC_BankEnsure (int p) {
         return;
     }
     if (PlayerType(p) != 1) {
+        return;
+    }
+    // 【防阻塞】（用户 2026-11-13）：已经离开 / 掉线的座位不再补读档。
+    //   `BankWait` 没有超时参数，掉线玩家的同步不返回就会卡死整条脚本线程；
+    //   这类座位本来也不该再写统计（结算路径已经在 `PlayerStatus == 2` 时跳过）。
+    if (PlayerStatus(p) == 2) {
         return;
     }
     g_bank[p] = BankLoad("BOTCSave2", p);
@@ -86087,6 +86384,17 @@ void BOTC_TokToggleAt (int ob, int seat, int t) {
             }
         }
     }
+    // 【正式开始前只允许认知偏差 token】（用户 2026-11-13）：游戏正式开始前，说书人只能给玩家
+    //   打「是酒鬼 8 / 是疯子 49 / 是提线木偶 118 / 是悟道者 140」；中毒 / 醉酒 / 免死 / 干扰项
+    //   这些常驻标记统一留到 BOTC_GameStartGo() 里的 BOTC_OpeningMarkSync() 结算。
+    //   撤掉不受限制。
+    if (!g_started && ob == g_teller && seat >= 2 && seat <= 13
+            && !g_tokOn[(((ob * 14) + seat) * 256) + t]) {
+        if (t != 8 && t != 49 && t != 118 && t != 140) {
+            BOTC_Notice(ob, "游戏正式开始前只能标记「是酒鬼 / 是疯子 / 是悟道者 / 是提线木偶」。");
+            return;
+        }
+    }
     // 隐形槽（18 = 镇长记账）不给点
     if (BOTC_TokHidden(t, ob)) {
         return;
@@ -86799,6 +87107,13 @@ int BOTC_PickBoardRole (int t) {
         if (g_scrUsed[r] && !(g_athDeal && !BOTC_DealRoleSingleton(r))) {
             continue;
         }
+        // 【克星互斥 · 异端分子 × 痢蛭】（用户 2026-11-13）：同一局只能有其中一个在场
+        if (r == 101 && g_scrUsed[100]) {
+            continue;
+        }
+        if (r == 100 && g_scrUsed[101]) {
+            continue;
+        }
         // 【无神论者】（用户 2026-11-12）：本局有没有无神论者由 BOTC_Deal 开头掷一次（g_athDeal），
         //   这里不再单独抽他，统一留给镇民抽完后钉进一个镇民位。
         if (t == 0 && r == 83) {
@@ -86842,6 +87157,13 @@ int BOTC_PickBoardRole (int t) {
             if (g_scrUsed[r] && !(g_athDeal && !BOTC_DealRoleSingleton(r))) {
                 continue;
             }
+            // 【克星互斥 · 异端分子 × 痢蛭】（用户 2026-11-13）：兜底也不让两个克星同场
+            if (r == 101 && g_scrUsed[100]) {
+                continue;
+            }
+            if (r == 100 && g_scrUsed[101]) {
+                continue;
+            }
             if (g_lgNoBounty && t == 0 && r == 90) {
                 continue;                        // 军团 8 / 9 名：兜底也不抽赏金猎人
             }
@@ -86864,6 +87186,13 @@ int BOTC_PickBoardRole (int t) {
                 continue;
             }
             if (g_scrUsed[r] && !(g_athDeal && !BOTC_DealRoleSingleton(r))) {
+                continue;
+            }
+            // 【克星互斥 · 异端分子 × 痢蛭】（用户 2026-11-13）：兜底也不让两个克星同场
+            if (r == 101 && g_scrUsed[100]) {
+                continue;
+            }
+            if (r == 100 && g_scrUsed[101]) {
                 continue;
             }
             if (g_lgNoBounty && t == 0 && r == 90) {
@@ -87456,8 +87785,10 @@ void BOTC_Deal () {
     // 重新发牌 = 新的一局：隔夜技能记录和「传位解锁」一起清掉
     BOTC_NightSkillReset();
     g_promoteOpen = false;
-    g_nightPoison = 0;
-    g_poisonFrom = 0;
+    for (i = 0; i <= 13; i += 1) {
+        g_poisonAt[i] = 0;
+        g_poisonDayBy[i] = 0;
+    }
     BOTC_SpyPeekEnd();      // 间谍的魔典要是还摊在看说书人那份，先换回他自己那份
     BOTC_GrimResetPerPlayer();
     g_butlerSeat = 0;
@@ -88128,6 +88459,13 @@ void BOTC_Deal () {
                 continue;
             }
             if (g_scrUsed[r] && !(g_athDeal && !BOTC_DealRoleSingleton(r))) {
+                continue;
+            }
+            // 【克星互斥 · 异端分子 × 痢蛭】（用户 2026-11-13）：兜底也不让两个克星同场
+            if (r == 101 && g_scrUsed[100]) {
+                continue;
+            }
+            if (r == 100 && g_scrUsed[101]) {
                 continue;
             }
             candN = candN + 1;
@@ -92066,6 +92404,9 @@ bool BOTC_Tick_Func (bool testConds, bool runActions) {
     BOTC_PeekTick();
     // 【送葬者 · 清醒时自动发信息】（用户 2026-11-11）：唤醒后 1..5 秒自动私聊今天被处决者的角色
     BOTC_UtTick();
+    // 【痢蛭 · 恢复清醒时宿主已死】（用户 2026-11-13，官方规则）：0.5 秒一拍，
+    //   中毒 / 醉酒期间宿主先死 → 他一恢复清醒 / 健康就立即死亡。
+    BOTC_LleechRecoverCheck();
     // 【中毒 / 醉酒 · 说书人无操作自动给伪造魔典】（用户 2026-11-10）：弹窗 5 秒没人点就自动结算
     BOTC_FakeAskTick();
     // 【判定弹窗 / 自动判定】（用户 2026-11-01 / 2026-11-08）：0.5 秒一拍；
