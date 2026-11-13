@@ -1880,8 +1880,11 @@ int         g_musicPrio;
 int         g_musicPendPrio;    // 待播放那首的优先级
 // 提名环节：点开之后延迟几秒再把魔典弹给全场（中间留给"现在是什么阶段"的大提示）
 timer       g_tNomPop;
-// 【-laugh / 复活动画】（用户 2026-09-22）
-int         g_laughCd;         // -laugh 的公用冷却：还剩几拍（一拍 0.5 秒，60 拍 = 30 秒）
+// 【-laugh / 复活动画】（用户 2026-09-22；冷却规则 2026-11-13 改）
+int         g_laughCd;         // -laugh 的全场公用冷却：还剩几拍（一拍 0.5 秒，120 拍 = 60 秒）
+int[14]     g_laughPCd;        // -laugh 的个人冷却：还剩几拍（60 秒起，连续使用每次额外 +30 秒）
+int[14]     g_laughPStreak;    // -laugh 的个人连续使用次数（个人冷却走完再空闲 60 秒清零）
+int[14]     g_laughPIdle;      // 个人冷却归零后的空闲拍数（满 120 拍 = 60 秒 → 连续次数清零）
 int[14]     g_revFxCt;         // 复活动画：还要等几拍才撤红叉（12 拍 = 6 秒）
 int[14]     g_revFxSnd;        // 复活动画：还要等几拍才播 fuhuo（8 拍 = 4 秒）
 trigger     g_tNomPopTrig;
@@ -3429,7 +3432,7 @@ void   BOTC_MusicPlay (string name, int prio, fixed delay);
 void   BOTC_MusicDropPrio (int prio);
 void   BOTC_DayMusicRefresh (fixed delay);
 void   BOTC_PlaySfx (string id);
-void   BOTC_Laugh (int p);              // 【-laugh】（用户 2026-09-22）：所有玩家可用，全桌公用 30 秒冷却
+void   BOTC_Laugh (int p);              // 【-laugh】（2026-11-13）：全场（含说书人）公用 60 秒；个人连续使用每次额外 +30 秒
 void   BOTC_LaughTick ();               // -laugh 冷却 + 复活动画，都挂在 0.5 秒的 tick 上
 void   BOTC_PlaySfxTo (string id, int p);
 void   BOTC_StartCdBegin ();
@@ -13077,17 +13080,27 @@ bool BOTC_ChatDo (bool testConds, bool runActions) {
     //   big <文字>      → 直接用大提示弹一行字（试位置 / 试大小）
     //   sfx <音效ID>    → 试播一个音效（顺便把它记成入夜那声）
     //   参数都是英文，所以用 StringSub 直接取（中文会牵扯字节下标，这里不碰）
-    // 【-laugh】（用户 2026-09-22）：所有玩家都能用；全桌公用 30 秒冷却，冷却中完全静默 ----
+    // 【-laugh】（用户 2026-09-22；冷却 2026-11-13 改）：所有玩家 + 说书人共用 60 秒冷却；
+    //   同一个人连续使用，个人冷却每次额外 +30 秒；冷却中发指令只私聊告诉本人还剩几秒 ----
     //   ⚠ 直接内联在这里，不再调外部函数（外面那次「调用」在某些贴法下进不去）
     if (StringFind(msg, "-laugh", false) >= 0) {
-        if (g_laughCd <= 0) {
-            g_laughCd = 60;
-            s = BOTC_SayToken(p) + "：<s val=\"ModLeftSize20Bold\">爽朗的大笑！</s>";     // 【名字要渲染】（用户 2026-09-22）：用「玩家N」占位符，渲染时才带名字和颜色
-            g_chatWhoNow = BOTC_PosOf(p);
-            BOTC_PubLine(s);
-            g_chatWhoNow = 0;
-            BOTC_PlaySfx("laugh");
+        n = g_laughCd;
+        if (g_laughPCd[p] > n) {
+            n = g_laughPCd[p];
         }
+        if (n > 0) {
+            BOTC_Notice(p, "【-laugh】还在冷却中，请等待 " + IntToString((n + 1) / 2) + " 秒后再试。");
+            return true;
+        }
+        g_laughPStreak[p] = g_laughPStreak[p] + 1;                 // 连续使用次数：1、2、3…
+        g_laughPCd[p] = 120 + ((g_laughPStreak[p] - 1) * 60);      // 60 秒起，连续每次额外 +30 秒
+        g_laughPIdle[p] = 0;
+        g_laughCd = 120;                                           // 全场（含说书人）共用 60 秒
+        s = BOTC_SayToken(p) + "：<s val=\"ModLeftSize20Bold\">爽朗的大笑！</s>";     // 【名字要渲染】（用户 2026-09-22）：用「玩家N」占位符，渲染时才带名字和颜色
+        g_chatWhoNow = BOTC_PosOf(p);
+        BOTC_PubLine(s);
+        g_chatWhoNow = 0;
+        BOTC_PlaySfx("laugh");
         return true;
     }
     // 【测试·教派投票全流程】（用户 2026-10-11）：说书人自己起一次教派投票，并把**除他以外所有人**自动投成【投票】
@@ -17080,6 +17093,10 @@ void BOTC_ResetGameVars () {
         if (g_jrDlg[i] != 0) {
             DialogSetVisible(g_jrDlg[i], PlayerGroupAll(), false);
         }
+        // 【-laugh 个人冷却】（用户 2026-11-13）：新一局清掉个人冷却与连续使用计数
+        g_laughPCd[i] = 0;
+        g_laughPStreak[i] = 0;
+        g_laughPIdle[i] = 0;
     }
     g_rateTeller = 0;                  // 【说书人评分】新一局重新绑定被评分的说书人
     // 【间谍 / 寡妇 · 延迟看魔典】（用户 2026-11-10）：新一局清空待看计时
@@ -55027,12 +55044,19 @@ void BOTC_SendMarionetteToDemons () {
 // 夜间轮次再单独把“谁是提线木偶”发给所有恶魔；随后再询问是否给疯子发一条假提线。
 void BOTC_SendFirstNightMarionetteInfo () {
     int i;
+    int r;
     int lu;
     for (i = 2; i <= 13; i += 1) {
         if (g_seatOn[i] && BOTC_IsMarionette(i)) {
             // 提线木偶只在这里由说书人转述给恶魔，不再作为本人角色被额外唤醒。
-            g_autoWoke[i] = true;
-            g_testWoke[i] = true;
+            // 【认知身份仍有夜间行动】（用户 2026-11-13）：他以为自己是贵族这类首夜信息角色时，
+            //   自己那个夜序（贵族首夜第 67 位）还要被唤醒 ---- 只有魔典上仍是提线木偶本人
+            //   或假身份今晚没有行动时，才在这里标记「今晚已经唤醒过」。
+            r = g_mark[(g_teller * 14) + i] - 1;
+            if (r == 93 || BOTC_NightOrderOf(i) <= 0) {
+                g_autoWoke[i] = true;
+                g_testWoke[i] = true;
+            }
         }
     }
     BOTC_SendMarionetteToDemons();
@@ -91917,16 +91941,27 @@ bool BOTC_VoteTimer_Func (bool testConds, bool runActions) {
     return true;
 }
 
-// 【-laugh】（用户 2026-09-22）：所有玩家可用；公聊大字体 + laugh 音效；全桌公用 30 秒冷却，冷却中完全静默
+// 【-laugh】（用户 2026-09-22；冷却 2026-11-13 改）：所有玩家 + 说书人共用 60 秒；
+//   同一个人连续使用，个人冷却每次额外 +30 秒；冷却中发指令只私聊告诉本人还剩几秒
+//   （正式路径在 BOTC_ChatDo 内联；这里是同一套逻辑的备份入口，改动需同步）
 void BOTC_Laugh (int p) {
     string s;
+    int n;
     if (p < 1 || p > 13) {
         return;
     }
-    if (g_laughCd > 0) {
+    n = g_laughCd;
+    if (g_laughPCd[p] > n) {
+        n = g_laughPCd[p];
+    }
+    if (n > 0) {
+        BOTC_Notice(p, "【-laugh】还在冷却中，请等待 " + IntToString((n + 1) / 2) + " 秒后再试。");
         return;
     }
-    g_laughCd = 60;
+    g_laughPStreak[p] = g_laughPStreak[p] + 1;
+    g_laughPCd[p] = 120 + ((g_laughPStreak[p] - 1) * 60);
+    g_laughPIdle[p] = 0;
+    g_laughCd = 120;
     s = BOTC_NameTag(BOTC_PosOf(p)) + "爽朗的大笑！";
     g_chatWhoNow = BOTC_PosOf(p);
     BOTC_PubSayLine(p, s);
@@ -91939,6 +91974,20 @@ void BOTC_LaughTick () {
     int q;
     if (g_laughCd > 0) {
         g_laughCd = g_laughCd - 1;
+    }
+    // 【个人冷却 / 连续计数】（用户 2026-11-13）：个人冷却走完后再空闲满 60 秒，连续次数清零
+    for (q = 1; q <= 13; q += 1) {
+        if (g_laughPCd[q] > 0) {
+            g_laughPCd[q] = g_laughPCd[q] - 1;
+            g_laughPIdle[q] = 0;
+        }
+        else if (g_laughPStreak[q] > 0) {
+            g_laughPIdle[q] = g_laughPIdle[q] + 1;
+            if (g_laughPIdle[q] >= 120) {
+                g_laughPIdle[q] = 0;
+                g_laughPStreak[q] = 0;
+            }
+        }
     }
     for (q = 2; q <= 13; q += 1) {
         if (g_revFxCt[q] <= 0) {
