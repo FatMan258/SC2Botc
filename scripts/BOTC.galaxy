@@ -3835,13 +3835,12 @@ bool   BOTC_HotKey_Func (bool testConds, bool runActions);
 //   换说书人时对调的是 g_who 的两项；编号表 g_lab 不动（格子 2 永远叫 [1]）。
 int[14]     g_who;
 // 【座位颜色】（用户 2026-11-15）：说书人在剧本内固定红色；12 名玩家的名字颜色每局随机分配。
-//   · 不再按座位固定色号：进入剧本（BOTC_BoardFinish）时调用 BOTC_SeatColorShuffle() 把调色板
-//     洗牌后发给每个物理座位，下次进剧本再重新随机；
-//   · 调色板避开紫 / 深绿 / 棕等暗色，保证深色聊天背景上看得清；
-//   · 名字属于人：取色时先按位置反查物理座位，再取这个人分到的调色板号。
-int[14]     g_seatColor;     // 物理座位 → 调色板序号（1..12）
-color[13]   g_seatPal;       // 调色板本体（下标 1..12）
-// 座位取色：说书人固定红，其余按玩家当前分到的调色板色。
+//   · 不再按座位固定色号：进入剧本（BOTC_BoardFinish）时调用 BOTC_SeatColorShuffle() 把颜色
+//     随机发给每个物理座位，下次进剧本再重新随机；
+//   · 玩家颜色仍取 SC2 原生色，只把红(1，说书人专用)、紫(4)、紫罗兰(9) 换掉；
+//   · 名字属于人：取色时先按位置反查物理座位，再取这个人分到的色号。
+int[14]     g_seatColor;     // 物理座位 → SC2 原生色号
+// 座位取色：说书人固定红，其余按玩家当前分到的原生色。
 color BOTC_SeatColor (int p) {
     int pid;
     if (p < 1 || p > 13) {
@@ -3857,7 +3856,7 @@ color BOTC_SeatColor (int p) {
     if (pid > 13) {
         pid = 13;
     }
-    return g_seatPal[g_seatColor[pid]];
+    return libNtve_gf_ConvertPlayerColorToColor(g_seatColor[pid]);
 }
 // 【每局随机分配玩家颜色】（用户 2026-11-15）：进入剧本时调用；说书人座位不参与分配。
 void BOTC_SeatColorShuffle () {
@@ -3866,6 +3865,21 @@ void BOTC_SeatColorShuffle () {
     int t;
     int tmp;
     int[14] idx;
+    int[13] pool;
+    // 【玩家颜色池】（用户 2026-11-15）：SC2 原生色，去掉红(1，说书人专用)/紫(4)/紫罗兰(9)，
+    //   用浅绿(13)/深灰(14)/深粉(15) 补齐 12 色。
+    pool[0] = 2;       // 蓝
+    pool[1] = 3;       // 青
+    pool[2] = 5;       // 黄
+    pool[3] = 6;       // 橙
+    pool[4] = 7;       // 绿
+    pool[5] = 8;       // 粉
+    pool[6] = 10;      // 浅灰
+    pool[7] = 11;      // 深绿
+    pool[8] = 12;      // 棕
+    pool[9] = 13;      // 浅绿
+    pool[10] = 14;     // 深灰
+    pool[11] = 15;     // 深粉
     t = 0;
     for (i = 1; i <= 13; i += 1) {
         if (i == g_teller) {
@@ -3875,7 +3889,7 @@ void BOTC_SeatColorShuffle () {
         t = t + 1;
     }
     for (i = 0; i < t; i += 1) {
-        g_seatColor[idx[i]] = i + 1;
+        g_seatColor[idx[i]] = pool[i];
     }
     for (i = t - 1; i >= 1; i -= 1) {
         j = RandomInt(0, i);
@@ -15543,8 +15557,9 @@ void BOTC_BuildNightOrder () {
         g_noClose[p] = BOTC_NewButton(g_noDlg[p], 160, 40, 360, 1000, "关闭");
         g_noUp[p] = BOTC_NewButton(g_noDlg[p], 150, 40, 20, 1000, "▲ 上一页");
         g_noDown[p] = BOTC_NewButton(g_noDlg[p], 150, 40, 190, 1000, "▼ 下一页");
-        // 页码文字改成底部整行居中：右下角两枚切换按钮占满后，这一行不再挤在按钮中间（用户 2026-11-15）
-        g_noPageLbl[p] = BOTC_NewLabelC(g_noDlg[p], 1140, 26, 20, 1044, StringToText(""));
+        // 页码文字改成底部整行：用普通标签创建，不能走 BOTC_NewLabelC（第 9 个参数会开逐字显示），
+        //   否则每次刷新都会一个字一个字重写（用户 2026-11-15）
+        g_noPageLbl[p] = BOTC_NewLabel(g_noDlg[p], 1140, 26, 20, 1044, StringToText(""));
         libNtve_gf_SetDialogItemStyle(g_noPageLbl[p], "ModLeftSize20Bold", PlayerGroupAll());
         libNtve_gf_SetDialogItemAcceptMouse(g_noPageLbl[p], false, PlayerGroupAll());
         DialogSetVisible(g_noDlg[p], PlayerGroupSingle(p), false);
@@ -95610,19 +95625,8 @@ void BOTC_Init () {
         g_dispName[i] = "";
         g_introName[i] = "";
     }
-    // 【玩家调色板】（用户 2026-11-15）：12 个高对比亮色，避开紫 / 深绿 / 棕等暗色。
-    g_seatPal[1] = Color(255, 140, 26);     // 橙
-    g_seatPal[2] = Color(255, 214, 51);     // 黄
-    g_seatPal[3] = Color(200, 255, 77);     // 黄绿
-    g_seatPal[4] = Color(102, 230, 77);     // 绿
-    g_seatPal[5] = Color(124, 240, 200);    // 薄荷
-    g_seatPal[6] = Color(77, 216, 255);     // 天蓝
-    g_seatPal[7] = Color(85, 153, 255);     // 蓝
-    g_seatPal[8] = Color(160, 184, 255);    // 淡蓝
-    g_seatPal[9] = Color(255, 143, 200);    // 粉
-    g_seatPal[10] = Color(217, 160, 102);   // 茶色
-    g_seatPal[11] = Color(200, 200, 200);   // 浅灰
-    g_seatPal[12] = Color(232, 217, 160);   // 米黄
+    // 【进游戏前先随机一次】（用户 2026-11-15）：选板页 / 取名页也有彩色名字，避免默认色号出现红色。
+    BOTC_SeatColorShuffle();
     for (p = 0; p <= 13; p += 1) {
         g_mySess[p] = 0;
         g_sessOwner[p] = 0;
