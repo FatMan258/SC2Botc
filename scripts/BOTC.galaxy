@@ -247,11 +247,11 @@ int[364]    g_abNewRole;          // 每个坑位摆的是哪个身份（点进�
 int[56]     g_abNewSec;           // 玩家 × 第 2 页的分段小标题
 int[14]     g_abNewPrev;
 int[14]     g_abNewNext;
-int[14]     g_abViewBtn;          // 剧本角色表弹窗左上角【夜间行动顺序】切换
-int[14]     g_noViewBtn;          // 夜间顺序弹窗左上角【剧本角色】切换
-// 【失忆角色表】（用户 2026-11-14）：剧本里有失忆者时，在【剧本角色表】按钮上方多一个入口。
-//   复用剧本角色表的窗口和控件，只把数据换成「失忆者可以选择的全部能力」，只有两页、没有夜间行动顺序入口。
-int[14]     g_amneBtnDlg;
+int[14]     g_abViewBtn;          // 剧本角色表弹窗右下角【夜间行动顺序】切换
+int[14]     g_noViewBtn;          // 夜间顺序弹窗右下角【剧本角色表】切换
+int[14]     g_noAmneBtn;          // 夜间顺序弹窗右下角【失忆角色表】切换
+// 【失忆角色表】（用户 2026-11-15）：入口放在剧本角色表弹窗右下角，与【夜间行动顺序】同一行。
+//   复用剧本角色表的窗口和控件，只把数据换成「失忆者可以选择的全部能力」，只有两页。
 int[14]     g_amneOpenBtn;
 bool[14]    g_abAmneView;         // 剧本角色表窗口当前显示的是失忆角色表
 int[14]     g_amnePage;           // 失忆角色表当前页：1 = 镇民 / 2 = 外来者 + 爪牙
@@ -1717,8 +1717,7 @@ int[14]     g_fakeMark;       // 伪造身份 + 1（0 = 空白）
 bool[3584]  g_fakeTok;        // 伪造 token：(格子 * 256 + token)
 bool[16]    g_grimFakeOn;     // 这个玩家的魔典当前是否显示伪造魔典（间谍 / 寡妇被选择看伪造时）
 bool        g_tokFake;        // 当前 token 面板是否在编辑伪造魔典
-int         g_fakeBtnDlg;     // 说书人「伪造魔典」按钮底座
-int         g_fakeOpenBtn;    // 说书人「伪造魔典」按钮
+int         g_fakeOpenBtn;    // 说书人工具里的「伪造魔典」按钮
 // 【菜单按钮】（用户 2026-11-09）：右上角常驻【菜单】按钮，点它＝打开星际自带的 F10 菜单
 int         g_menuBtnDlg;
 int         g_menuBtn;
@@ -2064,7 +2063,7 @@ int         g_viewFlipChance;
 int[14]     g_claimBtnP;
 int[14]     g_claimBtnDlg;
 // 【竞选角色类型】（用户 2026-11-11）：剧本页右上角入口 + 每个玩家一份的参与设置面板。
-//   4 个类型各自独立：1 = 参与竞选（随机配板抽到该类型时权重 ×1.5），0 = 不参与。
+//   4 个类型各自独立：1 = 参与竞选（随机配板抽到该类型时权重 ×2），0 = 不参与。
 //   默认全开；只有点【关闭（保存）】才写入玩家本地 bank（opts 章节 jrw 位掩码），
 //   下一局随机配板读到的就是保存后的状态。
 int[14]     g_jrBtnDlg;
@@ -2121,6 +2120,10 @@ int          g_introTitleLbl;
 int          g_introPromptLbl;
 int          g_introEdit;        // 【取名输入框】（用户 2026-11-13）：玩家自选名，说书人不可见
 int          g_introBtn;         // 【确认取名】按钮
+// 【彩色名字按钮】（用户 2026-11-15）：积分 ≥ 1000 才显示，两个按钮互斥，每局重置不存档。
+int          g_introColorBtn1;   // 【渐变彩色】按钮
+int          g_introColorBtn2;   // 【随机彩色】按钮
+int[14]      g_introColorMode;   // 物理座位 → 0 无 / 1 渐变彩色 / 2 随机彩色
 timer        g_tIntro;
 trigger      g_tIntroTrig;
 int[48]     g_chip;            // 圆桌上每个座位 4 个小格：下面那行小字
@@ -3477,6 +3480,13 @@ void   BOTC_IntroTryName (int p, string name);
 void   BOTC_IntroConfirm (int p);
 void   BOTC_IntroRandomName (int p);
 bool   BOTC_IntroCanColor (int p);
+void   BOTC_IntroColorClick (int p, int mode);
+void   BOTC_IntroColorRender (int p);
+string BOTC_IntroStyledName (int p, string name);
+string BOTC_IntroHex2 (int v);
+string BOTC_IntroRgbHex (int r, int g, int b);
+string BOTC_IntroGradHex (int k, int n);
+string BOTC_IntroRandHex ();
 void   BOTC_ResetPlayerNames ();
 bool   BOTC_IntroTimer_Func (bool testConds, bool runActions);
 void   BOTC_BoardOpen ();
@@ -3821,14 +3831,59 @@ bool   BOTC_HotKey_Func (bool testConds, bool runActions);
 //--------------------------------------------------------------------------------------------------
 // 小工具
 //--------------------------------------------------------------------------------------------------
-// 【座位颜色表】（用户 2026-10-06）：**不吃大厅自选色**，按物理座位固定用 SC2 原生那套颜色；
-//   说书人一律**白色**（谁是当前说书人谁就是白的，换说书人后自动跟着变）。
-//   原生顺序：1 红 / 2 蓝 / 3 青 / 4 紫 / 5 黄 / 6 橙 / 7 绿 / 8 粉 /
-//             9 紫罗兰 / 10 浅灰 / 11 深绿 / 12 棕 / 13 浅绿
-int[14]     g_seatColor;
 // 【座位→人】（用户 2026-10-06）：`g_who[逻辑位置] = 物理座位`——编号属于位置、名字属于人。
 //   换说书人时对调的是 g_who 的两项；编号表 g_lab 不动（格子 2 永远叫 [1]）。
 int[14]     g_who;
+// 【座位颜色】（用户 2026-11-15）：说书人在剧本内固定红色；12 名玩家的名字颜色每局随机分配。
+//   · 不再按座位固定色号：进入剧本（BOTC_BoardFinish）时调用 BOTC_SeatColorShuffle() 把调色板
+//     洗牌后发给每个物理座位，下次进剧本再重新随机；
+//   · 调色板避开紫 / 深绿 / 棕等暗色，保证深色聊天背景上看得清；
+//   · 名字属于人：取色时先按位置反查物理座位，再取这个人分到的调色板号。
+int[14]     g_seatColor;     // 物理座位 → 调色板序号（1..12）
+color[13]   g_seatPal;       // 调色板本体（下标 1..12）
+// 座位取色：说书人固定红，其余按玩家当前分到的调色板色。
+color BOTC_SeatColor (int p) {
+    int pid;
+    if (p < 1 || p > 13) {
+        return Color(255, 255, 255);
+    }
+    if (p == 1 || g_who[p] == g_teller) {
+        return Color(255, 0, 0);
+    }
+    pid = g_who[p];
+    if (pid < 1) {
+        pid = 1;
+    }
+    if (pid > 13) {
+        pid = 13;
+    }
+    return g_seatPal[g_seatColor[pid]];
+}
+// 【每局随机分配玩家颜色】（用户 2026-11-15）：进入剧本时调用；说书人座位不参与分配。
+void BOTC_SeatColorShuffle () {
+    int i;
+    int j;
+    int t;
+    int tmp;
+    int[14] idx;
+    t = 0;
+    for (i = 1; i <= 13; i += 1) {
+        if (i == g_teller) {
+            continue;
+        }
+        idx[t] = i;
+        t = t + 1;
+    }
+    for (i = 0; i < t; i += 1) {
+        g_seatColor[idx[i]] = i + 1;
+    }
+    for (i = t - 1; i >= 1; i -= 1) {
+        j = RandomInt(0, i);
+        tmp = g_seatColor[idx[i]];
+        g_seatColor[idx[i]] = g_seatColor[idx[j]];
+        g_seatColor[idx[j]] = tmp;
+    }
+}
 
 // 【屏蔽关系查询】（用户 2026-11-06）：a 是否屏蔽了 b。
 bool BOTC_Blocked (int a, int b) {
@@ -4019,6 +4074,14 @@ void BOTC_AssignRandomNames () {
             }
         }
     }
+    // 【渐变 / 随机彩色】（用户 2026-11-15）：勾选彩色按钮的玩家进入剧本后统一按模式上色；
+    //   放在名字分配之后，避免颜色标签影响上面的重名比较；已上过色的自选名保持不动。
+    for (i = 1; i <= 13; i += 1) {
+        if (g_introColorMode[i] != 0 && StringLength(g_dispName[i]) > 0 &&
+            StringFind(g_dispName[i], "<c", false) < 0 && BOTC_IntroCanColor(i)) {
+            g_dispName[i] = BOTC_IntroStyledName(i, g_dispName[i]);
+        }
+    }
 }
 
 // 【清回战网名】：结算 / 取消开始 / 回到选板页时使用，同时丢掉下一次开局的自选名。
@@ -4162,9 +4225,9 @@ text BOTC_PlayerNameText (int p) {
         return StringToText(BOTC_NameTag(p)) + nt;
     }
     if (g_who[p] == g_teller || p == 1) {
-        return StringToText(BOTC_NameTag(p)) + TextWithColor(nt, libNtve_gf_ConvertPlayerColorToColor(g_seatColor[1]));   // 【说书人 = 游戏原生粉】（用户 2026-10-14）：色号 15
+        return StringToText(BOTC_NameTag(p)) + TextWithColor(nt, BOTC_SeatColor(1));   // 【说书人 = 游戏原生粉】（用户 2026-10-14）：色号 15
     }
-    return StringToText(BOTC_NameTag(p)) + TextWithColor(nt, libNtve_gf_ConvertPlayerColorToColor(g_seatColor[p]));
+    return StringToText(BOTC_NameTag(p)) + TextWithColor(nt, BOTC_SeatColor(p));
 }
 
 // 【魔典座位名字那一行】（用户 2026-11-13）：点开始说书之前只显示战网名（说书人格额外加「说书人」前缀，
@@ -4174,11 +4237,11 @@ text BOTC_SeatLabelText (int pos) {
     nt = BOTC_SeatNameText(pos);
     if (g_boardOpen) {
         if (g_who[pos] == g_teller || pos == 1) {
-            return StringToText("说书人 [") + TextWithColor(nt, libNtve_gf_ConvertPlayerColorToColor(g_seatColor[pos])) + StringToText("]");
+            return StringToText("说书人 [") + TextWithColor(nt, BOTC_SeatColor(pos)) + StringToText("]");
         }
-        return TextWithColor(nt, libNtve_gf_ConvertPlayerColorToColor(g_seatColor[pos]));
+        return TextWithColor(nt, BOTC_SeatColor(pos));
     }
-    return StringToText(IntToString(g_lab[pos] + g_nameNumShift) + " [") + TextWithColor(nt, libNtve_gf_ConvertPlayerColorToColor(g_seatColor[pos])) + StringToText("]");
+    return StringToText(IntToString(g_lab[pos] + g_nameNumShift) + " [") + TextWithColor(nt, BOTC_SeatColor(pos)) + StringToText("]");
 }
 
 // 【说话人占位符】（用户 2026-10-07）：公聊 / 私聊 / 邪恶小窗 / -laugh 的**说话人**不再按"格子"记，
@@ -4215,9 +4278,9 @@ color BOTC_SayColor (int seat) {
     int i;
     i = BOTC_PosOf(seat);
     if (g_who[i] == g_teller || i == 1) {
-        return libNtve_gf_ConvertPlayerColorToColor(g_seatColor[1]);      // 【说书人 = 游戏原生粉】（用户 2026-10-14）：色号 15
+        return BOTC_SeatColor(1);      // 【说书人 = 游戏原生粉】（用户 2026-10-14）：色号 15
     }
-    return libNtve_gf_ConvertPlayerColorToColor(g_seatColor[i]);
+    return BOTC_SeatColor(i);
 }
 
 // 把一行里出现的「玩家N」（以及「说书人：」这种说话人写法）全部换成上面那种显示 ----
@@ -4514,7 +4577,7 @@ text BOTC_LogPlayerNameText (int p) {
     //   这里改用清名前留下的昵称快照，说书人日志格式保持「[编号] 昵称（星际名）」。
     if (g_gameOver && StringLength(g_logNameKeep[p]) > 0) {
         shown = g_logNameKeep[p];
-        base = StringToText(BOTC_NameTag(p)) + TextWithColor(StringToText(shown), libNtve_gf_ConvertPlayerColorToColor(g_seatColor[p]));
+        base = StringToText(BOTC_NameTag(p)) + TextWithColor(StringToText(shown), BOTC_SeatColor(p));
     }
     else {
         base = BOTC_PlayerNameText(p);
@@ -4602,9 +4665,9 @@ text BOTC_RealPlayerNameText (int p) {
     }
     nt = StringToText(nm);
     if (g_who[p] == g_teller || p == 1) {
-        return StringToText(BOTC_NameTag(p)) + TextWithColor(nt, libNtve_gf_ConvertPlayerColorToColor(g_seatColor[1]));
+        return StringToText(BOTC_NameTag(p)) + TextWithColor(nt, BOTC_SeatColor(1));
     }
-    return StringToText(BOTC_NameTag(p)) + TextWithColor(nt, libNtve_gf_ConvertPlayerColorToColor(g_seatColor[p]));
+    return StringToText(BOTC_NameTag(p)) + TextWithColor(nt, BOTC_SeatColor(p));
 }
 
 // 与 BOTC_LogNameSubstText 相同的占位符替换，但名字强制走星际名（复盘专用）。
@@ -4794,6 +4857,11 @@ void BOTC_BuildIntro () {
     g_introEdit = BOTC_NewEdit(g_introDlg, 460, 44, 190, 160);
     g_introBtn = BOTC_NewButton(g_introDlg, 140, 44, 670, 160, "确认");
     libNtve_gf_SetDialogItemStyle(g_introBtn, "ModLeftSize20Bold", PlayerGroupAll());
+    // 【彩色名字按钮】（用户 2026-11-15）：输入框下面两个互斥按钮，默认隐藏，进入取名阶段按积分判定显示。
+    g_introColorBtn1 = BOTC_NewButton(g_introDlg, 200, 40, 290, 214, "渐变彩色");
+    g_introColorBtn2 = BOTC_NewButton(g_introDlg, 200, 40, 510, 214, "随机彩色");
+    libNtve_gf_SetDialogItemStyle(g_introColorBtn1, "ModLeftSize20Bold", PlayerGroupAll());
+    libNtve_gf_SetDialogItemStyle(g_introColorBtn2, "ModLeftSize20Bold", PlayerGroupAll());
 }
 
 void BOTC_IntroRender () {
@@ -4825,6 +4893,7 @@ void BOTC_IntroBegin () {
         g_introAnnounced[p] = false;
         g_introHinted[p] = false;
         g_dispName[p] = "";
+        g_introColorMode[p] = 0;            // 【每局重置】（用户 2026-11-15）：彩色选择不存档
     }
     g_introOn = true;
     g_introShownSec = -1;
@@ -4853,6 +4922,16 @@ void BOTC_IntroBegin () {
         libNtve_gf_SetDialogItemText(g_introPromptLbl, StringToText("请等待其他玩家设置名称"), PlayerGroupSingle(g_teller));
         DialogControlSetVisible(g_introEdit, PlayerGroupSingle(g_teller), false);
         DialogControlSetVisible(g_introBtn, PlayerGroupSingle(g_teller), false);
+    }
+    // 【彩色名字按钮】（用户 2026-11-15）：积分 ≥ 1000 且不是说书人才显示，默认都不勾选。
+    DialogControlSetVisible(g_introColorBtn1, PlayerGroupAll(), false);
+    DialogControlSetVisible(g_introColorBtn2, PlayerGroupAll(), false);
+    for (p = 1; p <= 13; p += 1) {
+        if (p != g_teller && BOTC_IntroCanColor(p)) {
+            DialogControlSetVisible(g_introColorBtn1, PlayerGroupSingle(p), true);
+            DialogControlSetVisible(g_introColorBtn2, PlayerGroupSingle(p), true);
+        }
+        BOTC_IntroColorRender(p);
     }
     // 倒计时移到输入框下方，避免和输入框 / 按钮重叠。
     DialogSetPosition(g_tmShowDlg, c_anchorCenter, 0, 110);
@@ -5003,6 +5082,173 @@ bool BOTC_IntroCanColor (int p) {
     return BOTC_StatsPointGet(g_bank[p]) >= 1000;
 }
 
+// 【彩色名字 · 十六进制两位】（用户 2026-11-15）：0..255 → "00".."FF"。
+string BOTC_IntroHex2 (int v) {
+    string hx;
+    int hi;
+    int lo;
+    hx = "0123456789ABCDEF";
+    if (v < 0) {
+        v = 0;
+    }
+    if (v > 255) {
+        v = 255;
+    }
+    hi = v / 16;
+    lo = v - (hi * 16);
+    return StringSub(hx, hi + 1, hi + 1) + StringSub(hx, lo + 1, lo + 1);
+}
+
+string BOTC_IntroRgbHex (int r, int g, int b) {
+    return BOTC_IntroHex2(r) + BOTC_IntroHex2(g) + BOTC_IntroHex2(b);
+}
+
+// 【渐变彩色】（用户 2026-11-15）：按字符序号在彩虹色带上插值，整名呈红→黄→绿→青→蓝→紫的渐变。
+//   k = 第几个可见字符（0 起），n = 可见字符总数。
+string BOTC_IntroGradHex (int k, int n) {
+    int[6] rr;
+    int[6] gg;
+    int[6] bb;
+    int total;
+    int num;
+    int seg;
+    int frac;
+    int r;
+    int g;
+    int b;
+    rr[0] = 255; gg[0] = 70;  bb[0] = 70;
+    rr[1] = 255; gg[1] = 190; bb[1] = 60;
+    rr[2] = 140; gg[2] = 240; bb[2] = 80;
+    rr[3] = 70;  gg[3] = 220; bb[3] = 220;
+    rr[4] = 90;  gg[4] = 140; bb[4] = 255;
+    rr[5] = 220; gg[5] = 100; bb[5] = 240;
+    total = n - 1;
+    if (total <= 0 || k <= 0) {
+        return BOTC_IntroRgbHex(rr[0], gg[0], bb[0]);
+    }
+    num = k * 5;
+    seg = num / total;
+    if (seg > 4) {
+        seg = 4;
+    }
+    frac = num - (seg * total);
+    r = rr[seg] + (((rr[seg + 1] - rr[seg]) * frac) / total);
+    g = gg[seg] + (((gg[seg + 1] - gg[seg]) * frac) / total);
+    b = bb[seg] + (((bb[seg + 1] - bb[seg]) * frac) / total);
+    return BOTC_IntroRgbHex(r, g, b);
+}
+
+// 【随机彩色】（用户 2026-11-15）：每个字从明亮色板里随机取一个颜色。
+string BOTC_IntroRandHex () {
+    int[10] rr;
+    int[10] gg;
+    int[10] bb;
+    int i;
+    rr[0] = 255; gg[0] = 85;  bb[0] = 85;
+    rr[1] = 255; gg[1] = 160; bb[1] = 60;
+    rr[2] = 255; gg[2] = 230; bb[2] = 70;
+    rr[3] = 150; gg[3] = 240; bb[3] = 90;
+    rr[4] = 80;  gg[4] = 220; bb[4] = 200;
+    rr[5] = 90;  gg[5] = 180; bb[5] = 255;
+    rr[6] = 130; gg[6] = 130; bb[6] = 255;
+    rr[7] = 200; gg[7] = 120; bb[7] = 255;
+    rr[8] = 255; gg[8] = 120; bb[8] = 220;
+    rr[9] = 255; gg[9] = 120; bb[9] = 160;
+    i = RandomInt(0, 9);
+    return BOTC_IntroRgbHex(rr[i], gg[i], bb[i]);
+}
+
+// 【按彩色模式重写名字】（用户 2026-11-15）：先去掉原有颜色标签，再按 1 渐变 / 2 随机逐字上色。
+string BOTC_IntroStyledName (int p, string name) {
+    int i;
+    int n;
+    int end;
+    int k;
+    int cnt;
+    string v;
+    string ch;
+    string out;
+    if (p < 1 || p > 13) {
+        return BOTC_NameVisibleText(name);
+    }
+    v = BOTC_NameVisibleText(name);
+    if (g_introColorMode[p] == 0) {
+        return v;
+    }
+    n = StringLength(v);
+    if (n <= 0) {
+        return v;
+    }
+    cnt = BOTC_NameCharCount(v);
+    out = "";
+    i = 1;
+    k = 0;
+    while (i <= n) {
+        end = BOTC_TextUnitEnd(v, i, n);
+        if (end < i) {
+            end = i;
+        }
+        ch = StringSub(v, i, end);
+        if (g_introColorMode[p] == 1) {
+            out = out + "<c val=\"" + BOTC_IntroGradHex(k, cnt) + "\">" + ch + "</c>";
+        }
+        else {
+            out = out + "<c val=\"" + BOTC_IntroRandHex() + "\">" + ch + "</c>";
+        }
+        k = k + 1;
+        i = end + 1;
+    }
+    return out;
+}
+
+// 【彩色名字按钮 · 点选】（用户 2026-11-15）：两个按钮互斥；已取好名字时立刻按新模式重算颜色。
+void BOTC_IntroColorClick (int p, int mode) {
+    string nm;
+    if (!g_introOn || p < 1 || p > 13 || p == g_teller) {
+        return;
+    }
+    if (!BOTC_IntroCanColor(p)) {
+        BOTC_Notice(p, "积分达到 1000 后才能使用彩色名字。");
+        return;
+    }
+    if (g_introColorMode[p] == mode) {
+        g_introColorMode[p] = 0;
+    }
+    else {
+        g_introColorMode[p] = mode;
+    }
+    BOTC_IntroColorRender(p);
+    if (g_introChosen[p] && StringLength(g_introName[p]) > 0) {
+        nm = BOTC_IntroStyledName(p, g_introName[p]);
+        g_introName[p] = nm;
+        g_dispName[p] = nm;
+        libNtve_gf_SetDialogItemText(g_introPromptLbl, StringToText("已取名：" + nm + "，倒计时结束前可继续修改。"), PlayerGroupSingle(p));
+    }
+}
+
+// 【彩色名字按钮 · 选中态】（用户 2026-11-15）：只刷新该玩家自己的两个按钮文字。
+void BOTC_IntroColorRender (int p) {
+    text t1;
+    text t2;
+    if (p < 1 || p > 13 || g_introColorBtn1 == 0 || g_introColorBtn2 == 0) {
+        return;
+    }
+    if (g_introColorMode[p] == 1) {
+        t1 = TextWithColor(StringToText("渐变彩色（已选）"), Color(120, 255, 120));
+    }
+    else {
+        t1 = StringToText("渐变彩色");
+    }
+    if (g_introColorMode[p] == 2) {
+        t2 = TextWithColor(StringToText("随机彩色（已选）"), Color(120, 255, 120));
+    }
+    else {
+        t2 = StringToText("随机彩色");
+    }
+    libNtve_gf_SetDialogItemText(g_introColorBtn1, t1, PlayerGroupSingle(p));
+    libNtve_gf_SetDialogItemText(g_introColorBtn2, t2, PlayerGroupSingle(p));
+}
+
 void BOTC_IntroTryName (int p, string name) {
     int q;
     string oldName;
@@ -5047,6 +5293,10 @@ void BOTC_IntroTryName (int p, string name) {
             BOTC_Notice(p, "这个名字已被其他玩家使用，请更换。");
             return;
         }
+    }
+    // 【渐变 / 随机彩色】（用户 2026-11-15）：勾选了彩色按钮时，按勾选模式给名字逐字上色。
+    if (g_introColorMode[p] != 0 && BOTC_IntroCanColor(p)) {
+        name = BOTC_IntroStyledName(p, name);
     }
     // 【第一次才播报进入小镇】（用户 2026-11-13）：用独立的已播报标记判断，
     //   改名永远只走「旧名字 改名成了 新名字」，不会重复触发「进入了小镇」。
@@ -5107,6 +5357,11 @@ void BOTC_IntroRandomName (int p) {
         g_dispName[p] = oldName;
         g_introChosen[p] = hadChosen;
         return;
+    }
+    // 【渐变 / 随机彩色】（用户 2026-11-15）：随机名同样按勾选的彩色模式上色。
+    if (g_introColorMode[p] != 0 && BOTC_IntroCanColor(p)) {
+        nm = BOTC_IntroStyledName(p, nm);
+        g_dispName[p] = nm;
     }
     g_introName[p] = nm;
     g_introChosen[p] = true;
@@ -6365,10 +6620,12 @@ void BOTC_LogPickStart (int p) {
     }
     // 每次打开都按当前 g_seatOn 重建：玩家掉线后座位会压缩，缓存旧列表会把行号映射到相邻座位。
     BOTC_LogPickRender(p);
-    DialogControlSelectItem(g_logPickList, PlayerGroupSingle(p), 0);
     g_logMenuSel[p] = -1;          // -1 = 这一拍只记基线、不动作
     g_logPickOn[p] = true;
     DialogSetVisible(g_logPickDlg, PlayerGroupSingle(p), true);
+    // 【防报错】（用户 2026-11-15）：列表框必须先显示再选行。面板还藏着时选第 0 行，
+    //   SC2 会把内部选中项当成 -1，抛「DialogControlSelectItem 参数超出界限」，整次点击中断。
+    DialogControlSelectItem(g_logPickList, PlayerGroupSingle(p), 0);
 }
 
 // 把下拉列表填满：第 1 行 = 所有玩家，第 2 行 = 说书人，之后按当前在场座位列出玩家
@@ -6880,28 +7137,12 @@ bool BOTC_DlgTopHitAt (int w, int h, int offX, int offY, int mx, int my, int cx,
     return mx >= lx && mx <= lx + w && my >= ly && my <= ly + 46;
 }
 
-// 左上角切换按钮那一小块不参与拖动（点它要能切视图）
-bool BOTC_DlgTopBtnAt (int w, int h, int offX, int offY, int mx, int my, int cx, int cy) {
-    int lx;
-    int ly;
-    lx = BOTC_DlgDragLeft(w, offX, cx);
-    ly = cy + offY - (h / 2);
-    return mx >= lx + 10 && mx <= lx + 250 && my >= ly && my <= ly + 40;
-}
-
+// 顶部 46 高的标题栏是拖动区
 bool BOTC_DlgTopHit (int w, int h, int offX, int offY, int mx, int my) {
     if (BOTC_DlgTopHitAt(w, h, offX, offY, mx, my, 1066, 600)) { return true; }   // 16:9 / 1200
     if (BOTC_DlgTopHitAt(w, h, offX, offY, mx, my, 960, 600)) { return true; }    // 16:10 / 1200
     if (BOTC_DlgTopHitAt(w, h, offX, offY, mx, my, 800, 600)) { return true; }     // 4:3 / 1200
     if (BOTC_DlgTopHitAt(w, h, offX, offY, mx, my, 960, 540)) { return true; }     // 1920×1080
-    return false;
-}
-
-bool BOTC_DlgTopBtnHit (int w, int h, int offX, int offY, int mx, int my) {
-    if (BOTC_DlgTopBtnAt(w, h, offX, offY, mx, my, 1066, 600)) { return true; }
-    if (BOTC_DlgTopBtnAt(w, h, offX, offY, mx, my, 960, 600)) { return true; }
-    if (BOTC_DlgTopBtnAt(w, h, offX, offY, mx, my, 800, 600)) { return true; }
-    if (BOTC_DlgTopBtnAt(w, h, offX, offY, mx, my, 960, 540)) { return true; }
     return false;
 }
 
@@ -6931,10 +7172,7 @@ bool BOTC_DlgDragDown_Func (bool testConds, bool runActions) {
     // 2 = 剧本角色表 / 夜间行动顺序：同一个窗口的两种视图，尺寸 1180×1080、位置完全一致
     if (g_abOpen[p] || g_noOpen[p]) {
         if (BOTC_DlgTopHit(1180, 1080, g_abOffX[p], g_abOffY[p], mx, my)) {
-            // 失忆角色表左上角没有切换按钮，整条顶栏都可以拖动（用户 2026-11-14）
-            if (!(g_abOpen[p] && g_abAmneView[p]) && BOTC_DlgTopBtnHit(1180, 1080, g_abOffX[p], g_abOffY[p], mx, my)) {
-                return true;
-            }
+            // 三种视图的切换按钮都在右下角，顶栏整条都能拖（用户 2026-11-15）
             g_dlgDrag[p] = 2;
             g_dlgDragOX[p] = g_abOffX[p];
             g_dlgDragOY[p] = g_abOffY[p];
@@ -7063,6 +7301,11 @@ void BOTC_PmPickStart (int p) {
     if (p < 1 || p > 13) {
         return;
     }
+    // 【结算阶段禁用发起私聊】（用户 2026-11-15）：胜负已分，复盘阶段只保留公聊。
+    if (g_gameOver) {
+        BOTC_Notice(p, "游戏已结算：不能再发起私聊，复盘阶段只能公聊。");
+        return;
+    }
     BOTC_SessRepair();
     if (g_pmPick[p]) {
         BOTC_PmPickEnd(p);        // 已经开着：再点一下 = 取消「发起私聊」
@@ -7119,6 +7362,8 @@ void BOTC_PmPickEnd (int p) {
 
 // 【屏蔽】（用户 2026-11-06）：token / 身份标记面板里点【屏蔽】→ 魔典上点一个座位屏蔽 / 解除屏蔽。
 void BOTC_BlockStart (int p) {
+    int b;
+    bool anyBlock;
     if (p < 1 || p > 13) {
         return;
     }
@@ -7132,6 +7377,20 @@ void BOTC_BlockStart (int p) {
     if (g_blockPick[p]) {
         BOTC_BlockEnd(p);
         return;
+    }
+    // 【提名阶段禁止新增屏蔽】（用户 2026-11-15）：提名环节只允许解除已有的屏蔽，
+    //   一个屏蔽对象都没有时直接挡住入口，不进入选座模式。
+    if (g_phase != 0) {
+        anyBlock = false;
+        for (b = 2; b <= 13; b += 1) {
+            if (g_block[(p * 14) + b]) {
+                anyBlock = true;
+            }
+        }
+        if (!anyBlock) {
+            BOTC_Notice(p, "提名阶段不能屏蔽玩家，只能解除之前的屏蔽。");
+            return;
+        }
     }
     if (g_pmPick[p]) {
         BOTC_PmPickEnd(p);         // 正在「发起私聊」选人：先收掉那一套
@@ -7161,7 +7420,12 @@ void BOTC_BlockStart (int p) {
     g_pmPick[p] = true;
     BOTC_PanelOpen(p, 2);
     BOTC_PmPickApply(p);
-    BOTC_Notice(p, "屏蔽：点魔典上的座位选择要屏蔽的玩家；再点一次已屏蔽的座位即可解除。");
+    if (g_phase != 0) {
+        BOTC_Notice(p, "提名阶段：点已屏蔽的座位即可解除屏蔽。");
+    }
+    else {
+        BOTC_Notice(p, "屏蔽：点魔典上的座位选择要屏蔽的玩家；再点一次已屏蔽的座位即可解除。");
+    }
 }
 
 void BOTC_BlockEnd (int p) {
@@ -8180,6 +8444,11 @@ void BOTC_PmTellWant (int p) {
 
 
 void BOTC_RequestChat (int p, int q) {
+    // 【结算阶段禁用发起私聊】（用户 2026-11-15）：胜负已分，任何路径都不再新建私聊。
+    if (g_gameOver) {
+        BOTC_Notice(p, "游戏已结算：不能再发起私聊，复盘阶段只能公聊。");
+        return;
+    }
     BOTC_SessRepair();
     // 【屏蔽】（用户 2026-11-06）：任意一方屏蔽了对方，就不允许发起私聊 / 提醒说书人。
     if (BOTC_Blocked(p, q)) {
@@ -9584,6 +9853,12 @@ void BOTC_BlockToggle (int a, int b) {
         BOTC_Notice(a, "说书人不能参与屏蔽。");
         return;
     }
+    // 【提名阶段只允许解除屏蔽】（用户 2026-11-15）：提名环节不再新增屏蔽，
+    //   放在冷却之前判断，被挡下的操作不消耗屏蔽冷却。
+    if (g_phase != 0 && !g_block[(a * 14) + b]) {
+        BOTC_Notice(a, "提名阶段不能屏蔽玩家，只能解除之前的屏蔽。");
+        return;
+    }
     // 【防刷屏 · 屏蔽冷却】（用户 2026-11-06）：同一名玩家 5 秒内只能屏蔽 / 解除一次，
     //   换目标也算；先屏蔽再解除同样要等 5 秒。
     if (g_blockCd[a] > 0) {
@@ -9934,6 +10209,15 @@ bool BOTC_ClickDo (bool testConds, bool runActions) {
     // 【取名阶段 · 确认】（用户 2026-11-13）：输入框留空则随机取名。
     if (g_introOn && g_introBtn != 0 && c == g_introBtn) {
         BOTC_IntroConfirm(p);
+        return true;
+    }
+    // 【取名 · 彩色名字按钮】（用户 2026-11-15）：渐变 / 随机彩色互斥切换。
+    if (g_introOn && g_introColorBtn1 != 0 && c == g_introColorBtn1) {
+        BOTC_IntroColorClick(p, 1);
+        return true;
+    }
+    if (g_introOn && g_introColorBtn2 != 0 && c == g_introColorBtn2) {
+        BOTC_IntroColorClick(p, 2);
         return true;
     }
     // 【菜单】（用户 2026-11-09）：右上角【菜单】按钮＝打开星际自带的 F10 菜单
@@ -10755,11 +11039,15 @@ bool BOTC_ClickDo (bool testConds, bool runActions) {
             return true;
         }
         if (c == g_abViewBtn[p]) {
-            BOTC_AbViewNight(p);       // 左上角【夜间行动顺序】
+            BOTC_AbViewNight(p);       // 右下角【夜间行动顺序】
             return true;
         }
         if (c == g_noViewBtn[p]) {
-            BOTC_AbViewRole(p);        // 左上角【剧本角色】
+            BOTC_AbViewRole(p);        // 右下角【剧本角色表】
+            return true;
+        }
+        if (c == g_noAmneBtn[p]) {
+            BOTC_AmneTableOpen(p);     // 右下角【失忆角色表】
             return true;
         }
 
@@ -11885,11 +12173,15 @@ bool BOTC_ClickDo (bool testConds, bool runActions) {
         return true;
     }
     if (c == g_abViewBtn[p]) {
-        BOTC_AbViewNight(p);       // 左上角【夜间行动顺序】
+        BOTC_AbViewNight(p);       // 右下角【夜间行动顺序】
         return true;
     }
     if (c == g_noViewBtn[p]) {
-        BOTC_AbViewRole(p);        // 左上角【剧本角色】
+        BOTC_AbViewRole(p);        // 右下角【剧本角色表】
+        return true;
+    }
+    if (c == g_noAmneBtn[p]) {
+        BOTC_AmneTableOpen(p);     // 右下角【失忆角色表】
         return true;
     }
 
@@ -14310,8 +14602,8 @@ void BOTC_SkipRender () {
     if (g_skipBtn == 0) {
         return;
     }
-    // 提名阶段 / 夜晚 / 还没正式开始：收起（= 不能投票）
-    if (!g_started || g_isNight || g_phase != 0) {
+    // 提名阶段 / 夜晚 / 还没正式开始 / 已结算：收起（= 不能投票）
+    if (!g_started || g_isNight || g_phase != 0 || g_gameOver) {
         DialogSetVisible(g_skipDlg, PlayerGroupAll(), false);
         return;
     }
@@ -14461,13 +14753,7 @@ void BOTC_BuildPanel (int p) {
 
     DialogSetVisible(g_abBtnDlg[p], PlayerGroupSingle(p), true);
 
-    // 【失忆角色表】（用户 2026-11-14）：剧本里有失忆者时，出现在【剧本角色表】正上方；
-    //   只在剧本内显示，选剧本 / 取名阶段由 BOTC_HideAllUI 与 BOTC_NomUI 统一收放。
-    DialogCreate(200, 26, c_anchorBottomLeft, 1174, 50, false);
-    g_amneBtnDlg[p] = DialogLastCreated();
-    DialogSetVisible(g_amneBtnDlg[p], PlayerGroupAll(), false);
-    g_amneOpenBtn[p] = BOTC_NewButton(g_amneBtnDlg[p], 200, 26, 0, 0, "失忆角色表");
-    DialogSetVisible(g_amneBtnDlg[p], PlayerGroupAll(), false);
+    // 【失忆角色表】入口（用户 2026-11-15）：已并入剧本角色表弹窗右下角，不再单独占用底部按钮栏。
 
     // 角色提示按钮（用户 2026-11-04：夜间顺序入口并入剧本角色表后整体左移一格）
     DialogCreate(120, 26, c_anchorBottomLeft, 1382, 18, false);
@@ -14989,7 +15275,7 @@ void BOTC_BuildNotes (int p) {
 
 //==================================================================================================
 // 【竞选角色类型】（用户 2026-11-11）：剧本页右上角入口，每个玩家一份 ----
-//   4 个类型（镇民 / 外来者 / 爪牙 / 恶魔）各自独立开关：参与 = 随机配板时抽到该类型权重 ×1.5。
+//   4 个类型（镇民 / 外来者 / 爪牙 / 恶魔）各自独立开关：参与 = 随机配板时抽到该类型权重 ×2。
 //   默认 4 类全开。状态保存在玩家本地 bank 的 opts 章节（键 jrw，位掩码），
 //   只有点【关闭（保存）】才写入；随机配板读的是保存后的状态，所以本局配板之后再改只影响下一局。
 //==================================================================================================
@@ -15084,14 +15370,15 @@ int BOTC_JrRoleType (int role) {
     return 0;
 }
 
-// 【镇民 / 外来者权重】（用户 2026-11-14）：善良角色分座位的基础权重统一为 10；
-//   参与对应类型竞选后 ×1.5，按整数 (10*3)/2 = 15 计算。
-//   所有玩家初始权重均为 10，未参与竞选时也按 10 参与抽签。
+// 【镇民 / 外来者权重】（用户 2026-11-14 / 2026-11-15）：善良角色分座位的基础权重统一为 20；
+//   参与对应类型竞选后 ×2，即 40。
+//   【失忆者（73）】（用户 2026-11-15）：不再使用恶魔 / 爪牙权重，同样走这张善良座位表，
+//   并继续限制只发给总场数 >= 20 的玩家（见 BOTC_Deal 的善良发座循环）。
 int BOTC_JrGoodWeight (int q, int which) {
     int w;
-    w = 10;
+    w = 20;
     if (BOTC_JrBit(g_dealJoin[q], which) == 1) {
-        w = (w * 3) / 2;
+        w = w * 2;
     }
     return w;
 }
@@ -15121,7 +15408,7 @@ void BOTC_BuildJoinRole (int p) {
     g_jrTitle[p] = BOTC_NewLabel(g_jrDlg[p], 520, 30, 20, 12, StringToText("竞选角色类型"));
     libNtve_gf_SetDialogItemStyle(g_jrTitle[p], "ModLeftSize20Bold", PlayerGroupAll());
     libNtve_gf_SetDialogItemAcceptMouse(g_jrTitle[p], false, PlayerGroupAll());
-    BOTC_NewLabel(g_jrDlg[p], 520, 40, 20, 42, StringToText("参与的类型在随机配板时权重 ×1.5；修改后点【关闭（保存）】生效。"));
+    BOTC_NewLabel(g_jrDlg[p], 520, 40, 20, 42, StringToText("参与的类型在随机配板时权重 ×2；修改后点【关闭（保存）】生效。"));
     // 【认知偏差角色的竞选归类】（用户 2026-11-11）：面板内注明这四个角色按「以为的身份」参与竞选。
     BOTC_NewLabel(g_jrDlg[p], 520, 48, 20, 82, StringToText("认知偏差角色按「以为的身份」参与竞选：疯子 → 恶魔，悟道者 → 外来者，提线木偶 → 镇民 / 外来者，酒鬼 → 镇民。"));
     for (i = 0; i < 4; i += 1) {
@@ -15228,7 +15515,10 @@ void BOTC_BuildNightOrder () {
         DialogCreate(1180, 1080, c_anchorCenter, 0, 0, false);
         g_noDlg[p] = DialogLastCreated();
         DialogSetVisible(g_noDlg[p], PlayerGroupAll(), false);
-        g_noViewBtn[p] = BOTC_NewButton(g_noDlg[p], 170, 28, 20, 4, "剧本角色");
+        g_noViewBtn[p] = BOTC_NewButton(g_noDlg[p], 200, 40, 960, 1000, "剧本角色表");
+        // 【失忆角色表】（用户 2026-11-15）：本剧本包含失忆者时，出现在【剧本角色表】左边
+        g_noAmneBtn[p] = BOTC_NewButton(g_noDlg[p], 200, 40, 750, 1000, "失忆角色表");
+        DialogControlSetVisible(g_noAmneBtn[p], PlayerGroupAll(), false);
         g_noTitleL[p] = BOTC_NewLabel(g_noDlg[p], 280, 36, 240, 8, StringToText("首夜"));
         libNtve_gf_SetDialogItemStyle(g_noTitleL[p], "ModLeftSize20Bold", PlayerGroupAll());
         libNtve_gf_SetDialogItemAcceptMouse(g_noTitleL[p], false, PlayerGroupAll());
@@ -15253,7 +15543,8 @@ void BOTC_BuildNightOrder () {
         g_noClose[p] = BOTC_NewButton(g_noDlg[p], 160, 40, 360, 1000, "关闭");
         g_noUp[p] = BOTC_NewButton(g_noDlg[p], 150, 40, 20, 1000, "▲ 上一页");
         g_noDown[p] = BOTC_NewButton(g_noDlg[p], 150, 40, 190, 1000, "▼ 下一页");
-        g_noPageLbl[p] = BOTC_NewLabel(g_noDlg[p], 420, 30, 530, 1006, StringToText(""));
+        // 页码文字改成底部整行居中：右下角两枚切换按钮占满后，这一行不再挤在按钮中间（用户 2026-11-15）
+        g_noPageLbl[p] = BOTC_NewLabelC(g_noDlg[p], 1140, 26, 20, 1044, StringToText(""));
         libNtve_gf_SetDialogItemStyle(g_noPageLbl[p], "ModLeftSize20Bold", PlayerGroupAll());
         libNtve_gf_SetDialogItemAcceptMouse(g_noPageLbl[p], false, PlayerGroupAll());
         DialogSetVisible(g_noDlg[p], PlayerGroupSingle(p), false);
@@ -15285,6 +15576,7 @@ void BOTC_NightOrderRender (int p) {
     int row;
     int b;
     int base;
+    int last;
     bool[164] showRole;
     base = p * 24;
     for (i = 0; i < 24; i += 1) {
@@ -15368,13 +15660,15 @@ void BOTC_NightOrderRender (int p) {
     if (row > g_noMaxRows[p]) {
         g_noMaxRows[p] = row;
     }
-    libNtve_gf_SetDialogItemText(g_noPageLbl[p], StringToText("显示第 " + IntToString(g_noShift[p] + 1) + " - " + IntToString(g_noShift[p] + 11) + " 行（最长一栏 " + IntToString(g_noMaxRows[p]) + " 行）"), PlayerGroupSingle(p));
-    if (g_noShift[p] + 11 >= g_noMaxRows[p]) {
-        libNtve_gf_SetDialogItemText(g_noPageLbl[p], StringToText("显示第 " + IntToString(g_noShift[p] + 1) + " - " + IntToString(g_noMaxRows[p]) + " 行（共 " + IntToString(g_noMaxRows[p]) + " 行）"), PlayerGroupSingle(p));
+    // 底部整行居中显示页码：始终显示完整信息，不再按页尾 / 单页切换成不同文案（用户 2026-11-15）
+    last = g_noShift[p] + 11;
+    if (last > g_noMaxRows[p]) {
+        last = g_noMaxRows[p];
     }
-    if (g_noMaxRows[p] <= 11) {
-        libNtve_gf_SetDialogItemText(g_noPageLbl[p], StringToText("共 " + IntToString(g_noMaxRows[p]) + " 行"), PlayerGroupSingle(p));
+    if (last < g_noShift[p] + 1) {
+        last = g_noShift[p] + 1;
     }
+    libNtve_gf_SetDialogItemText(g_noPageLbl[p], StringToText("显示第 " + IntToString(g_noShift[p] + 1) + " - " + IntToString(last) + " 行（共 " + IntToString(g_noMaxRows[p]) + " 行）"), PlayerGroupSingle(p));
 }
 
 // 翻页：delta = +6 / -6；越界自动夹住（最长一栏 - 12 = 最后一页）
@@ -15412,6 +15706,8 @@ void BOTC_NightOrderOpen (int p) {
     if (oy > 30) { oy = 30; }
     DialogSetPosition(g_noDlg[p], c_anchorCenter, ox, oy);
     DialogSetPosition(g_abNewDlg[p], c_anchorCenter, ox, oy);
+    // 【失忆角色表】只在当前剧本包含失忆者时出现在【剧本角色表】左边
+    DialogControlSetVisible(g_noAmneBtn[p], PlayerGroupSingle(p), (BOTC_BoardHasRole(73) && g_board != 13));
     DialogSetVisible(g_noDlg[p], PlayerGroupSingle(p), true);
 }
 
@@ -15420,7 +15716,7 @@ void BOTC_NightOrderClose (int p) {
     DialogSetVisible(g_noDlg[p], PlayerGroupSingle(p), false);
 }
 
-// 【剧本角色表 ↔ 夜间行动顺序】（用户 2026-11-04）：同一个弹窗，左上角按钮切换两个视图
+// 【剧本角色表 ↔ 夜间行动顺序】（用户 2026-11-04）：同一个弹窗，右下角按钮切换两个视图
 void BOTC_AbViewNight (int p) {
     if (p < 1 || p > 13) {
         return;
@@ -15553,8 +15849,12 @@ void BOTC_BuildAbNew () {
         DialogCreate(1180, 1080, c_anchorCenter, 0, 0, false);
         g_abNewDlg[p] = DialogLastCreated();
         DialogSetVisible(g_abNewDlg[p], PlayerGroupAll(), false);
-        g_abViewBtn[p] = BOTC_NewButton(g_abNewDlg[p], 200, 30, 20, 4, "夜间行动顺序");
-        g_abNewLbl[p] = BOTC_NewLabel(g_abNewDlg[p], 920, 30, 240, 6, StringToText("剧本角色表"));
+        // 【夜间行动顺序】与【失忆角色表】（用户 2026-11-15）：两个切换按钮统一放到面板右下角，
+        //   与【上一页 / 下一页 / 关闭】同一行；夜间行动顺序在失忆角色表视图里仍然隐藏。
+        g_abViewBtn[p] = BOTC_NewButton(g_abNewDlg[p], 200, 40, 960, 1012, "夜间行动顺序");
+        g_amneOpenBtn[p] = BOTC_NewButton(g_abNewDlg[p], 200, 40, 750, 1012, "失忆角色表");
+        DialogControlSetVisible(g_amneOpenBtn[p], PlayerGroupAll(), false);
+        g_abNewLbl[p] = BOTC_NewLabel(g_abNewDlg[p], 920, 30, 20, 6, StringToText("剧本角色表"));
         libNtve_gf_SetDialogItemStyle(g_abNewLbl[p], "ModLeftSize20Bold", PlayerGroupAll());
         libNtve_gf_SetDialogItemAcceptMouse(g_abNewLbl[p], false, PlayerGroupAll());
         for (i = 0; i < 4; i += 1) {
@@ -16135,7 +16435,7 @@ void BOTC_LegacyRowToggle (int i) {
 //==================================================================================================
 // 【失忆角色表】（用户 2026-11-14）
 //   与剧本角色表共用同一个窗口和全部控件，只把数据换成「失忆者可以选择的全部能力」：
-//   第 1 页 = 镇民，第 2 页 = 外来者 / 爪牙（不显示恶魔），左上角没有【夜间行动顺序】入口。
+//   第 1 页 = 镇民，第 2 页 = 外来者 / 爪牙（不显示恶魔），不提供【夜间行动顺序】入口。
 //   可选池与失忆者首夜选择网格共用 BOTC_AmneCanPickRole，黑名单一改这里自动同步。
 //==================================================================================================
 void BOTC_AmneTableOpen (int p) {
@@ -16164,7 +16464,9 @@ void BOTC_AmneTableToggle (int p) {
         return;
     }
     if (g_abOpen[p] && g_abAmneView[p]) {
-        BOTC_AbClose(p);               // 再点一次 = 关闭
+        // 失忆角色表里这个按钮写「剧本角色表」：点它原地切回正常剧本角色表（用户 2026-11-15）
+        g_abAmneView[p] = false;
+        BOTC_AbNewRender(p);
         return;
     }
     BOTC_AmneTableOpen(p);
@@ -16258,8 +16560,10 @@ void BOTC_AmneTableRender (int p) {
     for (f = 0; f < 18; f += 1) {
         DialogControlSetVisible(g_glossBodyCtl[bb + f], PlayerGroupSingle(p), false);
     }
-    // 左上角没有【夜间行动顺序】；标题顺势靠左，底部注释沿用剧本角色表
-    DialogControlSetVisible(g_abViewBtn[p], PlayerGroupSingle(p), false);
+    // 右下角：左边是【剧本角色表】（切回正常视图），右边是【夜间行动顺序】（用户 2026-11-15）
+    DialogControlSetVisible(g_abViewBtn[p], PlayerGroupSingle(p), true);
+    libNtve_gf_SetDialogItemText(g_amneOpenBtn[p], StringToText("剧本角色表"), PlayerGroupSingle(p));
+    DialogControlSetVisible(g_amneOpenBtn[p], PlayerGroupSingle(p), true);
     DialogControlSetPosition(g_abNewLbl[p], PlayerGroupSingle(p), c_anchorTopLeft, 20, 6);
     DialogControlSetVisible(g_abNewStarNote[p], PlayerGroupSingle(p), true);
     page = g_amnePage[p];
@@ -16339,7 +16643,10 @@ void BOTC_AbNewRender (int p) {
         return;
     }
     DialogControlSetVisible(g_abViewBtn[p], PlayerGroupSingle(p), true);   // 正常剧本角色表有【夜间行动顺序】
-    DialogControlSetPosition(g_abNewLbl[p], PlayerGroupSingle(p), c_anchorTopLeft, 240, 6);
+    // 【失忆角色表】入口（用户 2026-11-15）：本剧本包含失忆者时才在右下角出现
+    libNtve_gf_SetDialogItemText(g_amneOpenBtn[p], StringToText("失忆角色表"), PlayerGroupSingle(p));
+    DialogControlSetVisible(g_amneOpenBtn[p], PlayerGroupSingle(p), (BOTC_BoardHasRole(73) && g_board != 13));
+    DialogControlSetPosition(g_abNewLbl[p], PlayerGroupSingle(p), c_anchorTopLeft, 20, 6);
     BOTC_GridPlan();           // 【保险】每次渲染都按当前板子重算一遍格子（用户 2026-09-19）
     BOTC_GridBuildCat();
     pb = p * 26;
@@ -16783,15 +17090,21 @@ void BOTC_NightGo () {
         // 【进入白天 → 全场自动弹魔典】（用户 2026-09-20 提的，2026-09-22 修）----
         //   ⚠ 这一行原来被放进了下面「入夜」那一支（注释写着「进入白天」），所以天亮从来没弹过。
         //   现在挪到天亮这一支的末尾（天亮结算 + 猎手测试之后）：天一亮，全场每个人的魔典都会自己弹出来。
-        DialogSetVisible(g_grimDlg, PlayerGroupAll(), true);
-        BOTC_GrimFlagAll(true);
-        // 【保住的阅读弹窗别被魔典盖住】（用户 2026-11-13）：正式开局后日志 / 剧本角色表 /
-        //   游戏帮助 / 夜序还开着的人，天亮不自动弹魔典（跟提名阶段 BOTC_NomPop_Func 同一套判断）。
+        // 【夜晚已打开的魔典不再自动关】（用户 2026-11-15）：逐个按昨晚的开关状态处理 ----
+        //   昨晚开着魔典的人，天亮后保持打开，不再被下面的阅读弹窗判断自动收掉；
+        //   昨晚没开魔典、正在看日志 / 剧本角色表 / 游戏帮助 / 夜序的人，天亮不自动弹（避免盖住阅读页面）。
         for (q = 1; q <= 13; q += 1) {
+            if (g_grimOn[q]) {
+                DialogSetVisible(g_grimDlg, PlayerGroupSingle(q), true);
+                continue;
+            }
             if (g_logOpen[q] || g_abOpen[q] || g_tipOpen[q] || g_noOpen[q]) {
                 DialogSetVisible(g_grimDlg, PlayerGroupSingle(q), false);
                 g_grimOn[q] = false;
+                continue;
             }
+            DialogSetVisible(g_grimDlg, PlayerGroupSingle(q), true);
+            g_grimOn[q] = true;
         }
     }
     else {
@@ -17231,6 +17544,11 @@ bool BOTC_StartCompCheck () {
             err = err + "邪恶角色人数超出配比（最多 " + IntToString(k) + " 名，当前 " + IntToString(totalEvil) + " 名）；";
         }
     }
+    // ⑰ 赏金猎人（90）：必须已经有一名镇民被标成「邪恶」（token 15）。
+    //   配板收尾会自动标一名；若说书人把那名镇民改成别的身份，或手动撤掉 token，就不允许开始。
+    if (BOTC_SeatOfRole(90) >= 2 && BOTC_BountyEvilSeat() < 2) {
+        err = err + "赏金猎人必须在场时有一名镇民已标记为「邪恶」；";
+    }
     // ① 外来者配比：按人数基数叠加各角色的设置调整，再容下随机发牌的收敛区间
     skipOut = false;
     if (g_board == 13) { skipOut = true; }        // 全员追忆：配比本就自定义
@@ -17241,10 +17559,6 @@ bool BOTC_StartCompCheck () {
     if (!skipOut) {
         oc = g_ocTab[n];
         if (BOTC_SeatOfRole(20) >= 2) { oc = oc + 2; }
-        if (BOTC_SeatOfRole(39) >= 2) {
-            if (g_gfPlus) { oc = oc + 1; }
-            else if (oc > 1) { oc = oc - 1; }
-        }
         if (BOTC_SeatOfRole(68) >= 2) { oc = oc + 1; }
         if (BOTC_SeatOfRole(69) >= 2) {
             if (oc > 1) { oc = oc - 1; }
@@ -17255,23 +17569,24 @@ bool BOTC_StartCompCheck () {
         }
         lo = 0;
         hi = 0;
+        // 【教父（39）/ 气球驾驶员（72）/ 哨兵（88）】（用户 2026-11-15）：这三者的外来者
+        //   调整都有多个合法方向，不按随机配板掷到并显示的方向锁死；说书人手动改成其他
+        //   方向也要能开始。教父 ±1、气球 +0/+1、哨兵 -1/0/+1，按增量区间累加。
+        if (BOTC_SeatOfRole(39) >= 2) {
+            lo = lo - 1;
+            hi = hi + 1;
+        }
         if (BOTC_SeatOfRole(72) >= 2) {
-            // 气球驾驶员：+0 或 +1（两种都算合法，不再按这一局掷到的方向卡死）
             hi = hi + 1;
         }
         if (g_legacyOn[88]) {
-            if (g_sentSeeded) {
-                if (g_sentAdjust > 0 && oc < 4) { oc = oc + 1; }
-                else if (g_sentAdjust < 0 && oc > 1) { oc = oc - 1; }
-            }
-            else {
-                lo = lo + 1;
-                hi = hi + 1;
-            }
+            lo = lo - 1;
+            hi = hi + 1;
         }
         if (BOTC_SeatOfRole(77) >= 2 || BOTC_MarionetteFakeIs(77)) { hi = hi + 1; }
         if (BOTC_MarionetteFakeIs(72)) { hi = hi + 1; }
-        if (oc > 4) { oc = 4; }
+        // 【外来者数量不再压 4 上限】（用户 2026-11-15）：4 只是随机配板的收敛要求；
+        //   说书人手动配板时，只要角色池允许，超过 4 名外来者也应能正式开始。
         real = 0;
         for (i = 0; i < n; i += 1) {
             if (BOTC_RoleTeam(BOTC_SeatRealRole(g_seatList[i])) == 1) { real = real + 1; }
@@ -17990,6 +18305,13 @@ string BOTC_FixedSeatName (int pos) {
         nm = "空位";
     }
     return BOTC_NameTag(pos) + nm;
+}
+
+// 【冻结显示名】（用户 2026-11-15）：换座位播报要显示"换位前"的「座位 + 名字」。
+//   `BOTC_NameStr()` 返回的「玩家N」占位符是按格子渲染的，换位后会变成新坐进来的人，
+//   整个播报就变成"换完之后谁坐在哪"了。这里在换位前按当时的显示名（随机名 / 自选名 + 座位色）拼成死字符串。
+string BOTC_FixedPlayerName (int pos) {
+    return TextToString(BOTC_PlayerNameText(pos));
 }
 
 // 【开局场次播报】（用户 2026-11-01）：正式开始那一夜在公聊发一次全部玩家的总场数，
@@ -31003,11 +31325,19 @@ void BOTC_FakeRandomMarks () {
             g_fakeMark[q] = r + 1;
             break;
         }
-        // ② 随机 token：只抽本剧本会出现的（0..3 枚；内部记账用的 18 永远不出）
+        // ② 随机 token：只抽本剧本会出现的（0..2 枚；内部记账用的 18 永远不出）
         for (t = 0; t < 256; t += 1) {
             g_fakeTok[((q * 256) + t)] = false;
         }
-        cnt = RandomInt(0, 3);
+        // 【大部分座位没有 token】（用户 2026-11-15）：0 枚 60%、1 枚 30%、2 枚 10%
+        r = RandomInt(0, 9);
+        cnt = 0;
+        if (r >= 6) {
+            cnt = 1;
+        }
+        if (r == 9) {
+            cnt = 2;
+        }
         for (k = 0; k < cnt; k += 1) {
             for (guard = 0; guard < 40; guard += 1) {
                 t = RandomInt(0, 255);
@@ -31115,11 +31445,6 @@ void BOTC_BuildFakeGrim () {
         }
     }
     BOTC_FakeRender();
-    // 说书人入口按钮：放在【魔典】按钮正上方（魔典按钮在 1046,18）
-    DialogCreate(120, 26, c_anchorBottomLeft, 1046, 48, false);
-    g_fakeBtnDlg = DialogLastCreated();
-    DialogSetVisible(g_fakeBtnDlg, PlayerGroupAll(), false);
-    g_fakeOpenBtn = BOTC_NewButton(g_fakeBtnDlg, 120, 26, 0, 0, "伪造魔典");
 }
 
 void BOTC_FakeBtnRender () {
@@ -31132,10 +31457,13 @@ void BOTC_FakeBtnRender () {
             }
         }
     }
-    DialogSetVisible(g_fakeBtnDlg, PlayerGroupAll(), false);
+    // 【伪造魔典按钮已移入说书人工具】：工具面板进入收件人 / 发送子模式时不让外部重绘把它放出来
     if (show) {
-        DialogSetVisible(g_fakeBtnDlg, PlayerGroupSingle(g_teller), true);
+        if (DialogIsVisible(g_specDlg, g_teller) && g_specMode != 0) {
+            show = false;
+        }
     }
+    DialogControlSetVisible(g_fakeOpenBtn, PlayerGroupAll(), show);
 }
 
 void BOTC_FakeOpen () {
@@ -31166,6 +31494,8 @@ void BOTC_FakeOpen () {
         DialogSetVisible(g_fakeDlg, PlayerGroupAll(), false);
         return;
     }
+    // 【伪造魔典】现在从说书人工具面板打开：先把工具面板收起来
+    BOTC_SpecClose();
     BOTC_FakeRender();
     DialogSetVisible(g_fakeDlg, PlayerGroupSingle(g_teller), true);
 }
@@ -31406,6 +31736,9 @@ void BOTC_BuildSpec () {
     // 【标记能力使用】（用户 2026-11-11）：点一下再点圆桌座位，目标角色若有对应的「失去能力」token
     //   就自动打上；已经有则取消。白天 / 夜间都可用。
     g_specMarkBtn = BOTC_NewButton(g_specDlg, 255, 56, 600, 196, "标记能力使用");
+    // 【伪造魔典】（用户 2026-11-15）：从魔典下方移入说书人工具第二行；显示条件不变。
+    g_fakeOpenBtn = BOTC_NewButton(g_specDlg, 255, 56, 885, 196, "伪造魔典");
+    DialogControlSetVisible(g_fakeOpenBtn, PlayerGroupAll(), false);
     for (i = 0; i < 6; i += 1) {
         x = 30 + (i * 180);
         g_specSeatEdit[i] = BOTC_NewEdit(g_specDlg, 160, 41, x, 112);
@@ -31766,6 +32099,7 @@ void BOTC_SpecOpen () {
     DialogControlSetVisible(g_specCastBtn, PlayerGroupAll(), true);
     DialogControlSetVisible(g_specGrantBtn, PlayerGroupAll(), true);
     DialogControlSetVisible(g_specMarkBtn, PlayerGroupAll(), true);
+    BOTC_FakeBtnRender();          // 伪造魔典按钮：同样按板子是否含间谍 / 寡妇决定显隐
     for (i = 0; i < 6; i += 1) {
         DialogControlSetVisible(g_specSeatEdit[i], PlayerGroupAll(), false);
         DialogControlSetVisible(g_specRoleBtn[i], PlayerGroupAll(), false);
@@ -32501,6 +32835,7 @@ void BOTC_SpecSeatShow (int q) {
     DialogControlSetVisible(g_specCastBtn, PlayerGroupAll(), false);
     DialogControlSetVisible(g_specGrantBtn, PlayerGroupAll(), false);
     DialogControlSetVisible(g_specMarkBtn, PlayerGroupAll(), false);
+    DialogControlSetVisible(g_fakeOpenBtn, PlayerGroupAll(), false);
     for (i = 0; i < 6; i += 1) {
         DialogControlSetVisible(g_specSeatEdit[i], PlayerGroupAll(), true);
         DialogControlSetVisible(g_specRoleBtn[i], PlayerGroupAll(), true);
@@ -32801,6 +33136,7 @@ void BOTC_SpecBluffSeatShow () {
     DialogControlSetVisible(g_specCastBtn, PlayerGroupAll(), false);
     DialogControlSetVisible(g_specGrantBtn, PlayerGroupAll(), false);
     DialogControlSetVisible(g_specMarkBtn, PlayerGroupAll(), false);
+    DialogControlSetVisible(g_fakeOpenBtn, PlayerGroupAll(), false);
     for (i = 0; i < 6; i += 1) {
         DialogControlSetVisible(g_specSeatEdit[i], PlayerGroupAll(), false);
     }
@@ -33956,7 +34292,7 @@ void BOTC_GrimRender (int ob) {
     DialogControlSetVisible(g_saySeatIcon, PlayerGroupAll(), false);
     DialogControlSetVisible(g_saySeatIcon, PlayerGroupSingle(g_teller), true);
     // 「说书人」那一格也走统一显示名：取过名就显示自选名，否则回退战网名。
-    libNtve_gf_SetDialogItemText(g_saySeatLbl, StringToText("说书人 [") + TextWithColor(BOTC_SeatNameText(1), libNtve_gf_ConvertPlayerColorToColor(g_seatColor[1])) + StringToText("]"), PlayerGroupSingle(ob));   // 【说书人 = 游戏原生粉】（用户 2026-10-14）
+    libNtve_gf_SetDialogItemText(g_saySeatLbl, StringToText("说书人 [") + TextWithColor(BOTC_SeatNameText(1), BOTC_SeatColor(1)) + StringToText("]"), PlayerGroupSingle(ob));   // 【说书人 = 游戏原生粉】（用户 2026-10-14）
     if (snap) {
         markVal = g_grimSnapMark[(ob * 14) + 1];
     }
@@ -34882,6 +35218,9 @@ void BOTC_RsApply (int p) {
     //   由 BOTC_GameStartGo() 调用 BOTC_OpeningMarkSync() 统一结算。
     // 【随机配板最后统一清空】（用户 2026-10-20）：SetSeatRole / 提线木偶同步都不能提前下发玩家副本。
     BOTC_GrimResetPerPlayer();
+    // 【赏金猎人 · 配板阶段转邪恶】（用户 2026-11-15）：手动配板同样在这里把「邪恶」token
+    //   放到说书人魔典上，和随机配板保持一致，不等【确认发放】。
+    BOTC_BountySetupEvil();
     for (i = 1; i <= 13; i += 1) {
         BOTC_GrimRender(i);
     }
@@ -35039,7 +35378,7 @@ void BOTC_PreNoticeRender () {
     ttl = BOTC_TellerTitle();
     // 【称号对所有人可见】（用户 2026-11-02）：原来只给说书人看，现在所有玩家都能看到
     //   当前说书人是谁以及他的称号等级。
-    libNtve_gf_SetDialogItemText(g_preLbl, TextWithColor(StringToText("当前说书人："), Color(255, 0, 0)) + TextWithColor(PlayerName(g_teller), libNtve_gf_ConvertPlayerColorToColor(g_seatColor[1])), PlayerGroupAll());
+    libNtve_gf_SetDialogItemText(g_preLbl, TextWithColor(StringToText("当前说书人："), Color(255, 0, 0)) + TextWithColor(PlayerName(g_teller), BOTC_SeatColor(1)), PlayerGroupAll());
     libNtve_gf_SetDialogItemText(g_preTitleLbl, TextWithColor(StringToText("称号："), Color(255, 0, 0)) + TextWithColor(StringToText(ttl), Color(255, 215, 0)), PlayerGroupAll());
     DialogControlSetVisible(g_preTitleLbl, PlayerGroupAll(), true);
 }
@@ -68967,6 +69306,10 @@ void BOTC_WinFinalize (int side, string why1, string why2) {
     // 【结算固定公聊】（用户 2026-11-13）：如果正处在私聊阶段，先自动切回公聊；
     //   并把所有人残留的【私聊】输入模式拨回公聊，之后不能再切回私聊 / 提名阶段。
     BOTC_ChatModeSet(2);
+    // 【结算即解散全部私聊】（用户 2026-11-15）：连说书人自己开的私聊也一起结束，复盘只留公聊。
+    BOTC_DissolveAllSess(false);
+    // 【结算收起快进按钮】（用户 2026-11-15）：胜负已分，快进到提名一并失效。
+    BOTC_SkipReset();
     for (p = 1; p <= 13; p += 1) {
         g_chatSay[p] = 0;
         BOTC_SayRender(p);
@@ -70394,7 +70737,6 @@ void BOTC_HideAllUI () {
         DialogSetVisible(g_logBtnDlg[p], PlayerGroupAll(), false);
         DialogSetVisible(g_grimBtnDlg[p], PlayerGroupAll(), false);
         DialogSetVisible(g_abBtnDlg[p], PlayerGroupAll(), false);
-        DialogSetVisible(g_amneBtnDlg[p], PlayerGroupAll(), false);   // 【失忆角色表】入口也不在剧本外显示
         DialogSetVisible(g_tipBtnDlg[p], PlayerGroupAll(), false);
         DialogSetVisible(g_noteBtnDlg[p], PlayerGroupAll(), false);
         DialogSetVisible(g_claimBtnDlg[p], PlayerGroupAll(), false);
@@ -70411,9 +70753,6 @@ void BOTC_HideAllUI () {
     DialogSetVisible(g_grimDlg, PlayerGroupAll(), false);
     BOTC_GrimFlagAll(false);
     // 【伪造魔典】属于当前剧本，选板子时和魔典一起收起来
-    if (g_fakeBtnDlg != 0) {
-        DialogSetVisible(g_fakeBtnDlg, PlayerGroupAll(), false);
-    }
     if (g_fakeDlg != 0) {
         DialogSetVisible(g_fakeDlg, PlayerGroupAll(), false);
     }
@@ -71702,18 +72041,19 @@ void BOTC_SeatAskSend (int p, int cell) {
         return;
     }
     if (g_askFrom[to] != 0) {
-        BOTC_Notice(p, BOTC_NameStr(BOTC_PosOf(to)) + " 已经收到一个换座位请求了，等他先处理。");
+        BOTC_Notice(p, BOTC_FixedPlayerName(BOTC_PosOf(to)) + " 已经收到一个换座位请求了，等他先处理。");
         return;
     }
     g_askFrom[to] = p;
     g_askSec[to] = 30;                             // 【15 秒应答窗口】（用户 2026-11-02）：超时自动拒绝
-    libNtve_gf_SetDialogItemText(g_askLbl, BOTC_NameSubst(BOTC_NameStr(BOTC_PosOf(p)) + " 想与你交换座位"), PlayerGroupSingle(to));
+    // 【说书人也带名字】（用户 2026-11-15）：原来走 BOTC_NameStr()，说书人格只显示「说书人」。
+    libNtve_gf_SetDialogItemText(g_askLbl, BOTC_NameSubst(BOTC_FixedPlayerName(BOTC_PosOf(p)) + " 想与你交换座位"), PlayerGroupSingle(to));
     DialogControlSetVisible(g_askLbl, PlayerGroupSingle(to), true);
     DialogControlSetVisible(g_askYes, PlayerGroupSingle(to), true);
     DialogControlSetVisible(g_askNo, PlayerGroupSingle(to), true);
     DialogSetVisible(g_askDlg, PlayerGroupSingle(to), true);
     BOTC_PlaySfxTo(g_sfxReqName, to);              // 跟私聊请求同一个提示音
-    BOTC_Notice(p, "已向 " + BOTC_NameStr(BOTC_PosOf(to)) + " 发出换座位请求，等对方同意。");
+    BOTC_Notice(p, "已向 " + BOTC_FixedPlayerName(BOTC_PosOf(to)) + " 发出换座位请求，等对方同意。");
 }
 
 // 【对方点同意 / 拒绝】（用户 2026-10-07）
@@ -71721,6 +72061,8 @@ void BOTC_SeatAskAnswer (int p, bool yes) {
     int from;
     int a;
     int b;
+    string na;
+    string nb;
     if (p < 1 || p > 13) {
         return;
     }
@@ -71742,11 +72084,11 @@ void BOTC_SeatAskAnswer (int p, bool yes) {
     // 【踢出投票期间禁止换座位】（用户 2026-11-10）：同意也不生效，直接作废这次请求。
     if (yes && g_kickTar >= 1) {
         BOTC_Notice(p, "踢出投票进行中，暂时不能换座位，这次请求作废。");
-        BOTC_Notice(from, BOTC_NameStr(BOTC_PosOf(p)) + " 想换座位，但踢出投票进行中，这次请求作废。");
+        BOTC_Notice(from, BOTC_FixedPlayerName(BOTC_PosOf(p)) + " 想换座位，但踢出投票进行中，这次请求作废。");
         return;
     }
     if (!yes) {
-        BOTC_Notice(from, BOTC_NameStr(BOTC_PosOf(p)) + " 拒绝了和你换座位。");
+        BOTC_Notice(from, BOTC_FixedPlayerName(BOTC_PosOf(p)) + " 拒绝了和你换座位。");
         return;
     }
     a = BOTC_PosOf(from);                          // 发起人现在占的格子
@@ -71754,8 +72096,11 @@ void BOTC_SeatAskAnswer (int p, bool yes) {
     if (a < 1 || a > 13 || b < 1 || b > 13 || a == b) {
         return;
     }
+    // 【换位前先冻结双方原始「座位 + 名字」】（用户 2026-11-15）：换完再取名字就变成新坐进来的人了。
+    na = BOTC_FixedPlayerName(a);
+    nb = BOTC_FixedPlayerName(b);
     BOTC_SeatSwap(a, b);                           // 整体对调（含说书人格：换到格子 1 的人当说书人）
-    BOTC_PubAnnounce("【换座位】" + BOTC_NameStr(a) + " ↔ " + BOTC_NameStr(b) + "（双方同意）");
+    BOTC_PubAnnounce("【换座位】" + na + " ↔ " + nb + "（双方同意）");
 }
 
 // 【换座位请求 15 秒超时】（用户 2026-11-02）：无操作默认拒绝。
@@ -72258,9 +72603,15 @@ void BOTC_SeatSwap (int x, int y) {
     int ib;
     bool bb;
     string s;
+    string nx;
+    string ny;
     if (x < 1 || x > 13 || y < 1 || y > 13 || x == y) {   // 【测试·换座位】允许格子 1（说书人格）
         return;
     }
+    // 【换位前冻结双方原始「座位 + 名字」】（用户 2026-11-15）：播报 / 留档都用换位前的人，
+    //   不能等换完再按格子取名字（那时已经是新坐进来的人了）。
+    nx = BOTC_FixedPlayerName(x);
+    ny = BOTC_FixedPlayerName(y);
     BOTC_SwapOwnShownCapture();                 // 【换位前】记下谁本来就看得见自己的身份（用户 2026-11-07）
     a = g_who[x];                               // 第 x 格现在坐的人（物理座位）
     b = g_who[y];
@@ -72339,7 +72690,7 @@ void BOTC_SeatSwap (int x, int y) {
             }
         }
         // ⚠ g_hideSeat 不动（同上：换说书人不改玩家人数）
-        BOTC_PubAnnounce("【换座位】" + BOTC_NameStr(x) + " ↔ " + BOTC_NameStr(y) + "：说书人格换人了");
+        BOTC_PubAnnounce("【换座位】" + nx + " ↔ " + ny + "：说书人格换人了");
         BOTC_PmStore(g_teller, "【换座位】你现在是新的说书人。");
         BOTC_BsBtnRender();
         DialogSetVisible(g_bluffDlg, PlayerGroupAll(), false);
@@ -72349,7 +72700,7 @@ void BOTC_SeatSwap (int x, int y) {
         DialogSetVisible(g_tmMiniDlg, PlayerGroupSingle(g_teller), true);
     }
     // ⑥ 留档 + 重刷全场魔典（两格的名字都变了）
-    s = "【换座位】" + BOTC_NameStr(x) + " ↔ " + BOTC_NameStr(y);
+    s = "【换座位】" + nx + " ↔ " + ny;
     BOTC_PmStore(g_teller, s);
     if (g_swapPickBy >= 1) {
         BOTC_Notice(g_swapPickBy, s);
@@ -72405,8 +72756,9 @@ void BOTC_TellerHandover (int p, int seat) {
     }
     // 【先拼名字再换人】（用户 2026-10-06 报「播报里写成 玩家0 → 说书人」）：
     //   `BOTC_NameStr()` 判断"是不是说书人"用的是 `g_teller`，所以必须在**换之前**把名字取好。
-    nOld = BOTC_NameStr(posOld);
-    nNew = BOTC_NameStr(seat);
+    // 【说书人也带名字】（用户 2026-11-15）：改用固定显示名，播报里不再只写「说书人」。
+    nOld = BOTC_FixedPlayerName(posOld);
+    nNew = BOTC_FixedPlayerName(seat);
     BOTC_SwapOwnShownCapture();    // 【换位前】记下谁本来就看得见自己的身份（用户 2026-11-07）
     // ① 魔典「谁看到什么」的矩阵。⚠【行列是两套坐标系】（用户 2026-10-07 报「第二次换位就乱」）：
     //    · **行 = 观察者 = 物理座位**（谁知道什么）→ 老说书人 old 与 新说书人 newSeat 两行对调，
@@ -72977,6 +73329,8 @@ void BOTC_BoardFinish (int b) {
     }
     BOTC_LegacyApply(b);
     g_boardOpen = false;
+    // 【每局随机玩家颜色】（用户 2026-11-15）：进入剧本时重排一次，说书人固定红。
+    BOTC_SeatColorShuffle();
     g_bootSavePending = false;
     g_bootSaveSlot = 0;
     // 入场取名阶段继续保持黑幕；20 秒后才撤掉并分配座位 / 名字。
@@ -87387,11 +87741,11 @@ void BOTC_StatsRecord (int winSide) {
         BOTC_StatsOwnBump(bk, "t");
         if (al == 0) {
             BOTC_StatsOwnBump(bk, "g");
-            BankValueSetFromInt(bk, "stats", "la", 0);   // 上一场阵营（随机发牌换边用）
+            BankValueSetFromInt(bk, "stats", "la", 0);   // 上一场阵营（仅留档，不再参与随机配板权重）
         }
         else {
             BOTC_StatsOwnBump(bk, "e");
-            BankValueSetFromInt(bk, "stats", "la", 1);   // 上一场阵营（随机发牌换边用）
+            BankValueSetFromInt(bk, "stats", "la", 1);   // 上一场阵营（仅留档，不再参与随机配板权重）
         }
         // 【积分】（用户 2026-11-06）：正常结算一局，胜方阵营 +100、败方阵营 +50。
         // 【说书人胜】（用户 2026-11-12）：无神论者对局中途转为邪恶阵营的玩家，跟说书人一起算胜方。
@@ -87412,7 +87766,7 @@ void BOTC_StatsRecord (int winSide) {
         bk = g_bank[pid];
         BOTC_StatsOwnBump(bk, "t");
         BOTC_StatsOwnBump(bk, "s");
-        BankValueSetFromInt(bk, "stats", "la", 0);       // 说书人不算邪恶，下一局按善良处理
+        BankValueSetFromInt(bk, "stats", "la", 0);       // 说书人记善良；仅留档，不再参与随机配板权重
         g_statSavePend[pid] = true;                      // 【延后保存】与玩家一样交给心跳写盘
     }
     BOTC_PmStore(g_teller, "【场次统计】本局已按每名玩家的本地 bank 记录。");
@@ -89562,51 +89916,65 @@ void BOTC_OpeningMarkSync () {
 
 // 【随机发牌的座位权重】（用户 2026-11-06 / 2026-11-07）：以前按分数取最大值，
 //   多人同时满足场次条件时恶魔 / 爪牙永远落在总场数最高的那几个人身上，
-//   反复点【随机发牌】也不换人。改成按场次加权随机，恶魔位和爪牙位共用同一张表：
-//   <5 场 = 1；5..9 场 = 5；10..15 场 = 10；16..20 场 = 15；>20 场 = 20。
-// 【随机发牌的座位基础权重】（用户 2026-11-10）：恶魔 / 爪牙 / 失忆者（73）共用的场次权重，
-//   只按总场数给权重，不含上一场阵营的软换边。
-int BOTC_DealSeatBaseWeight (int tot) {
+//   反复点【随机发牌】也不换人。改成按场次加权随机。
+// 【恶魔 / 爪牙分表】（用户 2026-11-15）：恶魔位与爪牙位不再共用同一张表；
+//   失忆者（73）也不再使用这张表，改走镇民 / 外来者的善良座位权重（见 BOTC_JrGoodWeight），
+//   并且仍然只发给总场数 >= 20 的玩家。
+//   恶魔：0..4 场 = 1；5..9 场 = 5；10..14 场 = 10；15..19 场 = 15；>= 20 场 = 20。
+int BOTC_DealDemonWeightBase (int tot) {
     int w;
     w = 1;
-    if (tot > 20) {
+    if (tot >= 20) {
         w = 20;
     }
-    else {
-        if (tot > 15) {
-            w = 15;
-        }
-        else {
-            if (tot >= 10) {
-                w = 10;
-            }
-            else {
-                if (tot >= 5) {
-                    w = 5;
-                }
-            }
-        }
+    else if (tot >= 15) {
+        w = 15;
+    }
+    else if (tot >= 10) {
+        w = 10;
+    }
+    else if (tot >= 5) {
+        w = 5;
     }
     return w;
 }
 
-//   上一场不是邪恶的玩家权重 ×1.2（整数按 (w*6)/5 计算）作为软换边。
-//   【竞选角色类型】（用户 2026-11-11）：参与该类型竞选的玩家再 ×1.5；为保留小数效果，
-//   先把基础权重 ×2，参与时按 ×3 计算，比例仍是 1.5 倍。
-int BOTC_DealSeatWeight (int tot, int lastEvil, int join) {
+//   爪牙：0..4 场 = 5；5..9 场 = 10；10..14 场 = 15；>= 15 场 = 20。
+int BOTC_DealMinionWeightBase (int tot) {
     int w;
-    w = BOTC_DealSeatBaseWeight(tot) * 2;
-    if (lastEvil == 0) {
-        w = (w * 6) / 5;
+    w = 5;
+    if (tot >= 15) {
+        w = 20;
+    }
+    else if (tot >= 10) {
+        w = 15;
+    }
+    else if (tot >= 5) {
+        w = 10;
+    }
+    return w;
+}
+
+//   【竞选角色类型】（用户 2026-11-11 / 2026-11-15）：参与该类型竞选的玩家再 ×2。
+//   【删除软换边】（用户 2026-11-15）：不再读取上一场阵营，也不再按 ×1.2 加权。
+//   which：2 = 爪牙（含小怪宝改成爪牙的恶魔格），3 = 恶魔。
+int BOTC_DealSeatWeight (int which, int tot, int join) {
+    int w;
+    if (which == 2) {
+        w = BOTC_DealMinionWeightBase(tot);
+    }
+    else {
+        w = BOTC_DealDemonWeightBase(tot);
     }
     if (join == 1) {
-        w = (w * 3) / 2;
+        w = w * 2;
     }
     return w;
 }
 
 // 【随机发牌的座位优先序】（用户 2026-11-03 / 2026-11-04）：
-//   恶魔位与爪牙位共用同一张场次权重表（见 BOTC_DealSeatWeight）；上一场已经扮演邪恶的玩家尽量换边。
+//   恶魔位与爪牙位各自按场次权重抽座位（见 BOTC_DealSeatWeight）。
+//   【删除软换边】（用户 2026-11-15）：不再读取上一场阵营，也不再按 ×1.2 给善良玩家加权。
 //   军团（94）没有单独的恶魔位，卡扎力（135）的爪牙位会被换成善良角色，这两种情况跳过对应偏好；
 //   小怪宝（112）的恶魔位实际会改成爪牙，所以按爪牙偏好挑人。
 void BOTC_DealSeatOrder (int demonRole) {
@@ -89620,12 +89988,10 @@ void BOTC_DealSeatOrder (int demonRole) {
     int q;
     int pid;
     int t;
-    int pe;
     int take;
     int minionN;
     int jm;
     int[16] tot;
-    int[16] lastEvil;
     int[16] join;
 
     n = g_seatN;
@@ -89641,7 +90007,6 @@ void BOTC_DealSeatOrder (int demonRole) {
         q = g_scrSeat[i];
         pid = g_who[q];
         t = 0;
-        pe = 0;
         jm = 15;
         if (pid >= 1 && pid <= 13 && PlayerType(pid) == 1) {
             // 【缓存优先 · 不阻塞读档】（用户 2026-11-11）：随机发牌的场次权重只读开局缓存，
@@ -89649,11 +90014,6 @@ void BOTC_DealSeatOrder (int demonRole) {
             // 【兜底补加载】（用户 2026-11-13）：句柄缺失时先补一次，否则按 0 场 / 默认偏好参与配板。
             BOTC_BankEnsure(pid);
             t = BOTC_StatsOwnGet(g_bank[pid], "t");
-            if (BankKeyExists(g_bank[pid], "stats", "la")) {
-                if (BankValueGetAsInt(g_bank[pid], "stats", "la") != 0) {
-                    pe = 1;
-                }
-            }
             // 【竞选角色类型】（用户 2026-11-11）：读玩家本地保存的参与状态（默认 15 = 全参与）
             if (BankKeyExists(g_bank[pid], "opts", "jrw")) {
                 jm = BankValueGetAsInt(g_bank[pid], "opts", "jrw");
@@ -89663,7 +90023,6 @@ void BOTC_DealSeatOrder (int demonRole) {
             }
         }
         tot[i] = t;
-        lastEvil[i] = pe;
         join[i] = jm;
         g_dealStatT[q] = t;
         g_dealJoin[q] = jm;
@@ -89673,12 +90032,12 @@ void BOTC_DealSeatOrder (int demonRole) {
         // 【加权随机，而不是取最高分】（用户 2026-11-06）：多人同为 10 场以上时轮流当恶魔
         bestScore = 0;
         for (i = 0; i < n; i += 1) {
-            bestScore = bestScore + BOTC_DealSeatWeight(tot[i], lastEvil[i], BOTC_JrBit(join[i], 3));
+            bestScore = bestScore + BOTC_DealSeatWeight(3, tot[i], BOTC_JrBit(join[i], 3));
         }
         best = 0;
         sc = RandomInt(1, bestScore);
         for (i = 0; i < n; i += 1) {
-            sc = sc - BOTC_DealSeatWeight(tot[i], lastEvil[i], BOTC_JrBit(join[i], 3));
+            sc = sc - BOTC_DealSeatWeight(3, tot[i], BOTC_JrBit(join[i], 3));
             if (sc <= 0) {
                 best = i;
                 break;
@@ -89686,7 +90045,6 @@ void BOTC_DealSeatOrder (int demonRole) {
         }
         tmp = g_scrSeat[0]; g_scrSeat[0] = g_scrSeat[best]; g_scrSeat[best] = tmp;
         tmp = tot[0]; tot[0] = tot[best]; tot[best] = tmp;
-        tmp = lastEvil[0]; lastEvil[0] = lastEvil[best]; lastEvil[best] = tmp;
         tmp = join[0]; join[0] = join[best]; join[best] = tmp;
     }
     if (demonRole == 94 || demonRole == 135) {
@@ -89702,12 +90060,12 @@ void BOTC_DealSeatOrder (int demonRole) {
         // 【加权随机，而不是取最高分】（用户 2026-11-06）：多个 5 场以上的玩家轮流当爪牙
         bestScore = 0;
         for (i = take; i < n; i += 1) {
-            bestScore = bestScore + BOTC_DealSeatWeight(tot[i], lastEvil[i], BOTC_JrBit(join[i], 2));
+            bestScore = bestScore + BOTC_DealSeatWeight(2, tot[i], BOTC_JrBit(join[i], 2));
         }
         best = take;
         sc = RandomInt(1, bestScore);
         for (i = take; i < n; i += 1) {
-            sc = sc - BOTC_DealSeatWeight(tot[i], lastEvil[i], BOTC_JrBit(join[i], 2));
+            sc = sc - BOTC_DealSeatWeight(2, tot[i], BOTC_JrBit(join[i], 2));
             if (sc <= 0) {
                 best = i;
                 break;
@@ -89715,7 +90073,6 @@ void BOTC_DealSeatOrder (int demonRole) {
         }
         tmp = g_scrSeat[take]; g_scrSeat[take] = g_scrSeat[best]; g_scrSeat[best] = tmp;
         tmp = tot[take]; tot[take] = tot[best]; tot[best] = tmp;
-        tmp = lastEvil[take]; lastEvil[take] = lastEvil[best]; lastEvil[best] = tmp;
         tmp = join[take]; join[take] = join[best]; join[best] = tmp;
         take = take + 1;
     }
@@ -90319,7 +90676,7 @@ void BOTC_Deal () {
     }
     // 【提线木偶的竞选归类】（用户 2026-11-11 / 2026-11-14）：提线木偶（93）以为自己抽到的是镇民或外来者，
     //   所以爪牙牌发下去之后，再在爪牙座位之间按「镇民 / 外来者竞选」加权重挑一格
-    //   （基础权重 10，参与镇民或外来者任一类即 15）；他仍然是爪牙，只是落在哪个座位换了。
+    //   （基础权重 20，参与镇民或外来者任一类即 40）；他仍然是爪牙，只是落在哪个座位换了。
     mrSeat = 0;
     mrSlot = -1;
     mrTotal = 0;
@@ -90328,9 +90685,9 @@ void BOTC_Deal () {
         if (g_mark[(g_teller * 14) + q] == 94) {
             mrSeat = q;
         }
-        mrW = 10;
+        mrW = 20;
         if (BOTC_JrBit(g_dealJoin[q], 0) == 1 || BOTC_JrBit(g_dealJoin[q], 1) == 1) {
-            mrW = 15;
+            mrW = 40;
         }
         mrTotal = mrTotal + mrW;
     }
@@ -90338,9 +90695,9 @@ void BOTC_Deal () {
         mrSc = RandomInt(1, mrTotal);
         for (i = mrLo; i <= mc; i += 1) {
             q = g_scrSeat[i];
-            mrW = 10;
+            mrW = 20;
             if (BOTC_JrBit(g_dealJoin[q], 0) == 1 || BOTC_JrBit(g_dealJoin[q], 1) == 1) {
-                mrW = 15;
+                mrW = 40;
             }
             mrSc = mrSc - mrW;
             if (mrSc <= 0) {
@@ -90945,7 +91302,7 @@ void BOTC_Deal () {
         candN = 0;
         wantNew = BOTC_RoleNewbieSafe(goodR[i]);
         // 【竞选角色类型】（用户 2026-11-11 / 2026-11-14）：镇民 / 外来者各自独立加权，
-        //   基础权重 10，参与对应竞选的座位按 15（×1.5）参与加权抽签（见 BOTC_JrGoodWeight）。
+        //   基础权重 20，参与对应竞选的座位按 40（×2）参与加权抽签（见 BOTC_JrGoodWeight）。
         // 【认知偏差角色的竞选归类】（用户 2026-11-11 追加）：疯子 / 悟道者 / 提线木偶 / 酒鬼
         //   按「玩家以为的身份」参与竞选（见 BOTC_JrRoleType）。
         wantOut = BOTC_JrRoleType(goodR[i]);
@@ -91304,6 +91661,9 @@ void BOTC_Deal () {
     //   改到游戏正式开始、进入首夜时由 BOTC_OpeningMarkSync() 统一结算。
     // 【诺-达鲺（70）/ 店小二（115）】（用户 2026-11-09）：随机发牌期间不再提前打标记，
     //   改到游戏正式开始、进入首夜时由 BOTC_GameStartGo() 统一结算。
+    // 【赏金猎人 · 配板阶段转邪恶】（用户 2026-11-15）：随机配板收尾就把「邪恶」token
+    //   放到说书人魔典上（和酒鬼的「是酒鬼」token 一样），不等【确认发放】。
+    BOTC_BountySetupEvil();
     // 重新发牌后清掉旧的死亡红叉，所有人的魔典都刷新一遍
     for (i = 1; i <= 13; i += 1) {
         BOTC_GrimRender(g_who[i]);
@@ -91327,6 +91687,9 @@ void BOTC_BountySetupEvil () {
     int bs;
     int pick;
     int n;
+    int r;
+    int priN;
+    int[14] pri;
     bs = BOTC_SeatOfRole(90);
     if (bs < 2 || bs > 13) {
         return;
@@ -91334,14 +91697,31 @@ void BOTC_BountySetupEvil () {
     if (BOTC_BountyEvilSeat() >= 2) {
         return;
     }
+    // 【优先一次性技能 / 夜间能力者】（用户 2026-11-15）：先在这两类镇民里随机挑一名，
+    //   场上没有这类角色时再退回全部镇民随机；赏金猎人本人不参与。
+    priN = 0;
     pick = 0;
-    n = 0;
     for (i = 2; i <= 13; i += 1) {
         if (!g_seatOn[i]) { continue; }
         if (i == bs) { continue; }
-        if (BOTC_RoleTeam(BOTC_SeatTrueRole(i)) != 0) { continue; }
-        n = n + 1;
-        if (RandomInt(1, n) == 1) { pick = i; }
+        r = BOTC_SeatTrueRole(i);
+        if (BOTC_RoleTeam(r) != 0) { continue; }
+        if (g_roleInfoClass[r] != 1 && g_roleInfoClass[r] != 3) { continue; }
+        pri[priN] = i;
+        priN = priN + 1;
+    }
+    if (priN > 0) {
+        pick = pri[RandomInt(1, priN) - 1];
+    }
+    else {
+        n = 0;
+        for (i = 2; i <= 13; i += 1) {
+            if (!g_seatOn[i]) { continue; }
+            if (i == bs) { continue; }
+            if (BOTC_RoleTeam(BOTC_SeatTrueRole(i)) != 0) { continue; }
+            n = n + 1;
+            if (RandomInt(1, n) == 1) { pick = i; }
+        }
     }
     if (pick < 2) {
         BOTC_PmStore(g_teller, "【赏金猎人】配板阶段没有可转为邪恶的镇民，本局不产生转阵营。");
@@ -93144,13 +93524,18 @@ void BOTC_NomUI () {
         DialogSetVisible(g_logBtnDlg[ob], PlayerGroupSingle(ob), true);
         DialogSetVisible(g_grimBtnDlg[ob], PlayerGroupSingle(ob), true);
         DialogSetVisible(g_abBtnDlg[ob], PlayerGroupSingle(ob), true);
-        // 【失忆角色表】（用户 2026-11-14）：只在本剧本包含失忆者、且已经进入剧本后显示；
-        //   全员追忆（板子 13）所有身份都是占位卡，不提供失忆角色表入口。
-        DialogSetVisible(g_amneBtnDlg[ob], PlayerGroupSingle(ob), (BOTC_BoardHasRole(73) && g_board != 13 && !g_boardOpen && !g_introOn));
+        // 【失忆角色表】入口已经并入剧本角色表弹窗右下角，随面板渲染显隐，底部按钮栏不再单独显示
         DialogSetVisible(g_tipBtnDlg[ob], PlayerGroupSingle(ob), true);
         DialogSetVisible(g_noteBtnDlg[ob], PlayerGroupSingle(ob), true);
         // 【竞选角色】剧本选择页与进入剧本后都显示（用户 2026-11-11）
         DialogSetVisible(g_jrBtnDlg[ob], PlayerGroupSingle(ob), true);
+        // 【结算阶段收起私聊入口】（用户 2026-11-15）：胜负已分后不能再发起私聊，
+        //   复盘阶段只保留公聊；重新开始回到准备阶段后自动恢复。
+        DialogControlSetVisible(g_joinBtn[ob], PlayerGroupSingle(ob), !g_gameOver);
+        if (g_gameOver) {
+            DialogControlSetVisible(g_joinPopBtn[ob], PlayerGroupSingle(ob), false);
+            g_joinPopOn[ob] = 0;
+        }
     }
     // 发起提名：阶段 1，且今天还没发起过
     DialogControlSetVisible(g_nomStart, PlayerGroupAll(), false);
@@ -94502,6 +94887,11 @@ void BOTC_KickPickStart (int p) {
         BOTC_Notice(p, "已取消踢人投票。");
         return;
     }
+    // 【提名阶段禁止踢出玩家】（用户 2026-11-15）：提名环节不给发起踢人，取消分支仍可退出。
+    if (g_phase != 0) {
+        BOTC_Notice(p, "提名阶段不能踢出玩家。");
+        return;
+    }
     if (g_kickTar >= 1) {
         BOTC_Notice(p, "已经有一个踢出投票在进行中了。");
         return;
@@ -94520,6 +94910,14 @@ void BOTC_KickPickStart (int p) {
 void BOTC_KickStart (int by, int q) {
     int i;
     if (q < 1 || q > 13) {
+        return;
+    }
+    // 【提名阶段禁止踢出玩家】（用户 2026-11-15）：兜底拦截，覆盖先进入选座、后进提名阶段的路径。
+    if (g_phase != 0) {
+        if (g_kickMode == by) {
+            g_kickMode = 0;
+        }
+        BOTC_Notice(by, "提名阶段不能踢出玩家。");
         return;
     }
     if (g_kickTar >= 1) {
@@ -95201,8 +95599,7 @@ void BOTC_Init () {
     g_cdImgLast = -1;
     for (i = 1; i <= 13; i += 1) {
         g_lab[i] = i - 1;         // 【编号表】格子 i 的显示编号 = i - 1（玩家1 = 格子 2）；换说书人时**不动**
-        // 【座位颜色】用户 2026-10-06：**玩家1（= 物理座位 2）从红色开始**，往后 蓝/青/紫/黄/橙/绿/粉…
-        //   （物理座位 1 是说书人那一格，固定白色，这里给个占位值就行）
+        // 【座位颜色】默认值；进入剧本时由 BOTC_SeatColorShuffle() 重新随机分配 1..12。
         g_seatColor[i] = i - 1;
         g_who[i] = i;             // 【座位→人】开局：位置 i 就是物理座位 i
         if (g_seatColor[i] < 1) {
@@ -95213,9 +95610,19 @@ void BOTC_Init () {
         g_dispName[i] = "";
         g_introName[i] = "";
     }
-    // 【说书人那一格固定用「深粉」】（用户 2026-10-14）：**色号 15 = 深粉**（用户实测：8 是淡粉、太淡）----
-    //   下面所有按位置取色的地方（魔典名字行、座位面板…）都会跟着走，换成别色只改这一行。
-    g_seatColor[1] = 15;
+    // 【玩家调色板】（用户 2026-11-15）：12 个高对比亮色，避开紫 / 深绿 / 棕等暗色。
+    g_seatPal[1] = Color(255, 140, 26);     // 橙
+    g_seatPal[2] = Color(255, 214, 51);     // 黄
+    g_seatPal[3] = Color(200, 255, 77);     // 黄绿
+    g_seatPal[4] = Color(102, 230, 77);     // 绿
+    g_seatPal[5] = Color(124, 240, 200);    // 薄荷
+    g_seatPal[6] = Color(77, 216, 255);     // 天蓝
+    g_seatPal[7] = Color(85, 153, 255);     // 蓝
+    g_seatPal[8] = Color(160, 184, 255);    // 淡蓝
+    g_seatPal[9] = Color(255, 143, 200);    // 粉
+    g_seatPal[10] = Color(217, 160, 102);   // 茶色
+    g_seatPal[11] = Color(200, 200, 200);   // 浅灰
+    g_seatPal[12] = Color(232, 217, 160);   // 米黄
     for (p = 0; p <= 13; p += 1) {
         g_mySess[p] = 0;
         g_sessOwner[p] = 0;
