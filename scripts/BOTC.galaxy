@@ -90094,6 +90094,8 @@ void BOTC_Deal () {
     // 【气球驾驶员（72）】（用户 2026-09-23）：他是镇民，抽牌之前定不了他会不会在场，
     //   而这局掷到「+1」就必须外来者 +1、镇民 -1（不然提示写着 +1，牌面却只有一个外来者）。
     //   所以掷到 +1 就直接把他钉进场：配比先改，抽镇民的时候再把他塞进池子。
+    // 【纯随机 0..4】（用户 2026-11-14）：卡扎力 / 堤丰之首 / 限 局的外来者数量以随机值为准，
+    //   气球驾驶员的 +1 不额外叠加，也不再把他钉进场。
     balloon = 0;
     if (g_balPlus) {
         for (i = 0; i < g_boardRoleN[g_board]; i += 1) {
@@ -90102,12 +90104,18 @@ void BOTC_Deal () {
             }
         }
         if (balloon == 1) {
-            tc = tc - 1;
-            if (tc < 0) {
-                tc = 0;
+            if (demonPick == 135 || demonPick == 111 || BOTC_SeatOfRole(147) >= 2) {
+                BOTC_PmStore(g_teller, "【配比】卡扎力 / 堤丰之首 / 限在场 → 外来者数量保持随机 0..4，气球驾驶员的 +1 不额外叠加。");
+                balloon = 0;              // 不把气球驾驶员钉进场，纯随机名额为准
             }
-            oc = oc + 1;
-            BOTC_PmStore(g_teller, "【配比】气球驾驶员在场 → 外来者 +1、镇民 -1。");
+            else {
+                tc = tc - 1;
+                if (tc < 0) {
+                    tc = 0;
+                }
+                oc = oc + 1;
+                BOTC_PmStore(g_teller, "【配比】气球驾驶员在场 → 外来者 +1、镇民 -1。");
+            }
         }
     }
     // 【哨兵（88）】（用户 2026-09-26 / 2026-11-08）：被加进本局时，随机导致外来者 -1 / 不变 / +1 ----
@@ -90900,7 +90908,15 @@ void BOTC_Deal () {
     BOTC_AlchemistMarionetteEnsure();
     BOTC_MarionetteRoleSync();
     // 【气球驾驶员 × 提线木偶】（用户 2026-11-12）：假身份为气球驾驶员时可能 +1 外来者。
-    BOTC_BalloonMarionetteComposition();
+    // 【纯随机 0..4】（用户 2026-11-14）：卡扎力 / 堤丰之首 / 限 局以随机值为准，不再额外 +1。
+    if (BOTC_RoleInPlay(135) || BOTC_RoleInPlay(111) || BOTC_RoleInPlay(147)) {
+        if (BOTC_MarionetteFakeIs(72)) {
+            BOTC_PmStore(g_teller, "【气球驾驶员×提线木偶】卡扎力 / 堤丰之首 / 限在场 → 外来者保持随机 0..4，本次不再额外 +1。");
+        }
+    }
+    else {
+        BOTC_BalloonMarionetteComposition();
+    }
     // 巡山人（77）在场：必定有一个外来者是落难少女（82）
     //   用户 2026-11-08：大概率把一名外来者换成落难少女；小概率改为把一名
     //   「无主动能力 / 一次性能力」的镇民转成外来者落难少女（外来者 +1、镇民 -1）。
