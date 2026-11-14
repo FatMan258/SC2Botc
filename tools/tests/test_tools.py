@@ -414,7 +414,7 @@ class RoleSpecTests(unittest.TestCase):
             "g_tokName[201]",
             "g_tokName[202]",
             "g_tokName[204]",
-            "g_deathN = 24;",
+            "g_deathN = 25;",
             "g_deathTok[22] = 204;",
             "g_roleDeathTok[163] = 204;",
             "if (r == 163) {",
@@ -829,7 +829,7 @@ class IntroNameFlowTests(unittest.TestCase):
         self.assertIn("BOTC_BoardSelect(b);", source)
         self.assertIn("g_boardStartBtn = BOTC_NewButton(g_boardDlg, 280, 50, 1600, 930", source)
         self.assertIn("DialogSetPosition(g_tmShowDlg, c_anchorTopLeft, 1600, 990);", source)
-        self.assertIn("DialogSetPosition(g_tmShowDlg, c_anchorCenter, 0, 40);", source)
+        self.assertIn("DialogSetPosition(g_tmShowDlg, c_anchorCenter, 0, 110);", source)
         self.assertIn("BOTC_FixedCountdownStop();", source)
         self.assertIn("if (!g_boardOpen || g_boardFade < 4 || g_cOpen)", source)
         self.assertIn("g_seatInfoLbl = BOTC_NewLabel(g_boardDlg, 900, 36, 980, 956", source)
@@ -841,8 +841,8 @@ class IntroNameFlowTests(unittest.TestCase):
         count_render = source[source.index("void BOTC_BoardStartCdRender () {"):]
         count_render = count_render[: count_render.index("\n}\n") + 3]
         self.assertNotIn("DialogSetVisible", count_render)
-        self.assertIn("输入 -名字 以取名", source)
-        self.assertIn("例如：-好人", source)
+        self.assertIn("输入名字后点击【确认】", source)
+        self.assertIn("取名阶段不能发言", source)
         self.assertIn('g_namePool[4]  = "泰凯斯"', source)
         self.assertIn("BOTC_TextWidth(name) > 20", source)
         self.assertIn("bool BOTC_ValidColorName (string s) {", source)
@@ -852,7 +852,10 @@ class IntroNameFlowTests(unittest.TestCase):
         self.assertIn("if (s == g_namePool[i])", source)
         self.assertIn("visible == g_namePool[i]", source)
         self.assertIn("return BOTC_ChatNoColor(s);", source)
-        self.assertIn("g_introName[q] == name", source)
+        self.assertIn(
+            "BOTC_NameVisibleText(g_introName[q]) == BOTC_NameVisibleText(name)",
+            source,
+        )
         self.assertIn("positions[m] = i;", source)
         self.assertIn("g_who[positions[i]] = people[i];", source)
         self.assertIn('if (p == g_teller) {\n        BOTC_Notice(p, "说书人保持战网名', source)
@@ -861,11 +864,11 @@ class IntroNameFlowTests(unittest.TestCase):
             source,
         )
         self.assertIn("BOTC_IntroTryMsg(p, msg);", source)
-        self.assertIn("StringSub(msg, at + 1, n)", source)
-        self.assertIn('StringFind(msg, "\uff0d", false)', source)
+        self.assertIn("libNtve_gf_DialogItemEditValue(g_introEdit, p)", source)
+        self.assertIn("void BOTC_IntroConfirm (int p) {", source)
         self.assertIn("if (!g_introHinted[p])", source)
         self.assertIn(
-            "if (pid == g_teller && !g_introChosen[pid])",
+            'StringToText("请等待其他玩家设置名称")',
             source,
         )
         self.assertIn(
@@ -882,7 +885,7 @@ class IntroNameFlowTests(unittest.TestCase):
         custom_show = source[source.index("void BOTC_CustomShowEditor () {"):]
         custom_show = custom_show[: custom_show.index("\n}\n") + 3]
         self.assertIn(
-            "DialogSetVisible(g_boardStartBtn, PlayerGroupAll(), false);",
+            "DialogControlSetVisible(g_boardStartBtn, PlayerGroupAll(), false);",
             custom_show,
         )
         self.assertIn("g_dispName[p] = name;", source)
@@ -922,7 +925,9 @@ class LogIdentityTests(unittest.TestCase):
         self.assertIn("BOTC_LogNameSubstText(t)", line_text)
         self.assertIn("BOTC_NameSubstText(t)", line_text)
 
-        self.assertGreaterEqual(source.count("BOTC_LogLineText(p,"), 20)
+        # 【日志统一拆行】（用户 2026-11-13）：日志列表统一走 BOTC_LogAddLine，
+        #   由它内部调用 BOTC_LogLineText 做名字替换并处理超宽换行。
+        self.assertGreaterEqual(source.count("BOTC_LogAddLine(p,"), 20)
         self.assertIn("g_pubLog[i], g_pubWho[i]", source)
         self.assertIn("g_pmLog[(p * 600) + i]", source)
 
@@ -1026,7 +1031,12 @@ class MergeRegressionTests(unittest.TestCase):
             source, "bool BOTC_AutoWakeEvilStep () {"
         )
 
-        self.assertNotIn("是提线木偶", demon_info)
+        demon_info_code = "\n".join(
+            line
+            for line in demon_info.splitlines()
+            if not line.strip().startswith("//")
+        )
+        self.assertNotIn("是提线木偶", demon_info_code)
         self.assertIn("BOTC_SendMarionetteToDemons();", marionette_info)
         self.assertIn("BOTC_LunaticMarionetteAsk(lu)", marionette_info)
         self.assertIn("ord = 19;", evil_step)
@@ -1269,7 +1279,7 @@ class MergeRegressionTests(unittest.TestCase):
             "BOTC_MalfNote(t, \"悟道者被邪恶能力影响后改变角色\");",
             "role == 163 && BOTC_BoardHasRole(163)",
             "if (mode == 21 && r == 162) {",
-            "if (BOTC_ActRoleOf(p) == 100 && BOTC_ActingIsFirstNight(p)) {",
+            "if (BOTC_ActRoleOf(p) == 100 && BOTC_LleechHostMode(p)) {",
         ):
             self.assertIn(marker, source)
 
