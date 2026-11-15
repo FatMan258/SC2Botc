@@ -94112,6 +94112,12 @@ void BOTC_NomPick (int p, int q) {
             return;
         }
     }
+    // 【剧本没有无神论者 → 不能提名说书人】（用户 2026-11-15）：
+    //   提名说书人是无神论者的专属规则，当前板子里没有无神论者（83）时直接拦掉。
+    if (q == 1 && !BOTC_BoardHasRole(83)) {
+        BOTC_Notice(g_who[p], "当前剧本没有无神论者：不能提名说书人。");
+        return;
+    }
     if (g_nomTargeted[q]) {
         BOTC_Notice(g_who[p], BOTC_NameStr(q) + " 今天已经被提名过了，换一个。");
         return;
