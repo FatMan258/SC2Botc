@@ -427,6 +427,8 @@ int         g_fearTarget;       // 【恐惧之灵(102)】他当前公开选中�
 int         g_lleechHost;       // 【痢蛭(100)】首夜他选的宿主座位（0 = 还没选）
 int         g_lleechEval;       // 【防死循环】BOTC_LleechPoisonOn 正在求值时的重入深度（>0 表示已进入）
 int         g_philoDrunkEval;   // 【防死循环】BOTC_PhiloDrunkSeat 正在求值时的重入深度（>0 表示已进入）
+int         g_boffinEval;       // 【防死循环】BOTC_BoffinSourceIs 正在求值时的重入深度（>0 表示已进入）
+int         g_liveCorpseEval;   // 【防死循环】BOTC_LivingCorpseCountsAlive 正在求值时的重入深度（>0 表示已进入）
 int         g_lleechRecover;    // 【防重入】BOTC_LleechRecoverCheck 正在结算「恢复清醒后宿主已死」
 bool        g_fearPending;      // 【恐惧之灵(102)】今晚换了新目标 -> 等白天再播报（用户 2026-10-03）
 int         g_alcGuess;         // 猜中的座位（0 = 没猜中）
@@ -1043,6 +1045,7 @@ int         g_winSub;
 int         g_winBtn;
 int         g_winSide;            // 0 = 善良胜 / 1 = 邪恶胜
 bool        g_gameOver;           // 本局已经分出胜负
+bool        g_winFinalized;       // 【防重入】本局封盘是否已经执行过（政客待答时 PhaseUiForceClose 会嵌套回调 WinFinalize）
 // 【说书人评分】（用户 2026-11-02）：结算阶段每个玩家（除说书人）给说书人打 1..5 分；
 //   分数累加进说书人自己账号 bank 的 stats/rs、stats/rc，统计页显示平均分；
 //   同时按 1/2/3/4/5 分给 stats/rep 增减 -5/0/+5/+10/+15（最低 0），用于称号判定。
@@ -5549,6 +5552,7 @@ void BOTC_PubAnnounceWrap (string head, string msg) {
         pos = BOTC_WrapSkipSpace(msg, pos, n);
         if (pos > n) { break; }
         end = BOTC_WrapCut(msg, pos, cap, n);
+        if (end < pos) { break; }          // 【防死循环】断行函数异常返回时不推进位置
         part = StringSub(msg, pos, end);
         if (first) {
             BOTC_PubLine(head + part);
@@ -5868,6 +5872,7 @@ void BOTC_PmStore (int p, string s) {
         pos = BOTC_WrapSkipSpace(s, pos, n);
         if (pos > n) { break; }
         end = BOTC_WrapCut(s, pos, cap, n);
+        if (end < pos) { break; }          // 【防死循环】断行函数异常返回时不推进位置
         part = StringSub(s, pos, end);
         BOTC_PmStoreRaw(p, BOTC_Spaces(prefW) + part);
         pos = end + 1;
@@ -8012,6 +8017,7 @@ void BOTC_LogAddLine (int p, string s, int who) {
         pos = BOTC_WrapSkipSpace(s, pos, n);
         if (pos > n) { break; }
         end = BOTC_WrapCut(s, pos, cap, n);
+        if (end < pos) { break; }          // 【防死循环】断行函数异常返回时不推进位置
         part = StringSub(s, pos, end);
         if (prefW > 0) {
             DialogControlAddItem(g_logList, PlayerGroupSingle(p), BOTC_LogLineText(p, BOTC_Spaces(prefW) + part, who));
@@ -8268,6 +8274,7 @@ void BOTC_PubSay (int p, string tag, string msg) {
         pos = BOTC_WrapSkipSpace(msg, pos, n);
         if (pos > n) { break; }
         end = BOTC_WrapCut(msg, pos, cap, n);
+        if (end < pos) { break; }          // 【防死循环】断行函数异常返回时不推进位置
         part = StringSub(msg, pos, end);
         if (first) {
             BOTC_PubSayLine(p, head + part);
@@ -19210,6 +19217,8 @@ void BOTC_ResetGameVars () {
     g_philoDrunkManual = false;    // 【哲学家醉酒 90】换局清零：手动优先交还给自动同步
     g_lleechEval = 0;              // 【防死循环】换局清零，避免异常中断后残留重入标记
     g_philoDrunkEval = 0;          // 【防死循环】换局清零，避免异常中断后残留重入标记
+    g_boffinEval = 0;              // 【防死循环】科学怪人嵌套来源重入标记：换局清零
+    g_liveCorpseEval = 0;          // 【防死循环】活尸来源求值重入标记：换局清零
     g_lleechHost = 0;              // 【痢蛭】换局清零：宿主记录（用户 2026-11-13）
     g_lleechRecover = 0;
     for (i = 0; i <= 13; i += 1) {
@@ -19445,6 +19454,7 @@ void BOTC_ResetGameVars () {
     }
     g_started = false;
     g_gameOver = false;
+    g_winFinalized = false;        // 【幂等】新一局重新允许封盘
     g_execUsedToday = false;
     g_phase = 0;
     g_dayNum = 0;
@@ -30856,6 +30866,7 @@ g_noAllOther[102] = 28;     // 恐惧之灵（其他夜第 28）
     g_winPanelOn = false;
     g_manualWin = false;
     g_gameOver = false;
+    g_winFinalized = false;        // 【幂等】取消正式开始 / 收面板后允许下一局重新封盘
 }
 
 // 【这个人还在不在游戏里】（用户 2026-11-07）：主动点「离开游戏」时 PlayerStatus 会变成 2，
@@ -53316,6 +53327,7 @@ void BOTC_KazaliCompositionApply () {
 
 // ■ 科学怪人（132）：每个能力来源座位独立保存一份善良角色 → 接收者。
 bool BOTC_BoffinSourceIs (int b) {
+    bool r;
     if (b < 2 || b > 13 || !g_seatOn[b]) {
         return false;
     }
@@ -53336,10 +53348,15 @@ bool BOTC_BoffinSourceIs (int b) {
     if (!g_bnestChosenBy[b] || g_bnestRoleBy[b] != 133) {
         return false;
     }
-    if (BOTC_BoffinNestedSourceIs(b)) {
-        return true;
+    // 【防死循环】（2026-11-16）：嵌套来源会反向再问 BOTC_BoffinSourceIs，
+    //   若两格互为嵌套来源就会无限互调、整个脚本时停。求值中再次进入直接按“非来源”断开。
+    if (g_boffinEval > 0) {
+        return false;
     }
-    return false;
+    g_boffinEval = 1;
+    r = BOTC_BoffinNestedSourceIs(b);
+    g_boffinEval = 0;
+    return r;
 }
 
 // 科怪把哲学家 / 炼金术士给恶魔后，由恶魔选择并获得的嵌套能力。
@@ -60886,11 +60903,23 @@ bool BOTC_PhysicallyDead (int q) {
 // 活尸在来源有效且尚未公开死亡时，参与能力互动仍按存活处理。
 bool BOTC_LivingCorpseCountsAlive (int q) {
     int p;
+    bool r;
     if (q < 2 || q > 13 || !g_liveCorpse[q] || g_deadShown[q] || g_liveCorpseLost[q]) {
         return false;
     }
     p = g_liveCorpseFrom[q];
-    return (p >= 1 && p <= 13 && (p == 1 || g_seatOn[p]) && BOTC_AbilityWorks(p, 155));
+    if (p < 1 || p > 13 || (p >= 2 && !g_seatOn[p])) {
+        return false;
+    }
+    // 【防死循环】（2026-11-16）：能力链会回到 BOTC_SeatDead → 本函数，
+    //   两个活尸互相把对方当来源时会无限互调。求值中再次进入按“来源不可用”断开。
+    if (g_liveCorpseEval > 0) {
+        return false;
+    }
+    g_liveCorpseEval = 1;
+    r = BOTC_AbilityWorks(p, 155);
+    g_liveCorpseEval = 0;
+    return r;
 }
 
 bool BOTC_SkinCanPrevent (int p) {
@@ -69595,6 +69624,12 @@ void BOTC_ShowWin (int side, string why1, string why2) {
 void BOTC_WinFinalize (int side, string why1, string why2) {
     int p;
     int q;
+    // 【幂等】（2026-11-16）：BOTC_PhaseUiForceClose 在政客待答时也会调进来，
+    //   WinFinalize 内部 ChatModeSet(2) 又会回调 PhaseUiForceClose → 同一局会封盘两遍。
+    if (g_winFinalized) {
+        return;
+    }
+    g_winFinalized = true;
     g_gameOver = true;
     // 【复盘】（用户 2026-11-11）：结算那一刻拍下结束身份 / 认知偏差 / 阵营，之后才允许在日志里查看
     BOTC_RpCapture(false);
@@ -70184,6 +70219,7 @@ void BOTC_WinClose () {
     DialogSetVisible(g_congratsDlg, PlayerGroupAll(), false);   // 上面那条「恭喜...」一起收掉
     DialogSetVisible(g_rateDlg, PlayerGroupAll(), false);       // 【说书人评分】打分框一起收掉
     g_gameOver = false;
+    g_winFinalized = false;        // 【幂等】重新开始后允许下一局重新封盘
     // ⚠ 这里**不**停胜利曲：面板收掉之后胜利 BGM 还要一直放着，
     //   直到说书人点【取消正式开始】（那一步会 BOTC_MusicStop）。
 }
@@ -86952,6 +86988,7 @@ void BOTC_BootleggerSyncText () {
     while (pos <= len && n < 54) {
         // 角色详情列表约 29 个汉字一行；按标点断行，避免切在半个汉字上出现「?」。
         end = BOTC_LineCut(s, pos, 90, 12, len);
+        if (end < pos) { break; }          // 【防死循环】断行函数异常返回时不推进位置
         s2 = StringSub(s, pos, end);
         g_tipLine[3046 + n] = StringToText(s2);
         n = n + 1;
@@ -87032,6 +87069,7 @@ void BOTC_BootleggerAnnounce () {
     while (pos <= len) {
         // 公聊约 33 个汉字一行（按 UTF-8 字节额度）；按标点断行，避免切在半个汉字上出现「?」。
         end = BOTC_LineCut(s, pos, 100, 30, len);
+        if (end < pos) { break; }          // 【防死循环】断行函数异常返回时不推进位置
         b = StringSub(s, pos, end);
         BOTC_PubAnnounce(b);
         pos = end + 1;
@@ -90614,6 +90652,7 @@ void BOTC_Deal () {
     g_butlerMaster = 0;
     BOTC_WinClose();          // 上一把的胜负横幅收掉
     g_gameOver = false;
+    g_winFinalized = false;   // 【幂等】重新发牌＝新的一局
     BOTC_MusicDropPrio(0);    // 重新发牌＝新的一局：把胜利曲那层最高优先级放开，好让选板子的音乐进来
     BOTC_PromoteHide();       // 上一把的传位面板也收掉
     BOTC_SlayAskHide();       // 上一把没答完的【猎手请求】也收掉
