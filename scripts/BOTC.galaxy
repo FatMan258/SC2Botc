@@ -1347,13 +1347,13 @@ int[14]     g_gossipDay;      // 造谣者上一次声明发生在哪一天；�
 int[14]     g_psyDay;         // 精神病患者上一次声称发生在哪一天；同上
 int[14]     g_psyLockDay;     // 【精神病患者猜拳 · 当日封锁声称】（用户 2026-11-14）：进行猜拳的当天不能再声称
 // 【提名阶段 · 消息类声称预输入】（用户 2026-11-14）：造谣者 / 杂耍艺人 / 戏法师在提名阶段提交后先入队，
-//   提名阶段结束后延迟 1~3 秒逐条公布，每条间隔 2 秒。
+//   提名阶段结束后固定等 1 秒再逐条公布，每条间隔 0.5 秒。
 int         g_pendClaimN;     // 队列里一共有几条
 int         g_pendClaimIdx;   // 已经播到第几条
 int         g_pendClaimSec;   // 下一条还要等几拍（0.5 秒一拍）
-int[24]     g_pendClaimType;  // 1 造谣者 / 2 杂耍艺人 / 3 戏法师 / 4 月之子、呆瓜（死后声称）
-int[24]     g_pendClaimBy;    // 发起人座位（1..13）
-string[72]  g_pendClaimText;  // 每条最多 3 句：下标 = 条号 * 3 + 句号
+int[64]     g_pendClaimType;  // 1 造谣者 / 2 杂耍艺人 / 3 戏法师 / 4 月之子、呆瓜（死后声称）
+int[64]     g_pendClaimBy;    // 发起人座位（1..13）
+string[192] g_pendClaimText;  // 每条最多 3 句：下标 = 条号 * 3 + 句号
 int         g_gossipRole;     // 造谣者那块输入框的角色标记（28；杂耍艺人现在走自己的 5 格面板，用户 2026-09-21）
 int         g_juggDlg;        // 杂耍艺人（58）的公开猜测面板：5 组「座位号 + 身份」
 int         g_juggTitle;
@@ -2830,6 +2830,7 @@ void   BOTC_TestPhilo (int role);
 void   BOTC_PhiloDrunkSync ();
 int    BOTC_SeatOfRoleNot (int r, int skip);
 bool   BOTC_IsLunatic (int q);
+void   BOTC_LunZombSecondDeath (int q);       // 疯子认知僵怖：第二次死亡后停止自动唤醒
 bool   BOTC_LunaticRealSeat (int q);         // 真疯子（不含哲学家 / 食人族借来的疯子）
 void   BOTC_ManInfoReShow ();
 void   BOTC_ManInfoOpenDreamer (int seat, int target);
@@ -3092,6 +3093,8 @@ bool   BOTC_DeclareCdBlocked (int p);          // 【防刷屏】声称冷却中
 void   BOTC_DeclareCdSet (int p);              // 【防刷屏】开始 15 秒声称冷却
 void   BOTC_PendClaimAdd (int typ, int by, string a, string b, string c);   // 【提名阶段】消息类声称入队
 void   BOTC_PendClaimTick ();                  // 【提名阶段】结束后的延迟逐条公布
+void   BOTC_PendClaimSay (int i);              // 【入夜兜底】立即播出队列里的第 i 条
+void   BOTC_PendClaimFlush ();                 // 【入夜兜底】把还没播完的条目一次播完
 bool   BOTC_SpamAllow (int p);                 // 【防刷屏】公聊刷屏检测，返回 false = 本条不发
 void   BOTC_DeclareSlay (int p, int q);
 void   BOTC_BuildSlayAsk ();
@@ -17195,6 +17198,9 @@ void BOTC_NightPending () {
     if (g_phase != 0) {
         BOTC_NomClose();               // 提名环节立刻收掉（不然这 5 秒里还能接着提名）
     }
+    // 【入夜前播完】（用户 2026-11-16）：提名阶段里排队还没播的声称，入夜前一次性全部播出，
+    //   不再带到夜晚的公聊里刷。放在 5 秒倒计时之前，保证一定在白天播完。
+    BOTC_PendClaimFlush();
     // 倒计时期间不要音乐：把当前这首 / 排队要放的那首都停掉（BOTC_NomClose 会顺手排上白天的曲子）
     BOTC_MusicStop();
     g_nightPendSec = 5;
@@ -37591,6 +37597,8 @@ void BOTC_ExecToggleAt (int q) {
         }
         g_execUsedToday = true;
         g_execByCorpse = true;         // 这次「处决」的是尸体：没有死亡标记可以取消
+        // 【疯子认知僵怖 · 第二次死亡】（用户 2026-11-16）：第二次死亡起不再自动唤醒，如同真僵怖
+        BOTC_LunZombSecondDeath(q);
         BOTC_LeviathanExecution(q);
         if (g_gameOver) {
             return;
@@ -38024,6 +38032,10 @@ void BOTC_PsyRpsAdvance () {
     BOTC_PmStore(g_teller, "【精神病患者猜拳】" + oppName + " 选择了" + oppStr + "。");
     BOTC_PubAnnounce("【猜拳】" + BOTC_NameStr(q) + " 选择了" + psyStr + "，" + oppName + " 选择了" + oppStr + " → " + resStr + "。");
     BOTC_PsyRpsClear();
+    // 【声称队列 · 等猜拳结果再播】（用户 2026-11-16）：结果已经公屏公布，队列恢复，1 秒后接着播。
+    if (g_pendClaimN > g_pendClaimIdx && !g_gameOver) {
+        g_pendClaimSec = 2;
+    }
     if (res == 0) {
         BOTC_PmStore(g_teller, "【精神病患者猜拳】" + BOTC_NameStr(q) + " 落败 → 进入正常处决。");
         // 【和平主义者 × 善良的精神病患者】（用户 2026-11-14）：精神病患者默认邪恶，但场上可能出现
@@ -38321,6 +38333,31 @@ bool BOTC_SeatDead (int q) {
         return true;
     }
     return false;
+}
+
+// 【疯子认知僵怖 · 第二次死亡】（用户 2026-11-16）：按僵怖的节拍照常演 ----
+//   第一次死亡后仍按僵怖节拍继续唤醒（BOTC_CanWakeAt 放行）；第二次死亡起不再自动唤醒，
+//   如同真僵怖第二次死亡。g_zombUsed 在这里借作「认知僵怖的第二次死亡已经发生」：
+//   死亡本身不清「是疯子」49，认知覆盖仍在，只是不再排入唤醒队列；
+//   复活时由 BOTC_RestoreOneShot 重置，重新进场后又按第一次死亡继续唤醒。
+void BOTC_LunZombSecondDeath (int q) {
+    if (q < 2 || q > 13 || g_leftMark) {
+        return;
+    }
+    if (!BOTC_SeatDead(q)) {
+        return;                            // 第一次死亡：继续唤醒，这里什么都不做
+    }
+    if (!BOTC_IsLunatic(q)) {
+        return;
+    }
+    if (g_mark[(g_teller * 14) + q] - 1 != 43) {
+        return;
+    }
+    if (g_zombUsed[q]) {
+        return;
+    }
+    g_zombUsed[q] = true;
+    BOTC_PmStore(g_teller, "【疯子·认知僵怖】" + BOTC_NameStr(q) + " 第二次死亡 → 之后不再按僵怖节拍自动唤醒他。");
 }
 
 // 死亡类型 → token 索引
@@ -39034,6 +39071,8 @@ void BOTC_MarkDeadPlain (int q) {
     if (q < 1 || q > 13) {
         return;
     }
+    // 【疯子认知僵怖 · 第二次死亡】（用户 2026-11-16）：已经死过一次后再被记死亡 → 之后不再自动唤醒
+    BOTC_LunZombSecondDeath(q);
     // 【退出 / 掉线不触发死亡技能】（用户 2026-11-11）：蓝叉死亡直接落地 ——
     //   不被画皮 / 赶尸人 / 僵怖 / 维齐尔这类「死亡时」能力拦下，也不触发任何角色死亡技能。
     if (!g_leftMark) {
@@ -44617,7 +44656,16 @@ bool BOTC_CanWakeAt (int q) {
             if (BOTC_KeepsAbilityAlive(q)) {
                 return true;
             }
-            return false;
+            // 【疯子认知僵怖 · 认知覆盖不因死亡终止】（用户 2026-11-16）：按钟楼百科「认知覆盖」
+            //   口径，以为自己是僵怖的疯子即使已经死亡，说书人仍要按僵怖的节拍照常唤醒他
+            //   （白天有人死 → BOTC_WakeSkipNow 跳过；其余夜晚照常），否则他一看自己不醒
+            //   就会察觉自己其实是疯子。认知覆盖只在离场（g_leftDeadP）或换身份
+            //   （BOTC_SetSeatRole 清「是疯子」49）时终止，死亡不清。
+            //   【第二次死亡后不再唤醒】：按僵怖的节拍照常演 —— g_zombUsed 由
+            //   BOTC_LunZombSecondDeath 在第二次死亡时点亮，之后和真僵怖一样不再自动唤醒。
+            if (!(BOTC_IsLunatic(q) && r == 43 && !g_zombUsed[q])) {
+                return false;
+            }
         }
     }
     // 【唱诗男孩（108）】（用户 2026-10-10）：平时不唤醒；国王身上带着「死亡（恶魔）」token 时才允许唤醒
@@ -49074,7 +49122,9 @@ void BOTC_TaotieClear () {
 //   先入队，提名阶段结束后再延迟逐条公布，避免在提名阶段里公屏泄露声明内容。
 void BOTC_PendClaimAdd (int typ, int by, string a, string b, string c) {
     int i;
-    if (g_pendClaimN >= 24) {
+    if (g_pendClaimN >= 64) {
+        // 【队列满】（用户 2026-11-16）：不再静默丢弃，至少让说书人知道这条没进队列。
+        BOTC_PmStore(g_teller, "【声称队列】待公布条数已满，这条声称没有排队，请提醒玩家重新提交或直接口述。");
         return;
     }
     i = g_pendClaimN;
@@ -49086,22 +49136,11 @@ void BOTC_PendClaimAdd (int typ, int by, string a, string b, string c) {
     g_pendClaimN = g_pendClaimN + 1;
 }
 
-// 0.5 秒一拍：提名阶段结束后先等 1~3 秒，再按顺序逐条公布，每条间隔 2 秒。
-void BOTC_PendClaimTick () {
-    int i;
-    if (g_pendClaimN <= 0 || g_pendClaimIdx >= g_pendClaimN) {
+// 0.5 秒一拍：提名阶段结束后固定等 1 秒，再按顺序逐条公布，每条间隔 0.5 秒。
+void BOTC_PendClaimSay (int i) {
+    if (i < 0 || i >= g_pendClaimN) {
         return;
     }
-    if (!g_started || g_phase != 0) {
-        return;                        // 还在提名阶段：先攒着，不公布
-    }
-    if (g_pendClaimSec > 0) {
-        g_pendClaimSec = g_pendClaimSec - 1;
-        if (g_pendClaimSec > 0) {
-            return;
-        }
-    }
-    i = g_pendClaimIdx;
     if (g_pendClaimType[i] == 1) {
         BOTC_PubAnnounceWrap("【造谣者】" + BOTC_NameStr(g_pendClaimBy[i]) + " 公开声明：", g_pendClaimText[(i * 3)]);
     }
@@ -49122,6 +49161,30 @@ void BOTC_PendClaimTick () {
             }
         }
     }
+}
+
+void BOTC_PendClaimTick () {
+    int i;
+    if (g_pendClaimN <= 0 || g_pendClaimIdx >= g_pendClaimN) {
+        return;
+    }
+    if (g_rpsOn) {
+        return;                        // 精神病患者猜拳进行中：等结果公布后再播
+    }
+    if (g_gameOver) {
+        return;                        // 已经分出胜负：结算时统一播完，不再在结算画面上刷
+    }
+    if (!g_started || g_phase != 0) {
+        return;                        // 还在提名阶段：先攒着，不公布
+    }
+    if (g_pendClaimSec > 0) {
+        g_pendClaimSec = g_pendClaimSec - 1;
+        if (g_pendClaimSec > 0) {
+            return;
+        }
+    }
+    i = g_pendClaimIdx;
+    BOTC_PendClaimSay(i);
     g_pendClaimIdx = g_pendClaimIdx + 1;
     if (g_pendClaimIdx >= g_pendClaimN) {
         g_pendClaimN = 0;
@@ -49129,8 +49192,23 @@ void BOTC_PendClaimTick () {
         g_pendClaimSec = 0;
     }
     else {
-        g_pendClaimSec = 4;            // 2 秒（0.5 秒一拍）
+        g_pendClaimSec = 1;            // 0.5 秒（0.5 秒一拍）
     }
+}
+
+// 【入夜前播完】（用户 2026-11-16）：进夜晚前把还没公布的条目一次播完，
+//   不再把声称带进夜里在公聊刷。
+void BOTC_PendClaimFlush () {
+    if (g_pendClaimN <= 0) {
+        return;
+    }
+    while (g_pendClaimIdx < g_pendClaimN) {
+        BOTC_PendClaimSay(g_pendClaimIdx);
+        g_pendClaimIdx = g_pendClaimIdx + 1;
+    }
+    g_pendClaimN = 0;
+    g_pendClaimIdx = 0;
+    g_pendClaimSec = 0;
 }
 
 void BOTC_GossipSubmit (int p) {
@@ -69775,6 +69853,9 @@ void BOTC_WinFinalize (int side, string why1, string why2) {
     }
     g_winFinalized = true;
     g_gameOver = true;
+    // 【声称队列 · 结算兜底】（用户 2026-11-16）：封盘这一刻把还没公布的条目一次播完，
+    //   既不会漏掉，也不会在胜利面板出来之后继续刷；放在改名之前，播报里还是局内昵称。
+    BOTC_PendClaimFlush();
     // 【复盘】（用户 2026-11-11）：结算那一刻拍下结束身份 / 认知偏差 / 阵营，之后才允许在日志里查看
     BOTC_RpCapture(false);
     g_rpOn = true;
@@ -94280,9 +94361,9 @@ void BOTC_DeclareCancelAll () {
 
 void BOTC_PhaseSet (int ph) {
     g_phase = ph;
-    // 【提名阶段结束 · 预输入声明开始延迟公布】（用户 2026-11-14）：先等 1~3 秒再逐条播报
+    // 【提名阶段结束 · 预输入声明开始延迟公布】（用户 2026-11-14 / 2026-11-16）：固定等 1 秒再逐条播报
     if (ph == 0 && g_pendClaimN > g_pendClaimIdx && g_pendClaimSec <= 0) {
-        g_pendClaimSec = RandomInt(2, 6);
+        g_pendClaimSec = 2;            // 1 秒（0.5 秒一拍）
     }
     // 【狂热者（110）· 倒计时一开始就变票】（用户 2026-11-11）：进入 10 秒投票阶段立刻把
     //   还没投票的狂热者能力者记成赞成票，不等倒计时结束；面板在下面 BOTC_NomUI() 一起重绘。
