@@ -844,7 +844,7 @@ class IntroNameFlowTests(unittest.TestCase):
         self.assertIn("输入名字后点击【确认】", source)
         self.assertIn("取名阶段不能发言", source)
         self.assertIn('g_namePool[4]  = "泰凯斯"', source)
-        self.assertIn("BOTC_TextWidth(name) > 20", source)
+        self.assertIn("BOTC_NameCharCount(name) > 7", source)
         self.assertIn("bool BOTC_ValidColorName (string s) {", source)
         self.assertIn("BOTC_ValidColorName(name)", source)
         self.assertIn("BOTC_IsHexChar(StringSub(code, j, j + 1))", source)
@@ -929,7 +929,7 @@ class LogIdentityTests(unittest.TestCase):
         #   由它内部调用 BOTC_LogLineText 做名字替换并处理超宽换行。
         self.assertGreaterEqual(source.count("BOTC_LogAddLine(p,"), 20)
         self.assertIn("g_pubLog[i], g_pubWho[i]", source)
-        self.assertIn("g_pmLog[(p * 600) + i]", source)
+        self.assertIn("g_pmLog[(p * 900) + i]", source)
 
 
 class BluffPanelRegressionTests(unittest.TestCase):
@@ -1077,19 +1077,39 @@ class MergeRegressionTests(unittest.TestCase):
             source,
         )
 
-    def test_wrong_damsel_guess_blocks_later_wins_for_rest_of_game(self) -> None:
+    def test_damsel_guess_uses_already_guessed_token_for_shared_chance(self) -> None:
         source = (PROJECT_ROOT / "scripts" / "BOTC.galaxy").read_text(
             encoding="utf-8-sig"
         )
-        dawn = self._function_text(source, "void BOTC_DawnResolve () {")
-        deal = self._function_text(source, "void BOTC_Deal () {")
         guess = self._function_text(source, "void BOTC_DamselGuess (int p, int q) {")
+        cleanup = self._function_text(source, "void BOTC_SourceGoneCleanup (int q, bool dying) {")
 
-        self.assertNotIn("g_damselFailed = false;", dawn)
-        self.assertIn("g_damselFailed = false;", deal)
+        # 猜测机会改成「已被猜测」102 记账，不再使用全局布尔标记。
+        self.assertNotIn("g_damselFailed", source)
+        self.assertIn("g_tokRole[102] = 82", source)
+        # 带着「已被猜测」的目标不算猜对：token 判定必须早于判胜。
         self.assertLess(
-            guess.index("if (g_damselFailed)"),
+            guess.index("g_tokOn[(((g_teller * 14) + q) * 256) + 102]"),
             guess.index("BOTC_ShowWin("),
+        )
+        self.assertIn("&& !wasMarked)", guess)
+        # 猜的爪牙自身中毒 / 醉酒不影响是否猜对。
+        self.assertNotIn("BOTC_SeatImpaired(p)", guess)
+        # 猜错时给所有「存活」的落难少女能力者挂标记（已死亡的跳过）。
+        self.assertLess(
+            guess.index("if (BOTC_SeatDead(i)) {"),
+            guess.index("g_tokOn[(((g_teller * 14) + i) * 256) + 102] = true;"),
+        )
+        self.assertLess(
+            guess.index("if (!BOTC_HasAbility(i, 82)) {"),
+            guess.index("g_tokOn[(((g_teller * 14) + i) * 256) + 102] = true;"),
+        )
+        # 标记的移除时机：落难少女能力者本人死亡或离场（按能力层，兼容借来的能力）。
+        self.assertIn("BOTC_HasAbility(q, 82)", cleanup)
+        self.assertIn("g_tokOn[(((g_teller * 14) + q) * 256) + 102] = false;", cleanup)
+        self.assertLess(
+            cleanup.index("BOTC_HasAbility(q, 82)"),
+            cleanup.index("g_tokOn[(((g_teller * 14) + q) * 256) + 102] = false;"),
         )
 
     def test_guide_and_gudiao_prompts_reset_shared_answer_panel(self) -> None:

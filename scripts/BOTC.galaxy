@@ -974,7 +974,8 @@ bool[14]    g_cultDeclDone;    // 今天已经声称过【异教领袖】了（�
 
 bool[14]    g_damselPick;      // 他正在「点头像猜落难」
 bool[14]    g_damselDone;      // 这个玩家今天已经公开猜过一次了（每人每天一次）
-bool        g_damselFailed;    // 本局已有真爪牙猜过（机会已用掉）→ 之后任何爪牙猜中都不能靠落难少女获胜
+bool[14]    g_damselTold;      // 这个玩家已经被告知过「落难少女在场」（按物理玩家记，不随换座位对调）
+bool[14]    g_damselPoisoned;  // 这个玩家身上的「中毒」7 是间谍/寡妇相克挂上的
 bool        g_damselSpySeen;   // 间谍真实进场过（落难少女相克）
 bool        g_damselWidowSeen; // 寡妇真实进场过（落难少女相克）
 // 【夜半狂欢 · 第 7 批】87 哈迪寂亚（用户 2026-09-26）：三个目标依次选活着 / 死亡
@@ -1350,7 +1351,7 @@ int[14]     g_psyLockDay;     // 【精神病患者猜拳 · 当日封锁声称�
 int         g_pendClaimN;     // 队列里一共有几条
 int         g_pendClaimIdx;   // 已经播到第几条
 int         g_pendClaimSec;   // 下一条还要等几拍（0.5 秒一拍）
-int[24]     g_pendClaimType;  // 1 造谣者 / 2 杂耍艺人 / 3 戏法师
+int[24]     g_pendClaimType;  // 1 造谣者 / 2 杂耍艺人 / 3 戏法师 / 4 月之子、呆瓜（死后声称）
 int[24]     g_pendClaimBy;    // 发起人座位（1..13）
 string[72]  g_pendClaimText;  // 每条最多 3 句：下标 = 条号 * 3 + 句号
 int         g_gossipRole;     // 造谣者那块输入框的角色标记（28；杂耍艺人现在走自己的 5 格面板，用户 2026-09-21）
@@ -1530,7 +1531,7 @@ int[14]     g_moonPick;       // 月之子：他公开选的玩家（0 = 还没�
 bool[14]    g_moonPickGood;   // 月之子：选人那一刻目标是否善良（莽夫按这一刻判定，用户 2026-11-13）
 bool[14]    g_moonDone;       // 月之子：这次选择已经结算过了
 bool[14]    g_moonDeclare;    // 月之子：他正在「公开选人」的点头像阶段
-bool[14]    g_moonClaimed;    // 月之子：本局已经公开声称过（每人全局仅限一次，复活后重置）
+bool[14]    g_moonClaimed;    // 月之子：今天已经公开声称过（每人每天仅限一次，天亮重置）
 bool[14]    g_moonOpen;       // 月之子死亡被宣布的当天（提醒用）
 int         g_moonBy;         // 是哪个座位的月之子在等结算（0 = 没有）
 // 【梦殒春宵 · 第 2 批】61 心上人 / 62 理发师 / 63 呆瓜（用户 2026-09-21）
@@ -1538,7 +1539,7 @@ bool        g_sweetPick;       // 说书人正在给「心上人」点头像选�
 int         g_sweetSeat;       // 死了的心上人坐在哪（0 = 没有）
 int         g_sweetDrunk;      // 心上人让谁醉酒（0 = 没有）
 bool[14]    g_klutzDone;       // 呆瓜：这次公开选择已经结算过了
-bool[14]    g_klutzClaimed;   // 呆瓜：本局已经公开声称过（每人全局仅限一次，复活后重置）
+bool[14]    g_klutzClaimed;   // 呆瓜：今天已经公开声称过（每人每天仅限一次，天亮重置）
 int[14]     g_klutzPick;       // 呆瓜公开选的玩家
 int         g_klutzBy;         // 是哪个座位的呆瓜在等结算（0 = 没有）
 bool        g_barberWait;      // 今晚有一次「理发师交换」要处理
@@ -3325,6 +3326,8 @@ void   BOTC_DamselClick (int p);
 void   BOTC_DamselGuess (int p, int q);
 void   BOTC_DamselPoisonSync ();
 void   BOTC_DamselDealInfo ();
+bool   BOTC_DamselMinionLike (int q);
+void   BOTC_DamselTellSeat (int seat);
 bool   BOTC_InfoErrorOn (int q);
 void   BOTC_RascalOpen (int p);
 void   BOTC_RascalPick (int p, int role);
@@ -19358,9 +19361,9 @@ void BOTC_ResetGameVars () {
         g_moonPick[i] = 0;             // 月之子（36）
         g_moonPickGood[i] = false;
         g_moonDone[i] = false;
-        g_moonClaimed[i] = false;      // 月之子：每名玩家全局仅限声称一次
+        g_moonClaimed[i] = false;      // 月之子：每天仅限声称一次（天亮另有一次重置）
         g_klutzDone[i] = false;        // 呆瓜（63）的公开选择：换局清零（用户 2026-09-21）
-        g_klutzClaimed[i] = false;     // 呆瓜：每名玩家全局仅限声称一次
+        g_klutzClaimed[i] = false;     // 呆瓜：每天仅限声称一次（天亮另有一次重置）
         g_klutzPick[i] = 0;
         g_klutzDeclare[i] = false;
         g_klutzWaitSeat = 0;
@@ -36785,7 +36788,7 @@ void BOTC_PickChoose (int ob, int idx) {
                     return;
                 }
                 if (g_moonClaimed[BOTC_PosOf(ob)]) {
-                    BOTC_Notice(ob, "你本局已经声称过【月之子】了：每名玩家全局只能声称一次，复活后才会重置。");
+                    BOTC_Notice(ob, "你今天已经声称过【月之子】了：每人每天只能声称一次，等明天吧。");
                     return;
                 }
                 if (g_moonDone[BOTC_PosOf(ob)]) {
@@ -36803,7 +36806,7 @@ void BOTC_PickChoose (int ob, int idx) {
                     return;
                 }
                 if (g_klutzClaimed[BOTC_PosOf(ob)]) {
-                    BOTC_Notice(ob, "你本局已经声称过【呆瓜】了：每名玩家全局只能声称一次，复活后才会重置。");
+                    BOTC_Notice(ob, "你今天已经声称过【呆瓜】了：每人每天只能声称一次，等明天吧。");
                     return;
                 }
                 if (g_klutzDone[BOTC_PosOf(ob)]) {
@@ -37304,6 +37307,11 @@ void BOTC_SetSeatRole (int ob, int seat, int roleIdx) {
     if (g_started && ob == g_teller && seat >= 2 && seat <= 13 && roleIdx == 82 && oldR != 82) {
         BOTC_DamselDealInfo();
         BOTC_PmStore(g_teller, "【落难少女】" + BOTC_NameStr(seat) + " 成为落难少女 → 已通知所有爪牙「落难少女在场」。");
+    }
+    // 【中途变成爪牙 → 补发告知】（用户 2026-11-16）：理发师交换 / 沙巴洛斯复活等造成的
+    //   「之前不是爪牙、之后是爪牙」必须被告知「落难少女在场」（百科「理发师」「沙巴洛斯」）。
+    if (g_started && ob == g_teller && seat >= 2 && seat <= 13 && oldR != roleIdx) {
+        BOTC_DamselTellSeat(seat);
     }
     // 【利维坦（127）】游戏中途成为利维坦：不在这里公开，只按当前天数打 token；进入下一个白天再播报。
     if (ob == g_teller && g_started && seat >= 2 && seat <= 13) {
@@ -38722,6 +38730,13 @@ void BOTC_SourceGoneCleanup (int q, bool dying) {
     r = BOTC_SeatTrueRole(q);
     if (r < 0 || r > 163) {
         return;
+    }
+    // 【已被猜测（落难少女）】（用户 2026-11-16）：猜测机会改用这枚标记记账，移除时机是
+    //   「落难少女能力者本人死亡或离场」——按能力层判断，食人族 / 失忆者等借来的能力同样要收；
+    //   真身 82 那一路下面的通用 token 回收也会清，这里补能力层。
+    if (BOTC_HasAbility(q, 82) && g_tokOn[(((g_teller * 14) + q) * 256) + 102]) {
+        g_tokOn[(((g_teller * 14) + q) * 256) + 102] = false;
+        BOTC_PmStore(g_teller, "【落难少女】" + BOTC_NameStr(q) + " 死亡 / 离场 → 收回「已被猜测」标记。");
     }
     // 【离场即清 · 不看死亡】（用户 2026-11-11）：解谜大师「醉酒」129、店小二「醉酒」136、
     //   心上人「醉酒」82 的移除时机都是「本人离场时」，与本人是否已经死亡无关：
@@ -46905,8 +46920,10 @@ void BOTC_DamselClick (int p) {
 }
 
 void BOTC_DamselGuess (int p, int q) {
+    int i;
     int ds;
     int ob;
+    bool wasMarked;
     if (p < 1 || p > 13 || q < 2 || q > 13) {
         return;
     }
@@ -46925,41 +46942,104 @@ void BOTC_DamselGuess (int p, int q) {
     BOTC_PubAnnounce("【落难少女】" + BOTC_NameStr(p) + " 公开猜测 " + BOTC_NameStr(q) + " 是落难少女。");
     BOTC_DeclareCdSet(g_who[p]);
     // 【假声称不提醒说书人】（用户 2026-11-13）：不是真爪牙的猜测只公屏播报，不再私聊提醒说书人。
-    if (BOTC_RoleTeam(BOTC_SeatTrueRole(p)) != 2) {
+    // 【军团按爪牙处理】（用户 2026-11-16）：军团真身是恶魔，但官方规则把它当作爪牙，可以猜落难少女。
+    if (!BOTC_DamselMinionLike(p)) {
         return;
     }
-    // 【机会统一消耗】（用户 2026-11-13）：只要真爪牙公开猜过，无论猜没猜中、落难少女是否中毒/醉酒，
-    //   这一次机会都算用掉；之后其他爪牙再猜都不能靠落难少女获胜。
-    if (g_damselFailed) {
-        BOTC_PmStore(g_teller, "【落难少女】已经有爪牙用掉这一次机会 → 这一次猜测按规则无效。");
-        return;
+    // 【猜测机会改成 token 记账】（用户 2026-11-16）：猜错时给所有「存活的落难少女能力者」挂
+    //   「已被猜测」102；只要还有存活的能力者没带这个标记，机会就还在，可以继续猜。
+    //   标记在落难少女能力者死亡 / 离场时移除（BOTC_SourceGoneCleanup），所以她复活后机会自动重置。
+    // 【猜中判定】（用户 2026-11-16）：目标必须是「存活、能力生效、且没有带 102」的落难少女能力者；
+    //   带着 102 的不算猜对，必须猜那个没带标记的；同时有两个没带 102 的，猜中任意一个都算赢。
+    //   猜的爪牙自身中毒 / 醉酒不影响是否猜对（用户 2026-11-16）。
+    // 目标在猜之前是否已经带着「已被猜测」（带着的这次不算猜对）。
+    wasMarked = false;
+    if (BOTC_HasAbility(q, 82) && !BOTC_SeatDead(q) && g_tokOn[(((g_teller * 14) + q) * 256) + 102]) {
+        wasMarked = true;
     }
-    g_damselFailed = true;
-    if (BOTC_SeatImpaired(p)) {
-        BOTC_PmStore(g_teller, "【落难少女】" + BOTC_NameStr(p) + " 中毒/醉酒 → 能力失效，这次猜测不结算；但这一次机会已经用掉。");
-        return;
-    }
-    if (BOTC_HasAbility(q, 82) && !BOTC_SeatDead(q)) {
-        // 【中毒 / 醉酒适配】（用户 2026-09-26）：她中毒 / 酒鬼时能力失效 → 猜中也不判邪恶胜
-        if (!BOTC_AbilityWorks(q, 82)) {
-            BOTC_PmStore(g_teller, "【落难少女】" + BOTC_NameStr(q) + " 中毒/酒鬼 → 能力失效：这次猜中不判邪恶胜；但这一次机会已经用掉。");
+    if (BOTC_HasAbility(q, 82) && !BOTC_SeatDead(q) && !wasMarked) {
+        // 【中毒 / 醉酒适配】（用户 2026-09-26）：她中毒 / 酒鬼时能力失效 → 猜中也不判邪恶胜，按猜错处理
+        if (BOTC_AbilityWorks(q, 82)) {
+            BOTC_ShowWin(1 - BOTC_SeatAlign(q), "镇民们没能保护好" + BOTC_NameStr(q) + "，", "真是可悲！");
             return;
         }
-        BOTC_ShowWin(1 - BOTC_SeatAlign(q), "镇民们没能保护好" + BOTC_NameStr(q) + "，", "真是可悲！");
-        return;
+        BOTC_PmStore(g_teller, "【落难少女】" + BOTC_NameStr(q) + " 中毒/酒鬼 → 能力失效：这次猜中不判邪恶胜，按猜错处理。");
     }
-    ds = BOTC_DamselSeat();
-    if (ds >= 2) {
-        g_tokOn[(((g_teller * 14) + ds) * 256) + 102] = true;
+    // 猜错（含猜了已经带 102 的落难少女）：给所有存活的落难少女能力者挂「已被猜测」（已挂上的不重复）。
+    ds = 0;
+    for (i = 2; i <= 13; i += 1) {
+        if (!g_seatOn[i]) {
+            continue;
+        }
+        if (BOTC_SeatDead(i)) {
+            continue;
+        }
+        if (!BOTC_HasAbility(i, 82)) {
+            continue;
+        }
+        g_tokOn[(((g_teller * 14) + i) * 256) + 102] = true;
+        ds = ds + 1;
     }
     for (ob = 1; ob <= 13; ob += 1) {
         BOTC_GrimRender(ob);
     }
-    BOTC_PmStore(g_teller, "【落难少女】" + BOTC_NameStr(p) + " 猜错了（他猜 " + BOTC_NameStr(q) + "）：之后爪牙再猜也不能赢。");
+    if (ds <= 0) {
+        BOTC_PmStore(g_teller, "【落难少女】" + BOTC_NameStr(p) + " 猜错了（他猜 " + BOTC_NameStr(q) + "）：场上没有存活的落难少女，暂时没人被标记；她复活后爪牙可以再猜。");
+        return;
+    }
+    if (wasMarked) {
+        BOTC_PmStore(g_teller, "【落难少女】" + BOTC_NameStr(q) + " 已经带着「已被猜测」→ 不算猜对；已给所有存活的落难少女补挂标记。");
+        return;
+    }
+    BOTC_PmStore(g_teller, "【落难少女】" + BOTC_NameStr(p) + " 猜错了（他猜 " + BOTC_NameStr(q) + "）：所有存活的落难少女已挂「已被猜测」，之后爪牙再猜都不能赢；她死亡 / 离场时标记移除，复活后机会重置。");
+}
+
+// 【落难少女 · 谁算「爪牙」】（用户 2026-11-16）：军团真身是恶魔，但官方规则把它当作爪牙，
+//   同样得知落难少女在场、同样可以公开猜测；红唇女郎等继位成其他恶魔的不在此列。
+bool BOTC_DamselMinionLike (int q) {
+    int tr;
+    if (q < 1 || q > 13) {
+        return false;
+    }
+    tr = BOTC_SeatTrueRole(q);
+    if (BOTC_RoleTeam(tr) == 2) {
+        return true;
+    }
+    return (tr == 94);
+}
+
+// 【中途变成爪牙 → 补发「落难少女在场」】（用户 2026-11-16）：理发师交换 / 沙巴洛斯复活等
+//   造成的「之前不是爪牙、之后是爪牙」必须被告知一次；已经被告知过的人不重复打扰。
+void BOTC_DamselTellSeat (int seat) {
+    if (seat < 2 || seat > 13) {
+        return;
+    }
+    if (!g_started || !g_seatOn[seat]) {
+        return;
+    }
+    if (!BOTC_DamselMinionLike(seat)) {
+        return;
+    }
+    if (BOTC_IsMarionette(seat)) {
+        return;
+    }
+    if (g_damselTold[g_who[seat]]) {
+        return;
+    }
+    if (BOTC_DamselSeat() < 2) {
+        return;
+    }
+    g_damselTold[g_who[seat]] = true;
+    BOTC_PmInfo(g_who[seat], "【信息】你得知落难少女在场。");
+    BOTC_PmStore(g_teller, "【落难少女】" + BOTC_NameStr(seat) + " 成为爪牙 → 已告知「落难少女在场」。");
 }
 
 void BOTC_DamselPoisonSync () {
     int i;
+    int j;
+    bool changed;
+    bool still;
+    changed = false;
     // 【相克 · 落难少女 × 间谍/寡妇】：只认真实进场；角色仅在板子可选池里不算。
     //   一旦真实进场过，即使之后离场，中毒仍保持。
     if (BOTC_RoleTrueInPlay(18)) {
@@ -46968,15 +47048,40 @@ void BOTC_DamselPoisonSync () {
     if (BOTC_RoleTrueInPlay(75)) {
         g_damselWidowSeen = true;
     }
-    if (g_damselSpySeen || g_damselWidowSeen) {
-        for (i = 2; i <= 13; i += 1) {
-            if (g_seatOn[i] && BOTC_HasAbility(i, 82)) {
+    for (i = 2; i <= 13; i += 1) {
+        if (!g_seatOn[i]) {
+            continue;
+        }
+        if (BOTC_HasAbility(i, 82)) {
+            if (g_damselSpySeen || g_damselWidowSeen) {
+                g_damselPoisoned[g_who[i]] = true;
                 if (!g_tokOn[(((g_teller * 14) + i) * 256) + 7]) {
                     g_tokOn[(((g_teller * 14) + i) * 256) + 7] = true;
                     BOTC_PmStore(g_teller, "【相克】间谍/寡妇在场 → " + BOTC_NameStr(i) + "（落难少女）中毒。");
+                    changed = true;
                 }
             }
+            continue;
         }
+        // 【不再是落难少女 → 相克中毒随之结束】（用户 2026-11-16）：巡山人 / 理发师 / 麻脸巫婆
+        //   把她变成别的角色后，她不再是落难少女，这份中毒要撤掉；投毒者等其他来源还占着
+        //   这一格「中毒」7 时保留。
+        if (g_damselPoisoned[g_who[i]]) {
+            g_damselPoisoned[g_who[i]] = false;
+            still = false;
+            for (j = 1; j <= 13; j += 1) {
+                if (g_poisonAt[j] == i) {
+                    still = true;
+                }
+            }
+            if (!still && g_tokOn[(((g_teller * 14) + i) * 256) + 7]) {
+                g_tokOn[(((g_teller * 14) + i) * 256) + 7] = false;
+                BOTC_PmStore(g_teller, "【相克】" + BOTC_NameStr(i) + " 不再是落难少女 → 间谍/寡妇带来的中毒结束。");
+                changed = true;
+            }
+        }
+    }
+    if (changed) {
         BOTC_GrimRender(g_teller);
     }
 }
@@ -46997,8 +47102,12 @@ void BOTC_DamselDealInfo () {
         if (!g_seatOn[i]) {
             continue;
         }
-        if (BOTC_RoleTeam(BOTC_SeatTrueRole(i)) == 2 && !BOTC_IsMarionette(i)) {
-            BOTC_PmInfo(g_who[i], "【信息】你得知落难少女在场。");
+        // 【军团按爪牙处理】（用户 2026-11-16）：军团同样得知落难少女在场。
+        if (BOTC_DamselMinionLike(i) && !BOTC_IsMarionette(i)) {
+            if (!g_damselTold[g_who[i]]) {
+                BOTC_PmInfo(g_who[i], "【信息】你得知落难少女在场。");
+                g_damselTold[g_who[i]] = true;
+            }
         }
     }
     BOTC_DamselPoisonSync();
@@ -49003,8 +49112,14 @@ void BOTC_PendClaimTick () {
             if (StringLength(g_pendClaimText[(i * 3) + 2]) > 0) { BOTC_PubAnnounce(g_pendClaimText[(i * 3) + 2]); }
         }
         else {
-            BOTC_PubAnnounce("【戏法师】" + BOTC_NameStr(g_pendClaimBy[i]) + " 公开猜测。爪牙：" + g_pendClaimText[(i * 3)] + "。");
-            BOTC_PubAnnounce("恶魔：" + g_pendClaimText[(i * 3) + 1] + "。");
+            if (g_pendClaimType[i] == 3) {
+                BOTC_PubAnnounce("【戏法师】" + BOTC_NameStr(g_pendClaimBy[i]) + " 公开猜测。爪牙：" + g_pendClaimText[(i * 3)] + "。");
+                BOTC_PubAnnounce("恶魔：" + g_pendClaimText[(i * 3) + 1] + "。");
+            }
+            else {
+                // 4 = 月之子 / 呆瓜（死后声称）：提交时已拼好整行公告
+                BOTC_PubAnnounce(g_pendClaimText[(i * 3)]);
+            }
         }
     }
     g_pendClaimIdx = g_pendClaimIdx + 1;
@@ -54742,7 +54857,15 @@ void BOTC_MoonChildDeclare (int p, int q) {
     g_declarePick[g_who[p]] = false;
     BOTC_BigHintHide(g_who[p]);
     BOTC_DeclareRender();
-    BOTC_PubAnnounce("【月之子】" + BOTC_NameStr(p) + " 公开声明自己是【月之子】，并选择 " + BOTC_NameStr(q) + "。");
+    // 【提名阶段：公告延迟】（用户 2026-11-16）：跟造谣者一致，提名阶段内提交只入队，
+    //   等提名阶段结束后再在公聊公布。
+    if (g_phase != 0) {
+        BOTC_PendClaimAdd(4, p, "【月之子】" + BOTC_NameStr(p) + " 公开声明自己是【月之子】，并选择 " + BOTC_NameStr(q) + "。", "", "");
+        BOTC_Notice(g_who[p], "已记录你的公开声称：提名阶段结束后会自动在公聊公布。");
+    }
+    else {
+        BOTC_PubAnnounce("【月之子】" + BOTC_NameStr(p) + " 公开声明自己是【月之子】，并选择 " + BOTC_NameStr(q) + "。");
+    }
     BOTC_DeclareCdSet(g_who[p]);
     g_moonClaimed[p] = true;
     if (!BOTC_HasAbility(p, 36)) {
@@ -54987,11 +55110,18 @@ void BOTC_KlutzPick (int p, int q) {
     if (!BOTC_HasAbility(p, 63)) {
         if (q >= 2 && q <= 13 && g_seatOn[q] && !BOTC_SeatDead(q) && !g_klutzDone[p]) {
             g_klutzDone[p] = true;
-            g_klutzClaimed[p] = true;        // 假声称同样占掉全局这一次（复活后重置）
+            g_klutzClaimed[p] = true;        // 假声称同样占掉今天这一次（天亮重置）
             g_klutzDeclare[g_who[p]] = false;
             g_declarePick[g_who[p]] = false;
             BOTC_DeclareRender();
-            BOTC_PubAnnounce("【呆瓜】" + BOTC_NameStr(p) + " 声称自己是呆瓜，并公开选择 " + BOTC_NameStr(q) + "。");
+            // 【提名阶段：公告延迟】（用户 2026-11-16）：跟造谣者一致，提名阶段内提交只入队。
+            if (g_phase != 0) {
+                BOTC_PendClaimAdd(4, p, "【呆瓜】" + BOTC_NameStr(p) + " 声称自己是呆瓜，并公开选择 " + BOTC_NameStr(q) + "。", "", "");
+                BOTC_Notice(g_who[p], "已记录你的公开声称：提名阶段结束后会自动在公聊公布。");
+            }
+            else {
+                BOTC_PubAnnounce("【呆瓜】" + BOTC_NameStr(p) + " 声称自己是呆瓜，并公开选择 " + BOTC_NameStr(q) + "。");
+            }
             BOTC_DeclareCdSet(g_who[p]);
             // 假声称：不给说书人私聊提醒（用户 2026-11-04）
         }
@@ -55015,7 +55145,7 @@ void BOTC_KlutzPick (int p, int q) {
         return;
     }
     g_klutzDone[p] = true;
-    g_klutzClaimed[p] = true;            // 本局这一次声称已用掉（复活后重置）
+    g_klutzClaimed[p] = true;            // 今天这一次声称已用掉（天亮重置）
     g_klutzPick[p] = q;
     g_klutzWaitSeat = 0;
     // 【选完就收】（用户 2026-10-17）：技能面板 / 声称后的「点头像」阶段一起收掉，不会再冒出第二次点人
@@ -55024,7 +55154,14 @@ void BOTC_KlutzPick (int p, int q) {
     g_klutzDeclare[g_who[p]] = false;
     g_declarePick[g_who[p]] = false;
     BOTC_DeclareRender();
-    BOTC_PubAnnounce("【呆瓜】" + BOTC_NameStr(p) + " 公开选择 " + BOTC_NameStr(q) + "。");
+    // 【提名阶段：公告延迟】（用户 2026-11-16）：跟造谣者一致，提名阶段内提交只入队。
+    if (g_phase != 0) {
+        BOTC_PendClaimAdd(4, p, "【呆瓜】" + BOTC_NameStr(p) + " 公开选择 " + BOTC_NameStr(q) + "。", "", "");
+        BOTC_Notice(g_who[p], "已记录你的公开声称：提名阶段结束后会自动在公聊公布。");
+    }
+    else {
+        BOTC_PubAnnounce("【呆瓜】" + BOTC_NameStr(p) + " 公开选择 " + BOTC_NameStr(q) + "。");
+    }
     BOTC_PmStore(g_teller, "【呆瓜】" + BOTC_NameStr(p) + " 选了 " + BOTC_NameStr(q) + "（按真身阵营判）。");
     if (BOTC_SeatAlign(q) == 1) {
         align = BOTC_SeatAlign(p);
@@ -63796,7 +63933,10 @@ void BOTC_SkillConfirmCore (int p) {
             DialogSetVisible(g_skillDlg[p], PlayerGroupSingle(g_who[p]), false);
             return;
         }
-        if (BOTC_HasAbility(t, 82)) {
+        // 【只认真正的落难少女】（用户 2026-11-16）：食人族 / 哲学家 / 炼金术士等借来的能力
+        //   被选中时不会变成镇民（百科「拥有落难少女能力的其他角色被巡山人选择，
+        //   该玩家并不会变成一个不在场的镇民角色」）。
+        if (BOTC_SeatRealRole(t) == 82) {
             BOTC_RangerOpen(p, t);
         }
         else {
@@ -68351,6 +68491,8 @@ void BOTC_DawnResolve () {
         g_moonOpen[q] = false;
         g_moonDeclare[g_who[q]] = false;
         g_klutzDeclare[g_who[q]] = false;     // 呆瓜（63）：新的一天，死后声称的点头像阶段也清掉
+        g_moonClaimed[q] = false;             // 月之子（36）/ 呆瓜（63）：每人每天只能声称一次
+        g_klutzClaimed[q] = false;
     }
     // 造谣者（28）：新的一天，声明次数与内容都清掉（每天一次）
     g_gossipBy = 0;
@@ -68521,8 +68663,10 @@ void BOTC_PoisonClearSource (int src, string why) {
         BOTC_PmStore(g_teller, "【投毒者】" + why + "：仍有其他拥有投毒者能力的角色在毒 " + BOTC_NameStr(tgt) + "，中毒标记保留。");
         return;
     }
-    if (g_tokOn[(((g_teller * 14) + tgt) * 256) + 7]) {
+    if (g_tokOn[(((g_teller * 14) + tgt) * 256) + 7] && !g_damselPoisoned[g_who[tgt]]) {
         // 这里只管投毒者那份（7）；普卡的毒是 63 那一格，一直挂到普卡下一次行动，不跟黄昏清
+        // 【间谍/寡妇相克】（用户 2026-11-16）：这一格的中毒还是落难少女相克挂上的 → 保留，
+        //   等她不再是落难少女时由 BOTC_DamselPoisonSync() 统一收回。
         g_tokOn[(((g_teller * 14) + tgt) * 256) + 7] = false;
         BOTC_GrimRender(g_teller);
         BOTC_SailorSync();         // 中毒状态变了：水手的「不会死亡」标记跟着刷新
@@ -90700,8 +90844,15 @@ void BOTC_Deal () {
         g_cultDeclDone[i] = false;     // 异教领袖（106）：新一局，声称次数重新给（用户 2026-10-11）
         g_damselPick[i] = false;
         g_damselDone[i] = false;
+        g_damselTold[i] = false;
+        g_damselPoisoned[i] = false;
     }
-    g_damselFailed = false;
+    // 【落难少女 · 换说书人后 1 号玩家也可能坐在 2..13 格】（用户 2026-11-16）：
+    //   上面的清理循环从 2 开始，这里把物理玩家 1 的那份也归零，避免跨局残留。
+    g_damselPick[1] = false;
+    g_damselDone[1] = false;
+    g_damselTold[1] = false;
+    g_damselPoisoned[1] = false;
     g_finalPushDone = 0;
     g_finalRepDone = false;
     g_damselSpySeen = false;
