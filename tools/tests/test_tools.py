@@ -806,15 +806,15 @@ class IntroNameFlowTests(unittest.TestCase):
         board_finish = board_finish[: board_finish.index("\n}\n") + 3]
         self.assertIn("BOTC_IntroBegin();", board_finish)
 
-        intro_finish = source[source.index("void BOTC_IntroFinish () {"):]
-        intro_finish = intro_finish[: intro_finish.index("\n}\n") + 3]
+        enter_script = source[source.index("void BOTC_EnterScript (bool assignNames) {"):]
+        enter_script = enter_script[: enter_script.index("\n}\n") + 3]
         self.assertLess(
-            intro_finish.index("BOTC_ShuffleSeats();"),
-            intro_finish.index("BOTC_AssignRandomNames();"),
+            enter_script.index("BOTC_ShuffleSeats();"),
+            enter_script.index("BOTC_AssignRandomNames();"),
         )
         self.assertLess(
-            intro_finish.index("BOTC_AssignRandomNames();"),
-            intro_finish.index("BOTC_ClearAllLogs();"),
+            enter_script.index("BOTC_AssignRandomNames();"),
+            enter_script.index("BOTC_ClearAllLogs();"),
         )
 
         self.assertEqual(source.count("BOTC_ShuffleSeats();"), 1)
@@ -1219,7 +1219,7 @@ class MergeRegressionTests(unittest.TestCase):
             encoding="utf-8-sig"
         )
         start = source.index("void BOTC_PukkaResolve (int p, int t) {")
-        end = source.index("// ■ 沙巴洛斯（45）：反刍", start)
+        end = source.index("void BOTC_SabalosResolve (int p, int t1, int t2) {", start)
         pukka = source[start:end]
         guard = pukka.index("if (!BOTC_SkillWorks(p)) {")
         assign = pukka.index("g_pukkaSeat = t;")
@@ -1242,7 +1242,7 @@ class MergeRegressionTests(unittest.TestCase):
             source,
         )
         start = source.index("void BOTC_PukkaExorcistResolve (int p) {")
-        end = source.index("// ■ 沙巴洛斯（45）：反刍", start)
+        end = source.index("void BOTC_SabalosResolve (int p, int t1, int t2) {", start)
         helper = source[start:end]
         for marker in (
             "if (!BOTC_SkillWorks(p)) {",
