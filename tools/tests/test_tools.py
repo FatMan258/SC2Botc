@@ -29,6 +29,8 @@ from galaxy_check import (
     find_forward_call_errors,
     find_literal_array_index_errors,
     find_reversed_array_declaration_errors,
+    mask_galaxy_comments_and_strings,
+    matching_brace,
     scan_galaxy,
 )
 from private_dependency import render_impl
@@ -927,9 +929,17 @@ class LogIdentityTests(unittest.TestCase):
 
         # 【日志统一拆行】（用户 2026-11-13）：日志列表统一走 BOTC_LogAddLine，
         #   由它内部调用 BOTC_LogLineText 做名字替换并处理超宽换行。
-        self.assertGreaterEqual(source.count("BOTC_LogAddLine(p,"), 20)
-        self.assertIn("g_pubLog[i], g_pubWho[i]", source)
-        self.assertIn("g_pmLog[(p * 900) + i]", source)
+        # Check the actual UI boundary, not the number of duplicated call sites.
+        clean = mask_galaxy_comments_and_strings(source)
+        start = source.index("void BOTC_LogAddLine (int p, string s, int who) {")
+        opening = source.index("{", start)
+        end = matching_brace(clean, opening) + 1
+        add_line = source[start:end]
+        writes = re.findall(r"DialogControlAddItem\(g_logList[^\n]*", source)
+        self.assertTrue(writes)
+        for write in writes:
+            self.assertIn(write, add_line)
+            self.assertIn("BOTC_LogLineText(p,", write)
 
 
 class BluffPanelRegressionTests(unittest.TestCase):
