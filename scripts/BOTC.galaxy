@@ -527,6 +527,7 @@ int[14]     g_logTaskVer;      // 任务开始时的日志版本号
 int[14]     g_logTaskVerPm;    // 任务开始时该玩家自己的私聊日志版本号
 int[14]     g_logVerPm;        // 每人私聊日志版本号：只有他自己的私聊记录变化才 +1
 int[118272] g_logTaskIdx;      // 每人 8448 槽：正数 = 主来源索引+1，负数 = 私聊索引+1 取反
+int[14]     g_logTaskFullN;    // 【回卷完整重画计数】连续重画追不上时停止，避免整段重画卡死（2026-11-17）
 int         g_logVer;          // 日志版本号：公聊 / 投票 / 全部私聊新增一行就 +1
 int         g_logTurn;         // 【公平分帧】日志分帧轮转起点：不再每拍都从 1 号开始
 int[14]     g_sayCool;         // 【切换限频】公聊 / 私聊切换冷却（单位：1/16 秒拍）
@@ -554,7 +555,6 @@ int[14]     g_logMenuSel;      // 【看某玩家 · 菜单】这一拍已经处
 int[14]     g_logPickSel;      // 【看某玩家 · 菜单】打开时要选中的目标行，延后到下一拍列表就绪后再选（-1 = 无）
 int         g_logPickDlg;      // 【看某玩家】的下拉面板（一个滚轮列表）
 int         g_logPickList;     // 【看某玩家】下拉的列表框（自带滚轮；用户 2026-10-07 从"每行一个按钮"改回来）
-int[14]     g_logPickBtn;      // （已不用：又改回列表框了，见 g_logPickList）
 int[14]     g_logViewWho;      // 每个玩家各自在看谁（0 = 所有玩家 = 正常日志）
 bool[14]    g_logPickOn;       // 【看某玩家】下拉当前是不是开着（再点一次按钮 = 关掉）
 bool        g_inClick;         // 正在处理"点界面"的事件里：这时候冒出来的提示不进私聊日志（用户 2026-09-30）
@@ -2449,6 +2449,7 @@ int    BOTC_ChatWrapWidthLog ();                     // 日志列表框宽度（
 void   BOTC_LogTaskStart (int p);                    // 【日志分帧】收集整份日志的待办索引
 void   BOTC_LogTaskStep (int p);                     // 【日志分帧】画一小批
 void   BOTC_LogTaskRestart (int p);                  // 【日志分帧】清空并重新收集 + 画第一批
+void   BOTC_LogTaskCatchUp (int p);                  // 【日志分帧】画完后增量补齐新增项，不清空（2026-11-17）
 void   BOTC_RpCollectProc (int p);                   // 【复盘分帧】收集过程记录
 void   BOTC_RpCollectPm (int p);                     // 【复盘分帧】收集白天私聊
 void   BOTC_RpStageNext (int p);                     // 【复盘分帧】进入下一阶段
@@ -6655,6 +6656,7 @@ void BOTC_LogRender (int p) {
     DialogControlRemoveAllItems(g_logList, PlayerGroupSingle(p));
     g_logItems[p] = 0;
     g_logTaskN[p] = 0;
+    g_logTaskFullN[p] = 0;
     // 【复盘分帧】切页时把还没画完的复盘阶段和星际名标记一起收掉。
     g_logRpStage[p] = 0;
     g_logRealName[p] = false;
@@ -6818,15 +6820,68 @@ void BOTC_LogTaskStep (int p) {
         n = n + 1;
     }
     if (g_logTaskCur[p] >= g_logTaskN[p]) {
-        g_logTaskN[p] = 0;
         if (g_logRpStage[p] > 0) {
+            g_logTaskN[p] = 0;
             BOTC_RpStageNext(p);       // 复盘：过程记录 → 白天私聊 → 结束身份
         }
         else if (g_logVer != g_logTaskVer[p] || g_logVerPm[p] != g_logTaskVerPm[p]) {
-            // 分帧期间新增了日志：重跑一次，保证列表最终完整且顺序正确。
-            BOTC_LogTaskRestart(p);
+            // 分帧期间新增了日志：增量补齐（只追加新增、不清空），避免活跃对局里反复整段重画。
+            BOTC_LogTaskCatchUp(p);
+        }
+        else {
+            g_logTaskN[p] = 0;
         }
     }
+}
+
+// 【日志分帧 · 增量补齐】（2026-11-17）：当前任务画完后又有新日志时调用。
+//   正常情况（无回卷）新序列只是在尾部多出几项，已画内容完全相同，因此只追加新增项、不清空列表，
+//   无论分帧期间来多少消息都在尾部补齐，必然收敛。只有检测到存储回卷（索引整体偏移）才完整重画，
+//   并对连续重画设次数兜底，追不上就停止重画、转实时追加，避免单核主线程被反复整段重画卡死。
+void BOTC_LogTaskCatchUp (int p) {
+    int base;
+    int oldN;
+    int oldFirst;
+    int newN;
+    int newFirst;
+    if (p < 1 || p > 13) { return; }
+    base = p * 8448;
+    oldN = g_logTaskN[p];
+    if (oldN <= 0) {
+        BOTC_LogTaskRestart(p);
+        return;
+    }
+    oldFirst = g_logTaskIdx[base];          // 旧序列首项锚点（无回卷时不变，回卷后必变）
+    BOTC_LogTaskStart(p);                   // 重新收集当前完整序列（覆盖同一区域）
+    newN = g_logTaskN[p];
+    if (newN <= 0) {
+        DialogControlRemoveAllItems(g_logList, PlayerGroupSingle(p));
+        g_logItems[p] = 0;
+        g_logTaskN[p] = 0;
+        g_logTaskCur[p] = 0;
+        g_logTaskFullN[p] = 0;
+        return;
+    }
+    newFirst = g_logTaskIdx[base];
+    if (newFirst == oldFirst && newN >= oldN) {
+        // 无回卷：前 oldN 项与已画内容相同，跳过已画部分，只在尾部追加新增项。
+        g_logTaskFullN[p] = 0;
+        g_logTaskCur[p] = oldN;
+        g_logTaskVer[p] = g_logVer;
+        g_logTaskVerPm[p] = g_logVerPm[p];   // 私聊版本同步：否则下一拍会被判成「又有新增」反复补齐
+        BOTC_LogTaskStep(p);
+        return;
+    }
+    // 回卷：源索引整体偏移、无法增量，完整重画（连续重画次数兜底）。
+    g_logTaskFullN[p] = g_logTaskFullN[p] + 1;
+    if (g_logTaskFullN[p] >= 3) {
+        g_logTaskN[p] = 0;
+        g_logTaskCur[p] = 0;
+        g_logTaskFullN[p] = 0;
+        BOTC_Notice(p, "日志内容更新过快，已停止整段重画；新消息会实时追加，可重新打开日志查看完整历史。");
+        return;
+    }
+    BOTC_LogTaskRestart(p);
 }
 
 void BOTC_LogTaskRestart (int p) {
@@ -7182,6 +7237,7 @@ void BOTC_LogClose (int p) {
     g_logOpen[p] = false;
     g_logPickOn[p] = false;
     g_logTaskN[p] = 0;             // 【日志分帧】关掉面板就不再继续补画
+    g_logTaskFullN[p] = 0;
     g_logRpStage[p] = 0;           // 【复盘分帧】中途关掉复盘，阶段状态一并复位
     g_logRealName[p] = false;
     g_logRealLast[p] = false;
@@ -15068,25 +15124,27 @@ void BOTC_SayToggle (int p) {
     if (g_gameOver) {
         g_chatSay[p] = 0;
         BOTC_SayRender(p);
-        BOTC_Notice(p, "游戏已结算：只能公聊。");
+        BOTC_NoticeSub(p, "游戏已结算：只能公聊。");
         return;
     }
+    // 【缺陷修复（2026-11-17）】下面的切换/拦截提示改用 NoticeSub：屏幕提示条照常显示，但不写日志页、
+    //   不 bump g_logVer、不触发私聊框重绘（纯 UI 状态反馈，不是聊天内容）。
     // 私聊阶段：非说书人被锁定成私聊，点按钮也切不回公聊（用户 2026-09-30）
     if (g_chatMode == 1 && !g_cultOn && p != g_teller) {
         g_chatSay[p] = 1;
         BOTC_SayRender(p);
-        BOTC_Notice(p, "现在是私聊时间：自动保持【私聊】，到了公聊时间才会解除。");
+        BOTC_NoticeSub(p, "现在是私聊时间：自动保持【私聊】，到了公聊时间才会解除。");
         return;
     }
     if (g_chatSay[p] == 1) {
         g_chatSay[p] = 0;
         BOTC_SayRender(p);
-        BOTC_Notice(p, "已切回【公聊】：回车打的内容全桌可见。");
+        BOTC_NoticeSub(p, "已切回【公聊】：回车打的内容全桌可见。");
     }
     else {
         g_chatSay[p] = 1;
         BOTC_SayRender(p);
-        BOTC_Notice(p, "已切到【私聊】：回车打的内容只进你当前的私聊（没在私聊里会提示）。");
+        BOTC_NoticeSub(p, "已切到【私聊】：回车打的内容只进你当前的私聊（没在私聊里会提示）。");
     }
 }
 
@@ -19072,6 +19130,7 @@ void BOTC_ClearAllLogs () {
         g_logTaskVerPm[p] = 0;
         g_logVerPm[p] = 0;
         g_sayCool[p] = 0;
+        g_logTaskFullN[p] = 0;
         g_logRpStage[p] = 0;
         g_logTaskLast[p] = false;
         g_logRealName[p] = false;
@@ -38143,6 +38202,7 @@ void BOTC_ExecApplyKill (int q) {
     int other;
     int twA;
     int twB;
+    bool twinActiveNow;
     // 【镜像双子 · 先记下这一对】（用户 2026-09-21 报「还是不行」的根因）：
     //   死亡结算（BOTC_MarkDeath → 离场清理）会按官方把配对战作废、76/77 标记一起收掉，
     //   等死亡落定之后再读 g_twinA / g_twinB 就已经是 0 了 → 那句「善良一方被处决」永远判不到。
@@ -38183,10 +38243,16 @@ void BOTC_ExecApplyKill (int q) {
             if (q == twA) {
                 other = twB;
             }
+            // 【缺陷修复（2026-11-17）】镜像双子醉酒/中毒时双子能力不生效：处决善良双子不再触发邪恶胜。
+            //   BOTC_TwinActive 已检查带 76 token 那只没醉酒/中毒、活着或保留能力，口径与双子封锁一致。
+            twinActiveNow = BOTC_TwinActive();
             // 【保留了能力的双子】（用户 2026-09-21）：他即使死了，能力还在 → 这一对照样算数
-            if (!BOTC_SeatDead(other) || BOTC_KeepsAbilityAlive(other)) {
+            if (twinActiveNow && (!BOTC_SeatDead(other) || BOTC_KeepsAbilityAlive(other))) {
                 BOTC_ShowWin(1, "你们将无辜的" + BOTC_NameStr(q) + "推向了深渊，", "而" + BOTC_NameStr(other) + "将会代替他永远的活下去......");
                 return;
+            }
+            if (!twinActiveNow) {
+                BOTC_PmStore(g_teller, "【镜像双子】" + BOTC_NameStr(q) + " 被处决，但镜像双子醉酒/中毒，特殊胜利不触发。");
             }
         }
     }
@@ -40523,7 +40589,9 @@ int BOTC_EvilTotalAll () {
     int n;
     n = 0;
     for (q = 2; q <= 13; q += 1) {
-        if (g_who[q] < 2) {
+        // 【缺陷修复（2026-11-17）】用 g_seatOn 判断该格是否有真人：换说书人后老说书人（物理1号）被移到
+        //   2..13 格时 g_who[q]=1，旧写法 g_who[q]<2 会把他漏算。g_seatOn 不随换位改变，能正确统计。
+        if (!g_seatOn[q]) {
             continue;
         }
         if (BOTC_SeatAlign(q) == 1) {
@@ -40542,7 +40610,8 @@ bool BOTC_HolySoulBlocks (int q) {
     if (!g_started || !BOTC_HolySoulOn()) {
         return false;
     }
-    if (q < 2 || q > 13 || g_who[q] < 2) {
+    // 【缺陷修复（2026-11-17）】同样改用 g_seatOn，与 EvilTotalAll 口径一致。
+    if (q < 2 || q > 13 || !g_seatOn[q]) {
         return false;
     }
     if (BOTC_SeatAlign(q) == 1) {
@@ -64736,8 +64805,10 @@ bool BOTC_TwinBlocksGood () {
     if (!BOTC_TwinActive()) {
         return false;                       // 【以 token 为准 + 醉酒/中毒即失效】（用户 2026-09-22）
     }
-    if (BOTC_SeatTrueRole(g_twinA) != 64) {
-        return false;                       // 那只镜像双子被改了身份 / 离场 → 能力没了
+    // 【缺陷修复（2026-11-17）】改用能力口径：真身是镜像双子，或炼金/哲学家/食人族借到镜像双子能力都算。
+    //   仍保留原保护：那只镜像双子被改身份、离场导致没有 64 能力时，HasAbility 返回 false。
+    if (!BOTC_HasAbility(g_twinA, 64)) {
+        return false;
     }
     // 【亡骨魔的「保留能力」】（用户 2026-09-21）：被亡骨魔杀死的双子死后能力还在 →
     //   这一对照样算「都在」，处决善良那只一样是邪恶胜（百科就是这么写的）。
@@ -68316,7 +68387,13 @@ void BOTC_CheckMayorWin () {
         return;                        // 今天处决过人
     }
     if (BOTC_AliveCountTrue() == 3) {
-        BOTC_ShowWin(BOTC_SeatAlign(mayor), "伟大的镇长" + BOTC_NameStr(mayor) + "建了一堵高墙，", "将所有恶魔驱逐出境！");
+        // 【缺陷修复（2026-11-17）】双子都活着时，善良镇长不能特胜（双子只阻止善良胜，邪恶镇长不受影响）。
+        if (BOTC_SeatAlign(mayor) == 0 && BOTC_TwinBlocksGood()) {
+            BOTC_PmStore(g_teller, "【镇长】" + BOTC_NameStr(mayor) + " 满足特胜条件，但两只双子都还活着，善良胜利不触发。");
+        }
+        else {
+            BOTC_ShowWin(BOTC_SeatAlign(mayor), "伟大的镇长" + BOTC_NameStr(mayor) + "建了一堵高墙，", "将所有恶魔驱逐出境！");
+        }
     }
 }
 
