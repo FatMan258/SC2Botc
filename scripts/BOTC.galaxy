@@ -517,19 +517,19 @@ int[14]     g_logItems;        // 【列表项计数】每人日志列表当前�
 bool        g_chatBatch;       // 【批量公告】为真时 BOTC_ChatShow 只入缓冲、不逐条重画聊天窗
 bool        g_pmBatch;         // 【私聊批量】为真时 BOTC_PmStoreRaw 只入缓冲、不逐条重画私聊框
 string[14]  g_subLast;         // 【操作反馈合并】BOTC_NoticeSub 上次发给该玩家的消息，完全相同则跳过（连点 / 宏只显示一次）
-// 【日志分帧渲染】（用户 2026-11-16）：日志必须完整可看，所以不截断，改为把整份日志先收集成
-//   待办索引，再由 1/16 秒定时器每拍画一小批，避免一次灌几千个列表项卡住整帧。
-int[14]     g_logTaskN;        // 每人待画项数（0 = 没有任务）
-int[14]     g_logTaskCur;      // 每人已画到第几项
-int[14]     g_logTaskVer;      // 任务开始时的日志版本号
-// 【私聊日志版本分离】（用户 2026-11-17）：以前所有玩家共用一个 g_logVer，别人的私聊一写入，
-//   正在加载的大日志就被判成「内容变化」清空重来。现在私聊记录按人单独记版本。
-int[14]     g_logTaskVerPm;    // 任务开始时该玩家自己的私聊日志版本号
-int[14]     g_logVerPm;        // 每人私聊日志版本号：只有他自己的私聊记录变化才 +1
-int[118272] g_logTaskIdx;      // 每人 8448 槽：正数 = 主来源索引+1，负数 = 私聊索引+1 取反
-int[14]     g_logTaskFullN;    // 【回卷完整重画计数】连续重画追不上时停止，避免整段重画卡死（2026-11-17）
-int         g_logVer;          // 日志版本号：公聊 / 投票 / 全部私聊新增一行就 +1
-int         g_logTurn;         // 【公平分帧】日志分帧轮转起点：不再每拍都从 1 号开始
+// 【日志分帧 · 流式读取】（用户 2026-11-18）：打开与刷新只排队；普通日志按来源游标逐条读，
+//   复盘仍按阶段索引读取。新增一行不再让正在加载的列表整段重画，也不会重扫已读部分。
+int[14]     g_logTaskN;        // 普通日志 1 = 还有待读内容；复盘 = 本阶段项数；0 = 无待画项
+int[14]     g_logTaskCur;      // 复盘：每人已画到第几项
+// 普通日志按来源分别保存绝对读游标；回卷只把存储起点前移，游标跟着 clamp 即可继续。
+int[14]     g_logReadMain;     // 公聊 / 投票 的绝对读位置
+int[14]     g_logReadPm;       // 私聊 的绝对读位置
+bool[14]    g_logRefresh;      // 打开 / 换页签：下一拍真正清空列表并重读
+int         g_logTickNext;     // 【轮转】下一拍从哪个玩家开始，避免固定从 1 号起
+int         g_pubLogBase;      // 公聊日志已丢弃的最旧行数（绝对基准）
+int[14]     g_pmLogBase;       // 每人私聊日志已丢弃的最旧行数（绝对基准）
+int         g_voteLogBase;     // 投票日志已丢弃的最旧行数（绝对基准）
+int[118272] g_logTaskIdx;      // 复盘用：每人 8448 槽（正数 = 主来源索引+1，负数 = 私聊索引+1 取反）
 int[14]     g_sayCool;         // 【切换限频】公聊 / 私聊切换冷却（单位：1/16 秒拍）
 int         g_logBatch;        // 本拍最多画多少项（多页签同时加载时由 tick 统一分配预算）
 // 【复盘分帧】（用户 2026-11-16）：复盘也要完整且不卡。
@@ -846,6 +846,11 @@ int[14]     g_boomVote;          // 各座位本轮指向的目标（0 = 未选�
 int[14]     g_boomCount;         // 最终各座位获得的票数
 bool        g_boomResult;        // 炸弹人投票已结束，座位下方正在显示最终票数
 int         g_boomTellerBtn;     // 炸弹人指向投票：所有玩家可见的「指向说书人」按钮
+bool        g_boomBlastOn;       // 炸弹人爆炸正在按顺时针逐座结算
+int[14]     g_boomBlastList;     // 顺时针待炸座位队列（不含保留者 / 已死亡 / 带免死 token 的座位）
+int         g_boomBlastN;        // 队列长度
+int         g_boomBlastIdx;      // 已经结算到队列第几个
+int         g_boomBlastTick;     // 距离下一次爆炸还剩几拍（0.5 秒一拍，6 拍 = 3 秒）
 int[14]     g_harpyFirstBy;      // 鹰身女妖来源 → 第一名
 int[14]     g_harpySecondBy;     // 鹰身女妖来源 → 第二名
 int[14]     g_harpyDay;          // 这一对选择属于哪一天
@@ -2446,10 +2451,10 @@ int    BOTC_PmWithMe (int p);          // 我这条私聊里的"对面那位"（
 void   BOTC_LogRender (int p);
 void   BOTC_LogWrapAdd (int p, string s, int who);   // 【全部私聊】实时追加时按同一口径拆行
 int    BOTC_ChatWrapWidthLog ();                     // 日志列表框宽度（半角单位）
-void   BOTC_LogTaskStart (int p);                    // 【日志分帧】收集整份日志的待办索引
+void   BOTC_LogTaskStart (int p);                    // 【日志分帧】只登记来源读游标
 void   BOTC_LogTaskStep (int p);                     // 【日志分帧】画一小批
-void   BOTC_LogTaskRestart (int p);                  // 【日志分帧】清空并重新收集 + 画第一批
-void   BOTC_LogTaskCatchUp (int p);                  // 【日志分帧】画完后增量补齐新增项，不清空（2026-11-17）
+void   BOTC_LogRenderNow (int p);                    // 【日志分帧】真正清空列表并按当前页签重读
+void   BOTC_LogStreamStep (int p);                   // 【日志分帧】按来源游标逐条读取并绘制
 void   BOTC_RpCollectProc (int p);                   // 【复盘分帧】收集过程记录
 void   BOTC_RpCollectPm (int p);                     // 【复盘分帧】收集白天私聊
 void   BOTC_RpStageNext (int p);                     // 【复盘分帧】进入下一阶段
@@ -3144,6 +3149,7 @@ int    BOTC_ViewSeenRole (int ob, int q);
 bool   BOTC_SeatIsDrunk (int q);
 bool   BOTC_SeatIsPoisoned (int q);
 bool   BOTC_SeatIsPoisonedOther (int q);
+bool   BOTC_MonkSafe (int q);          // 【僧侣保护】（用户 2026-11-18）：被保护者当晚免疫恶魔的非击杀类能力
 bool   BOTC_LleechPoisonOn ();
 bool   BOTC_LleechPoisonOnCore ();
 bool   BOTC_SeatImpaired (int q);
@@ -5679,65 +5685,27 @@ void BOTC_DiagStore (int p, string s) {
 void BOTC_PubLogStore (string s) {
     int i;
     int p;
-    int spk;
-    bool rolled;
-    rolled = false;
-    spk = 0;
-    // 【屏蔽】（用户 2026-11-06）：公聊行记住说话人，屏蔽他的玩家不再收到这一行。
-    if (g_chatWhoNow >= 1 && g_chatWhoNow <= 13) {
-        spk = g_who[g_chatWhoNow];
-    }
     if (g_pubLogCount >= 3600) {
-        rolled = true;
         // 【批量回卷】（用户 2026-11-16）：一次丢掉最旧 1200 行，之后每 1200 条才搬一次，
-        //   不再像以前那样每条新消息都整段左移 2400 行。
+        //   不再像以前每条新消息都整段左移 2400 行。
         for (i = 0; i < 2400; i += 1) {
             g_pubLog[i] = g_pubLog[i + 1200];
             g_pubWho[i] = g_pubWho[i + 1200];
             g_pubSeq[i] = g_pubSeq[i + 1200];
         }
         g_pubLogCount = 2400;
+        g_pubLogBase = g_pubLogBase + 1200;    // 【绝对基准】游标按绝对位置计算，回卷不用重画
     }
     g_pubLog[g_pubLogCount] = s;
     g_pubWho[g_pubLogCount] = g_chatWhoNow;
     g_pubSeq[g_pubLogCount] = g_pubSeqN;
     g_pubLogCount = g_pubLogCount + 1;
     g_pubSeqN = g_pubSeqN + 1;
-    g_logVer = g_logVer + 1;    // 【日志分帧】通知正在加载的列表重画一次
-    // 正开着【日志 → 公聊记录】的人：立刻把这一行接上去（**不自动滚到最新**，用户 2026-09-19）
+    // 【流式读取】只需通知正开着公聊 / 系统消息页的玩家"后面还有新行要读"，
+    //   读取由定时器按游标继续，不再在这里逐行追加、也不会整段重画。
     for (p = 1; p <= 13; p += 1) {
-        if (spk > 0 && BOTC_Blocked(p, spk)) {
-            continue;
-        }
-        if (g_logLiveUpdate && g_logOpen[p] && g_logTaskN[p] == 0 && (g_logMode[p] == 0 || g_logMode[p] == 3)) {
-            if (g_logMode[p] == 3) {
-                // 【系统消息】页签（用户 2026-09-30）：只接系统行，而且**追加**、不整段重画
-                //   （以前走 BOTC_LogRender 整段重画，列表会跳回最上面；跟公聊记录一样只追加就好）
-                if (g_chatWhoNow <= 0) {
-                    if (rolled) {
-                        BOTC_LogItemPop(p);
-                    }
-                    BOTC_LogAddLine(p, s, g_chatWhoNow);
-                }
-            }
-            else if (g_logViewWho[p] > 0) {
-                // 【看某玩家】（用户 2026-10-04 报「带滚轮的聊天框经常间歇性自己消失」）：
-                //   以前这里一有新消息就 BOTC_LogRender 整段重画（RemoveAllItems + 全部重新加一遍），
-                //   列表会瞬间空一下再填回来 —— 看起来就是聊天框自己消失。现在改成**只判断这一行要不要接**：
-                //   他说的 / 天数时段分隔标记 → 追加；别人说的 → 这一行本来也不该显示，直接不动。
-                if (BOTC_IsPeriodMark(s) || g_chatWhoNow == g_logViewWho[p]) {
-                    if (rolled) {
-                        BOTC_LogItemPop(p);
-                    }
-                    BOTC_LogAddLine(p, s, g_chatWhoNow);
-                }
-            }
-            else {
-                if (rolled) {
-                    BOTC_LogItemPop(p);
-                }
-                BOTC_LogAddLine(p, s, g_chatWhoNow);
-            }
+        if (g_logLiveUpdate && g_logOpen[p] && (g_logMode[p] == 0 || g_logMode[p] == 3)) {
+            g_logTaskN[p] = 1;
         }
     }
 }
@@ -5804,26 +5772,19 @@ void BOTC_PeriodRecord (string s) {
 void BOTC_VoteLogAdd (string s) {
     int i;
     int p;
-    bool rolled;
-    rolled = false;
     if (g_voteLogCount >= 900) {
-        rolled = true;
         // 【批量回卷】（用户 2026-11-16）：一次丢掉最旧 300 行，之后每 300 条才搬一次。
         for (i = 0; i < 600; i += 1) {
             g_voteLog[i] = g_voteLog[i + 300];
         }
         g_voteLogCount = 600;
+        g_voteLogBase = g_voteLogBase + 300;    // 【绝对基准】游标按绝对位置计算
     }
     g_voteLog[g_voteLogCount] = s;
     g_voteLogCount = g_voteLogCount + 1;
-    // 正开着【日志 → 投票统计】的人：立刻接上这一行（用户 2026-09-19）
-    g_logVer = g_logVer + 1;    // 【日志分帧】通知正在加载的列表重画一次
     for (p = 1; p <= 13; p += 1) {
-        if (g_logLiveUpdate && g_logOpen[p] && g_logTaskN[p] == 0 && g_logMode[p] == 2) {
-            if (rolled) {
-                BOTC_LogItemPop(p);
-            }
-            BOTC_LogAddLine(p, s, 0);   // 投票统计：名字也换成真名
+        if (g_logLiveUpdate && g_logOpen[p] && g_logMode[p] == 2) {
+            g_logTaskN[p] = 1;
         }
     }
 }
@@ -5862,13 +5823,10 @@ bool BOTC_PmOff () {
 void BOTC_PmStoreRaw (int p, string s) {
     int i;
     int w;
-    bool rolled;
-    rolled = false;
     // 【坐标统一】（用户 2026-10-07）：g_pmWith 要跟 g_pmWho / g_logViewWho 一样存**格子**，
     //   而 BOTC_PmWithMe 返回的是【对面那位】的**物理座位**（g_member / g_mySess 都按座位存）→ 这里先转成格子。
     w = BOTC_PosOf(BOTC_PmWithMe(p));
     if (g_pmLogCount[p] >= 900) {
-        rolled = true;
         // 【批量回卷】（用户 2026-11-16）：每名玩家一次丢掉最旧 300 行，之后每 300 条才搬一次，
         //   不再每条私聊都整段左移 600 行 × 4 个数组。
         for (i = 0; i < 600; i += 1) {
@@ -5879,6 +5837,7 @@ void BOTC_PmStoreRaw (int p, string s) {
             g_pmBoxOnly[(p * 900) + i] = g_pmBoxOnly[(p * 900) + i + 300];
         }
         g_pmLogCount[p] = 600;
+        g_pmLogBase[p] = g_pmLogBase[p] + 300;    // 【绝对基准】游标按绝对位置计算
     }
     g_pmLog[(p * 900) + g_pmLogCount[p]] = s;
     g_pmWho[(p * 900) + g_pmLogCount[p]] = g_chatWhoNow;
@@ -5886,29 +5845,9 @@ void BOTC_PmStoreRaw (int p, string s) {
     g_pmCont[(p * 900) + g_pmLogCount[p]] = g_pmContNow;
     g_pmBoxOnly[(p * 900) + g_pmLogCount[p]] = g_pmBoxOnlyNow;
     g_pmLogCount[p] = g_pmLogCount[p] + 1;
-    // 他正开着【日志 → 我的私聊】：立刻把这一行接上去（**不自动滚到最新**，用户 2026-09-19）
-    // 【私聊日志版本分离】（用户 2026-11-17）：只 +1 他自己的版本，别人正在加载的日志不受影响。
-    g_logVerPm[p] = g_logVerPm[p] + 1;
-    if (g_logLiveUpdate && g_logOpen[p] && g_logTaskN[p] == 0 && (g_logMode[p] == 1 || g_logMode[p] == 3)) {
-        if (g_logMode[p] == 3) {
-            // 【系统消息】页签（用户 2026-09-30）：只接系统行，而且是**追加**、不整段重画
-            if (g_chatWhoNow == 0 && !g_pmBoxOnlyNow) {
-                if (rolled) {
-                    BOTC_LogItemPop(p);
-                }
-                BOTC_LogAddLine(p, s, 0);
-            }
-        }
-        else {
-            // 【私聊信息】（用户 2026-11-17）：固定显示全部私聊房间，不再按「查看某玩家」过滤。
-            //   「只进聊天框、不进日志」的行（用户 2026-09-30）日志正开着也不接上去。
-            if (!g_pmBoxOnlyNow) {
-                if (rolled) {
-                    BOTC_LogItemPop(p);
-                }
-                BOTC_LogAddLine(p, s, g_chatWhoNow);
-            }
-        }
+    // 【流式读取】只标"还有新行要读"，由定时器按游标继续读，不再在这里逐行追加。
+    if (g_logLiveUpdate && g_logOpen[p] && (g_logMode[p] == 1 || g_logMode[p] == 3)) {
+        g_logTaskN[p] = 1;
     }
     if (!g_pmBatch) {
         BOTC_PmBoxRender(p);
@@ -5994,6 +5933,9 @@ void BOTC_AllPmStoreTo (string s, int sess, int extra) {
     int p;
     int idx;
     idx = 0;
+    // 【彻底停用】（用户 2026-11-18）：说书人【全部私聊】不再记录任何私聊消息与房间事件，
+    //   入口按钮已永久隐藏。参数和调用点保持不变，这里直接返回。
+    return;
     // 【暂时停用】（用户 2026-11-17）：说书人【全部私聊】关闭期间不再写入任何存档。
     if (g_logAllPmOff) {
         return;
@@ -6034,7 +5976,6 @@ void BOTC_AllPmStoreTo (string s, int sess, int extra) {
     g_allPmCount = g_allPmCount + 1;
     // 【实时更新】（用户 2026-11-10）：说书人正开着【日志 → 全部私聊】时立刻接上这一条；
     //   只追加、不整段重画，滚动条位置不会被拉回顶部。筛选口径与 BOTC_LogRender 的模式 4 一致。
-    g_logVer = g_logVer + 1;    // 【日志分帧】通知正在加载的列表重画一次
     if (g_logLiveUpdate && g_logOpen[g_teller] && g_logTaskN[g_teller] == 0 && g_logMode[g_teller] == 4) {
         if (g_logViewWho[g_teller] <= 0 || BOTC_IsPeriodMark(s) || g_allPmIn[(idx * 14) + g_logViewWho[g_teller]]) {
             BOTC_LogWrapAdd(g_teller, s, g_chatWhoNow);
@@ -6556,8 +6497,6 @@ void BOTC_RpCollectProc (int p) {
     }
     g_logTaskN[p] = n;
     g_logTaskCur[p] = 0;
-    g_logTaskVer[p] = g_logVer;
-    g_logTaskVerPm[p] = g_logVerPm[p];
 }
 
 // 【复盘分帧 · 收集白天私聊】（用户 2026-11-16）
@@ -6652,132 +6591,59 @@ void BOTC_RpTail (int p) {
 }
 
 void BOTC_LogRender (int p) {
-    BOTC_LogViewBtnRender(p);      // 按钮文字始终显示当前查看目标（用户 2026-11-03）
-    DialogControlRemoveAllItems(g_logList, PlayerGroupSingle(p));
-    g_logItems[p] = 0;
+    if (p < 1 || p > 13) { return; }
+    // 【流式读取】（用户 2026-11-18）：点击只登记刷新，清空列表、定游标与读取全部交给 1/16 秒定时器。
+    g_logRefresh[p] = true;
     g_logTaskN[p] = 0;
-    g_logTaskFullN[p] = 0;
     // 【复盘分帧】切页时把还没画完的复盘阶段和星际名标记一起收掉。
     g_logRpStage[p] = 0;
     g_logRealName[p] = false;
     g_logRealLast[p] = false;
-    // 【收集与首帧都移到定时器】（用户 2026-11-17）：切到「所有玩家」这类长页签时，
-    //   原来在这一帧就收集几千行再画 160 项，点击会明显卡住；现在只把待办标成 -1（待收集），
-    //   下一拍定时器再收集并按预算画第一批，点击立即返回。
-    g_logTaskN[p] = -1;
 }
 
-// 【日志分帧 · 收集】（用户 2026-11-16）：只做筛选判断、不碰控件，成本很低。
-//   编码：正数 = 主来源索引 + 1（公聊 / 投票 / 全部私聊，按当前页签决定），
-//         负数 = -(私聊索引 + 1)（只有「系统消息」页签会混入私聊行）。
-void BOTC_LogTaskStart (int p) {
-    int i;
-    int n;
-    int base;
-    int vw;
-    bool anyBlock;
+// 【日志分帧 · 真正重画】（用户 2026-11-18）：清空列表后按当前页签重置来源游标，
+//   之后由 BOTC_LogStreamStep 从下一拍开始逐条读取（不再预先扫描整表）。
+void BOTC_LogRenderNow (int p) {
     if (p < 1 || p > 13) { return; }
-    base = p * 8448;
-    n = 0;
-    vw = g_logViewWho[p];
-    // 【屏蔽预判】（用户 2026-11-17）：绝大多数玩家没有任何屏蔽关系，先扫一遍 13 个槽位，
-    //   没有就直接跳过几千次 BOTC_PubHideByBlock 调用，「所有玩家」页收集不再卡顿。
-    anyBlock = false;
-    for (i = 1; i <= 13; i += 1) {
-        if (g_block[(p * 14) + i] || g_blockHideTo[(p * 14) + i] > 0) {
-            anyBlock = true;
-            break;
-        }
-    }
-    if (g_logMode[p] == 4) {
-        for (i = 0; i < g_allPmCount && n < 8448; i += 1) {
-            if (vw > 0) {
-                if (!BOTC_IsPeriodMark(g_allPmLog[i])) {
-                    if (!g_allPmIn[(i * 14) + vw]) {
-                        continue;
-                    }
-                }
-            }
-            g_logTaskIdx[base + n] = i + 1;
-            n = n + 1;
-        }
-    }
-    else if (g_logMode[p] == 2) {
-        for (i = 0; i < g_voteLogCount && n < 8448; i += 1) {
-            g_logTaskIdx[base + n] = i + 1;
-            n = n + 1;
-        }
-    }
-    else if (g_logMode[p] == 3) {
-        for (i = 0; i < g_pubLogCount && n < 8448; i += 1) {
-            if (g_pubWho[i] <= 0) {
-                g_logTaskIdx[base + n] = i + 1;
-                n = n + 1;
-            }
-        }
-        for (i = 0; i < g_pmLogCount[p] && n < 8448; i += 1) {
-            if (g_pmBoxOnly[(p * 900) + i]) {
-                continue;
-            }
-            if (g_pmWho[(p * 900) + i] != 0) {
-                continue;
-            }
-            g_logTaskIdx[base + n] = -(i + 1);
-            n = n + 1;
-        }
-    }
-    else if (g_logMode[p] == 1) {
-        // 【私聊信息 · 固定全部】（用户 2026-11-17）：不再按「查看某玩家」筛选，
-        //   固定显示自己在所有私聊房间里的完整记录。
-        for (i = 0; i < g_pmLogCount[p] && n < 8448; i += 1) {
-            // 【只进聊天框、不进日志】的行（用户 2026-09-30：按 Tab 那些提示）
-            if (g_pmBoxOnly[(p * 900) + i]) {
-                continue;
-            }
-            g_logTaskIdx[base + n] = -(i + 1);
-            n = n + 1;
-        }
-    }
-    else {
-        for (i = 0; i < g_pubLogCount && n < 8448; i += 1) {
-            // 【屏蔽只隐藏新发言】（用户 2026-11-08）：屏蔽之后对方说的话不显示。
-            if (anyBlock && g_pubWho[i] >= 1 && g_pubWho[i] <= 13) {
-                if (g_pubLog[i] != "" && BOTC_PubHideByBlock(p, g_who[g_pubWho[i]], g_pubSeq[i])) {
-                    if (!BOTC_IsPeriodMark(g_pubLog[i])) {
-                        continue;
-                    }
-                }
-            }
-            // 【看某玩家】筛选（用户 2026-09-30）：只留那个人的发言 + 天数/时段分隔标记。
-            if (vw > 0) {
-                if (!BOTC_IsPeriodMark(g_pubLog[i])) {
-                    if (g_pubWho[i] != vw) {
-                        continue;
-                    }
-                }
-            }
-            g_logTaskIdx[base + n] = i + 1;
-            n = n + 1;
-        }
-    }
-    g_logTaskN[p] = n;
-    g_logTaskCur[p] = 0;
-    g_logTaskVer[p] = g_logVer;
-    g_logTaskVerPm[p] = g_logVerPm[p];
+    BOTC_LogViewBtnRender(p);      // 按钮文字始终显示当前查看目标（用户 2026-11-03）
+    DialogControlRemoveAllItems(g_logList, PlayerGroupSingle(p));
+    g_logItems[p] = 0;
+    g_logTaskN[p] = 0;
+    g_logRpStage[p] = 0;
+    g_logRealName[p] = false;
+    g_logRealLast[p] = false;
+    BOTC_LogTaskStart(p);
 }
 
-// 【日志分帧 · 画一批】（用户 2026-11-16）：每拍最多 160 项，剩下的下一拍继续。
+// 【日志分帧 · 登记游标】（用户 2026-11-18）：只把来源读位置对齐到当前存储起点，O(1)，不扫描历史。
+//   公聊 / 系统消息：公聊表 + 自己的私聊表；投票统计：只读投票表；私聊信息：只读自己的私聊表。
+void BOTC_LogTaskStart (int p) {
+    if (p < 1 || p > 13) { return; }
+    g_logReadMain[p] = g_pubLogBase;
+    if (g_logMode[p] == 2) {
+        g_logReadMain[p] = g_voteLogBase;
+    }
+    g_logReadPm[p] = g_pmLogBase[p];
+    g_logTaskN[p] = 1;
+    g_logTaskCur[p] = 0;
+}
+
+// 【日志分帧 · 画一批】（用户 2026-11-18）：普通日志交给流式读取；复盘按已收集的索引分帧输出。
 void BOTC_LogTaskStep (int p) {
-    int n;
     int base;
     int v;
     int i;
     if (p < 1 || p > 13) { return; }
+    if (g_logRpStage[p] == 0) {
+        BOTC_LogStreamStep(p);
+        return;
+    }
     if (g_logTaskN[p] <= 0) { return; }
     base = p * 8448;
-    n = 0;
-    while (g_logTaskCur[p] < g_logTaskN[p] && n < g_logBatch) {
+    while (g_logTaskCur[p] < g_logTaskN[p] && g_logBatch > 0) {
         v = g_logTaskIdx[base + g_logTaskCur[p]];
+        g_logTaskCur[p] = g_logTaskCur[p] + 1;
+        g_logBatch = g_logBatch - 1;
         if (g_logRpStage[p] == 1) {
             // 【复盘分帧】阶段 1：过程记录（正数 = g_rpLog / g_rpLLog 索引 + 1）
             i = v - 1;
@@ -6798,110 +6664,83 @@ void BOTC_LogTaskStep (int p) {
                 }
             }
         }
-        else if (v < 0) {
-            i = (-v) - 1;
-            if (i >= 0 && i < g_pmLogCount[p]) {
-                BOTC_LogAddLine(p, g_pmLog[(p * 900) + i], g_pmWho[(p * 900) + i]);
-            }
-        }
-        else {
-            i = v - 1;
-            if (g_logMode[p] == 4) {
-                BOTC_LogWrapAdd(p, g_allPmLog[i], g_allPmWho[i]);
-            }
-            else if (g_logMode[p] == 2) {
-                BOTC_LogAddLine(p, g_voteLog[i], 0);   // 投票统计：名字换成真名
-            }
-            else {
-                BOTC_LogAddLine(p, g_pubLog[i], g_pubWho[i]);
-            }
-        }
-        g_logTaskCur[p] = g_logTaskCur[p] + 1;
-        n = n + 1;
     }
     if (g_logTaskCur[p] >= g_logTaskN[p]) {
-        if (g_logRpStage[p] > 0) {
-            g_logTaskN[p] = 0;
-            BOTC_RpStageNext(p);       // 复盘：过程记录 → 白天私聊 → 结束身份
-        }
-        else if (g_logVer != g_logTaskVer[p] || g_logVerPm[p] != g_logTaskVerPm[p]) {
-            // 分帧期间新增了日志：增量补齐（只追加新增、不清空），避免活跃对局里反复整段重画。
-            BOTC_LogTaskCatchUp(p);
+        // 留到下一拍切换复盘阶段，不递归追加第二批。
+        g_logTaskN[p] = 0;
+    }
+}
+
+// 【日志流式读取】（用户 2026-11-18）：两个来源各自维护绝对游标，读一条、判一条、画一条。
+//   被过滤掉的行同样消耗预算，避免别人的发言 / 坏行把某个玩家永远卡在同一位置。
+//   回卷只前移存储起点（g_pubLogBase / g_pmLogBase / g_voteLogBase），游标 clamp 后继续，不重画。
+void BOTC_LogStreamStep (int p) {
+    int i;
+    int idx;
+    int vw;
+    int who;
+    string s;
+    bool show;
+    vw = g_logViewWho[p];
+    while (g_logBatch > 0) {
+        show = true;
+        if (g_logMode[p] == 2) {
+            if (g_logReadMain[p] < g_voteLogBase) { g_logReadMain[p] = g_voteLogBase; }
+            i = g_logReadMain[p] - g_voteLogBase;
+            if (i >= g_voteLogCount) { g_logTaskN[p] = 0; return; }
+            g_logReadMain[p] = g_logReadMain[p] + 1;
+            s = g_voteLog[i];
+            who = 0;
         }
         else {
-            g_logTaskN[p] = 0;
+            if (g_logReadMain[p] < g_pubLogBase) { g_logReadMain[p] = g_pubLogBase; }
+            if (g_logReadPm[p] < g_pmLogBase[p]) { g_logReadPm[p] = g_pmLogBase[p]; }
+            i = g_logReadMain[p] - g_pubLogBase;
+            if (g_logMode[p] != 1 && i < g_pubLogCount) {
+                g_logReadMain[p] = g_logReadMain[p] + 1;
+                s = g_pubLog[i];
+                who = g_pubWho[i];
+                if (g_logMode[p] == 3) {
+                    show = who <= 0;
+                }
+                else {
+                    // 【屏蔽只隐藏新发言】（用户 2026-11-08）：屏蔽之后对方说的话不显示。
+                    if (who >= 1 && who <= 13 && s != "" && !BOTC_IsPeriodMark(s)) {
+                        if (BOTC_PubHideByBlock(p, g_who[who], g_pubSeq[i])) { show = false; }
+                    }
+                    // 【看某玩家】筛选（用户 2026-09-30）：只留那个人的发言 + 天数/时段分隔标记。
+                    if (vw > 0 && who != vw && !BOTC_IsPeriodMark(s)) { show = false; }
+                }
+            }
+            else if ((g_logMode[p] == 1 || g_logMode[p] == 3) && g_logReadPm[p] - g_pmLogBase[p] < g_pmLogCount[p]) {
+                i = g_logReadPm[p] - g_pmLogBase[p];
+                idx = (p * 900) + i;
+                g_logReadPm[p] = g_logReadPm[p] + 1;
+                s = g_pmLog[idx];
+                who = g_pmWho[idx];
+                // 【只进聊天框、不进日志】的行（用户 2026-09-30：按 Tab 那些提示）
+                if (g_pmBoxOnly[idx]) { show = false; }
+                if (g_logMode[p] == 3) {
+                    if (who != 0) { show = false; }
+                }
+                // 【私聊信息 · 固定全部】（用户 2026-11-17）：模式 1 不再按「查看某玩家」过滤。
+            }
+            else { g_logTaskN[p] = 0; return; }
         }
+        g_logBatch = g_logBatch - 1;
+        if (show) { BOTC_LogAddLine(p, s, who); }
     }
 }
 
-// 【日志分帧 · 增量补齐】（2026-11-17）：当前任务画完后又有新日志时调用。
-//   正常情况（无回卷）新序列只是在尾部多出几项，已画内容完全相同，因此只追加新增项、不清空列表，
-//   无论分帧期间来多少消息都在尾部补齐，必然收敛。只有检测到存储回卷（索引整体偏移）才完整重画，
-//   并对连续重画设次数兜底，追不上就停止重画、转实时追加，避免单核主线程被反复整段重画卡死。
-void BOTC_LogTaskCatchUp (int p) {
-    int base;
-    int oldN;
-    int oldFirst;
-    int newN;
-    int newFirst;
-    if (p < 1 || p > 13) { return; }
-    base = p * 8448;
-    oldN = g_logTaskN[p];
-    if (oldN <= 0) {
-        BOTC_LogTaskRestart(p);
-        return;
-    }
-    oldFirst = g_logTaskIdx[base];          // 旧序列首项锚点（无回卷时不变，回卷后必变）
-    BOTC_LogTaskStart(p);                   // 重新收集当前完整序列（覆盖同一区域）
-    newN = g_logTaskN[p];
-    if (newN <= 0) {
-        DialogControlRemoveAllItems(g_logList, PlayerGroupSingle(p));
-        g_logItems[p] = 0;
-        g_logTaskN[p] = 0;
-        g_logTaskCur[p] = 0;
-        g_logTaskFullN[p] = 0;
-        return;
-    }
-    newFirst = g_logTaskIdx[base];
-    if (newFirst == oldFirst && newN >= oldN) {
-        // 无回卷：前 oldN 项与已画内容相同，跳过已画部分，只在尾部追加新增项。
-        g_logTaskFullN[p] = 0;
-        g_logTaskCur[p] = oldN;
-        g_logTaskVer[p] = g_logVer;
-        g_logTaskVerPm[p] = g_logVerPm[p];   // 私聊版本同步：否则下一拍会被判成「又有新增」反复补齐
-        BOTC_LogTaskStep(p);
-        return;
-    }
-    // 回卷：源索引整体偏移、无法增量，完整重画（连续重画次数兜底）。
-    g_logTaskFullN[p] = g_logTaskFullN[p] + 1;
-    if (g_logTaskFullN[p] >= 3) {
-        g_logTaskN[p] = 0;
-        g_logTaskCur[p] = 0;
-        g_logTaskFullN[p] = 0;
-        BOTC_Notice(p, "日志内容更新过快，已停止整段重画；新消息会实时追加，可重新打开日志查看完整历史。");
-        return;
-    }
-    BOTC_LogTaskRestart(p);
-}
-
-void BOTC_LogTaskRestart (int p) {
-    DialogControlRemoveAllItems(g_logList, PlayerGroupSingle(p));
-    g_logItems[p] = 0;
-    BOTC_LogTaskStart(p);
-    BOTC_LogTaskStep(p);
-}
-
-// 【日志分帧 · 驱动】（用户 2026-11-16）：1/16 秒定时器，只处理有任务的玩家。
-//   每拍总预算 320 项：即便十来个人同时打开日志，也不会在某一拍里一次画几千项。
-//   【公平分帧】（用户 2026-11-17）：以前每拍都从 1 号开始，1..4 号把 320 项预算吃完，
-//     5 号以后开着大日志就一直轮不上；现在从轮转起点开始，13 拍里每人都能轮到。
-//   【自适应预算】（用户 2026-11-17）：只有一名玩家有待画任务时，把整 320 预算都给他，
-//     单人翻长日志更快；多人同时加载仍按每人 80 分摊，保持公平。
+// 【日志分帧 · 驱动】（用户 2026-11-18）：1/16 秒定时器，轮流服务 13 个物理玩家。
+//   每拍总预算 320 项：只有一个人在看时全给他（3600 行约 0.7 秒铺满），
+//   多人同时看按每人 80 分摊，13 拍里每人都能轮到，不互相挤占。
 bool BOTC_LogTick_Func (bool testConds, bool runActions) {
     int i;
     int p;
     int nAct;
     int left;
+    int used;
     // 【定时器函数签名】（用户 2026-11-17）：TriggerCreate 只认 bool (bool testConds, bool runActions)，
     //   以前写成 void () 时这个 1/16 秒定时器实际不跑 —— 日志补画不动、
     //   公聊 / 私聊切换冷却永远停在 4 拍，点一次之后就再也切不动了。
@@ -6914,51 +6753,52 @@ bool BOTC_LogTick_Func (bool testConds, bool runActions) {
             g_sayCool[i] = g_sayCool[i] - 1;
         }
     }
-    // 【自适应预算】（用户 2026-11-17）：先数清这一拍到底有几个玩家有待画任务
-    //   （>0 = 正在画，<0 = 待收集）。只有一人时把整 320 预算都给他，单人更快；
-    //   多人仍按每人 80 分摊，保证公平、不互相挤占。
+    // 先数这一拍有几个玩家真的有待办（刷新 / 待读 / 复盘推进），单人时把整份预算都给他。
     nAct = 0;
     for (p = 1; p <= 13; p += 1) {
-        if (g_logTaskN[p] != 0) {
+        if (!g_logOpen[p]) { continue; }
+        if (g_logRefresh[p] || g_logTaskN[p] > 0) {
             nAct = nAct + 1;
         }
+        else if (g_logRpStage[p] > 0) {
+            nAct = nAct + 1;
+        }
+    }
+    if (g_logTickNext < 1 || g_logTickNext > 13) {
+        g_logTickNext = 1;
     }
     left = 320;
     for (i = 0; i < 13; i += 1) {
         if (left <= 0) {
             return true;
         }
-        g_logTurn = g_logTurn + 1;
-        if (g_logTurn > 13) {
-            g_logTurn = 1;
-        }
-        p = g_logTurn;
-        // 【待收集】（用户 2026-11-17）：切页时只标了 -1，真正收集放到这一拍做，
-        //   点击日志页签那一下不再卡在几千行的筛选上。
-        if (g_logTaskN[p] < 0) {
-            if (!g_logOpen[p]) {
-                g_logTaskN[p] = 0;
-                continue;
-            }
-            BOTC_LogTaskStart(p);
-            if (g_logTaskN[p] <= 0) {
-                continue;
-            }
-        }
-        else if (g_logTaskN[p] <= 0) {
+        p = g_logTickNext;
+        g_logTickNext = (p % 13) + 1;
+        if (!g_logOpen[p]) { continue; }
+        // 【刷新】打开 / 换页签：这一拍真正清空列表并对齐游标，读取从下一拍开始。
+        if (g_logRefresh[p]) {
+            g_logRefresh[p] = false;
+            BOTC_LogRenderNow(p);
+            left = left - 8;
             continue;
         }
-        if (nAct == 1) {
+        // 【复盘】本阶段画完：推进到下一阶段，不递归追画。
+        if (g_logRpStage[p] > 0 && g_logTaskN[p] == 0) {
+            BOTC_RpStageNext(p);
+            left = left - 8;
+            continue;
+        }
+        if (g_logTaskN[p] <= 0) { continue; }
+        if (nAct <= 1) {
             g_logBatch = 320;
         }
         else {
             g_logBatch = 80;
         }
-        if (g_logBatch > left) {
-            g_logBatch = left;
-        }
+        if (g_logBatch > left) { g_logBatch = left; }
+        used = g_logBatch;
         BOTC_LogTaskStep(p);
-        left = left - g_logBatch;
+        left = left - (used - g_logBatch);     // 只扣真正读掉 / 画掉的条数
     }
     return true;
 }
@@ -7235,9 +7075,9 @@ void BOTC_LogOpen (int p) {
 // 关闭日志：提名阶段若能力表也没开，就把魔典放回来
 void BOTC_LogClose (int p) {
     g_logOpen[p] = false;
+    g_logRefresh[p] = false;       // 【日志分帧】关掉面板就不再继续重画
     g_logPickOn[p] = false;
     g_logTaskN[p] = 0;             // 【日志分帧】关掉面板就不再继续补画
-    g_logTaskFullN[p] = 0;
     g_logRpStage[p] = 0;           // 【复盘分帧】中途关掉复盘，阶段状态一并复位
     g_logRealName[p] = false;
     g_logRealLast[p] = false;
@@ -15128,7 +14968,7 @@ void BOTC_SayToggle (int p) {
         return;
     }
     // 【缺陷修复（2026-11-17）】下面的切换/拦截提示改用 NoticeSub：屏幕提示条照常显示，但不写日志页、
-    //   不 bump g_logVer、不触发私聊框重绘（纯 UI 状态反馈，不是聊天内容）。
+    //   不标记日志有新内容、不触发私聊框重绘（纯 UI 状态反馈，不是聊天内容）。
     // 私聊阶段：非说书人被锁定成私聊，点按钮也切不回公聊（用户 2026-09-30）
     if (g_chatMode == 1 && !g_cultOn && p != g_teller) {
         g_chatSay[p] = 1;
@@ -18998,8 +18838,12 @@ void BOTC_GameStartGo () {
         first = true;
         g_startEvilN = 0;
         for (i = 2; i <= 13; i += 1) {
+            // 【开局邪恶总数 · 按格子判定】（用户 2026-11-18）：原来用 g_who[i] >= 2，换座位后
+            //   老说书人（物理 1 号）坐进 2..13 格时会被漏算，导致堤丰之首局初始 4 名邪恶只记成 3 名，
+            //   圣洁之魂的上限跟着算成 4（应为初始 + 1 = 5）。改用 g_seatOn，与
+            //   BOTC_EvilTotalAll() / BOTC_HolySoulBlocks() 的口径保持一致。
             g_startEvil[i] = g_seatOn[i] && BOTC_SeatAlign(i) == 1;
-            if (g_who[i] >= 2 && BOTC_SeatAlign(i) == 1) {
+            if (g_startEvil[i]) {
                 g_startEvilN = g_startEvilN + 1;
             }
         }
@@ -19114,23 +18958,24 @@ void BOTC_ClearAllLogs () {
     }
     g_allPmCount = 0;
     g_pubLogCount = 0;
+    g_pubLogBase = 0;              // 【绝对基准】新局从零开始，读游标同步归位
     g_pubSeqN = 0;
     g_voteLogCount = 0;
-    g_logVer = 0;
-    g_logTurn = 0;
+    g_voteLogBase = 0;
+    g_logTickNext = 1;
     g_rpPmTmpN = 0;
     g_rpCollect = false;
     for (p = 1; p <= 13; p += 1) {
         g_pmLogCount[p] = 0;
+        g_pmLogBase[p] = 0;
+        g_logReadMain[p] = 0;
+        g_logReadPm[p] = 0;
+        g_logRefresh[p] = false;
         g_chatCount[p] = 0;
         g_logItems[p] = 0;
         g_logTaskN[p] = 0;
         g_logTaskCur[p] = 0;
-        g_logTaskVer[p] = 0;
-        g_logTaskVerPm[p] = 0;
-        g_logVerPm[p] = 0;
         g_sayCool[p] = 0;
-        g_logTaskFullN[p] = 0;
         g_logRpStage[p] = 0;
         g_logTaskLast[p] = false;
         g_logRealName[p] = false;
@@ -19619,6 +19464,13 @@ void BOTC_ResetGameVars () {
     }
     g_boomSeat = 0;
     g_boomResult = false;
+    g_boomBlastOn = false;
+    g_boomBlastN = 0;
+    g_boomBlastIdx = 0;
+    g_boomBlastTick = 0;
+    for (i = 0; i <= 13; i += 1) {
+        g_boomBlastList[i] = 0;
+    }
     g_organSeat = 0;
     g_xaanInitialOutsiders = 0;
     g_xaanPoisonOn = false;
@@ -31470,6 +31322,10 @@ void BOTC_PhaseUiForceClose () {
     }
     g_boomPending = false;
     g_boomResult = false;
+    g_boomBlastOn = false;
+    g_boomBlastN = 0;
+    g_boomBlastIdx = 0;
+    g_boomBlastTick = 0;
     g_twinPick = false;
     g_courtPick = false;
     g_scarletPick = false;
@@ -38098,6 +37954,10 @@ void BOTC_ExecAfterRps (int q) {
     if (BOTC_CorpseFirstDeath(q)) {
         BOTC_PubAnnounce("【处决】" + BOTC_NameStr(q) + " 被处决了，但他并没有死亡。");
         BOTC_PeriodRecord("---- " + BOTC_PeriodStr() + "：" + BOTC_NameStr(q) + " 被处决（没有死亡）----");
+        // 【炸弹人被处决但没死也触发】（用户 2026-11-18）
+        if (BOTC_BoomdandyTrigger(q)) {
+            return;
+        }
         if (g_phase != 0) {
             BOTC_NomCloseEx(false);
         }
@@ -38112,6 +37972,10 @@ void BOTC_ExecAfterRps (int q) {
     if (BOTC_VizierDayImmune(q)) {
         BOTC_PubAnnounce("【处决】" + BOTC_NameStr(q) + " 被处决了，但不知道为什么，他并没有死亡。");
         BOTC_PeriodRecord("---- " + BOTC_PeriodStr() + "：" + BOTC_NameStr(q) + " 被处决（没有死亡）----");
+        // 【炸弹人被处决但没死也触发】（用户 2026-11-18）
+        if (BOTC_BoomdandyTrigger(q)) {
+            return;
+        }
         if (g_phase != 0) {
             BOTC_NomCloseEx(false);
         }
@@ -38144,6 +38008,10 @@ void BOTC_ExecAfterRps (int q) {
         }
         BOTC_PubAnnounce("【处决】" + BOTC_NameStr(q) + " 被处决了，但不知道为什么，他并没有死亡。");
         BOTC_PeriodRecord("---- " + BOTC_PeriodStr() + "：" + BOTC_NameStr(q) + " 被处决（没有死亡）----");
+        // 【炸弹人被处决但没死也触发】（用户 2026-11-18）
+        if (BOTC_BoomdandyTrigger(q)) {
+            return;
+        }
         // 【处决后不自动入夜】（用户 2026-09-20）：只收掉提名环节，留在白天，由说书人自己点【进入夜晚】
         if (g_phase != 0) {
             BOTC_NomCloseEx(false);
@@ -38155,6 +38023,10 @@ void BOTC_ExecAfterRps (int q) {
         BOTC_PubAnnounce("【处决】" + BOTC_NameStr(q) + " 被处决了，但不知道为什么，他并没有死亡。");
         BOTC_PeriodRecord("---- " + BOTC_PeriodStr() + "：" + BOTC_NameStr(q) + " 被处决（没有死亡）----");
         BOTC_PmStore(g_teller, "---- " + BOTC_PeriodStr() + "：" + BOTC_NameStr(q) + " 被处决（弄臣免死）----");
+        // 【炸弹人被处决但没死也触发】（用户 2026-11-18）
+        if (BOTC_BoomdandyTrigger(q)) {
+            return;
+        }
         // 【处决后不自动入夜】（用户 2026-09-20）：只收掉提名环节，留在白天，由说书人自己点【进入夜晚】
         if (g_phase != 0) {
             BOTC_NomCloseEx(false);
@@ -38173,6 +38045,10 @@ void BOTC_ExecAfterRps (int q) {
             BOTC_PeriodRecord("---- " + BOTC_PeriodStr() + "：" + BOTC_NameStr(q) + " 被处决（没有死亡）----");
             BOTC_PmStore(g_teller, "【画皮】已阻止 " + BOTC_NameStr(q) + " 的处决死亡，画皮重获能力。");
         }
+        // 【炸弹人被处决但没死也触发】（用户 2026-11-18）
+        if (BOTC_BoomdandyTrigger(q)) {
+            return;
+        }
         if (g_phase != 0) {
             BOTC_NomCloseEx(false);
         }
@@ -38180,6 +38056,10 @@ void BOTC_ExecAfterRps (int q) {
     }
     if (g_liveCorpse[q]) {
         BOTC_LivingCorpseFinalize(q);
+        // 【炸弹人被处决后照常触发】（用户 2026-11-18）
+        if (BOTC_BoomdandyTrigger(q)) {
+            return;
+        }
         if (g_phase != 0) {
             BOTC_NomCloseEx(false);
         }
@@ -39065,6 +38945,11 @@ bool BOTC_InfoErrorOn (int q) {
     }
     if (g_liveCorpse[q]) {
         return true;
+    }
+    // 【僧侣保护】（用户 2026-11-18）：涡流 84 是恶魔能力造成的信息错误，保护期间不生效；
+    //   熊孩子的「捣蛋」170 是镇民能力，不受僧侣影响，照旧。
+    if (BOTC_MonkSafe(q)) {
+        return g_tokOn[(((g_teller * 14) + q) * 256) + 170];
     }
     return g_tokOn[(((g_teller * 14) + q) * 256) + 84] || g_tokOn[(((g_teller * 14) + q) * 256) + 170];
 }
@@ -40854,6 +40739,13 @@ bool BOTC_ProtectTokOn (int q, int t) {
     return g_tokOn[(((g_teller * 14) + q) * 256) + t];
 }
 
+// 【僧侣保护 · 恶魔非击杀效果】（用户 2026-11-18）：被僧侣保护的玩家当晚免于恶魔的非击杀类能力 ----
+//   诺-达鲺 80 / 普卡 63 / 亡骨魔 81 / 痢蛭 120 / 混沌 138 的持续中毒，以及涡流 84 的信息错误。
+//   保护标记只维持当晚，天亮由 BOTC_DawnResolve 清掉后，这些持续效果自动恢复。
+bool BOTC_MonkSafe (int q) {
+    return BOTC_ProtectTokOn(q, 9);
+}
+
 // 【这次死亡会不会被挡住】返回空字符串 = 没被挡；否则返回「是谁挡的」（给说书人看的说明）
 //   判定顺序（用户 2026-09-19）：① 来源保护 → ② 无条件免死 → ③ 处决免死 → ④ 穿透（刺客无视以上一切）
 //   kind / byDemon 就是死亡类型表里的那两个大类字段；ignoreProtect = 这次死亡带「穿透」
@@ -41107,7 +40999,16 @@ bool BOTC_SeatIsPoisonedOther (int q) {
     if (q < 1 || q > 13) {
         return false;                     // 允许 1：说书人自己那一格
     }
-    return (g_tokOn[(((g_teller * 14) + q) * 256) + 7] || g_tokOn[(((g_teller * 14) + q) * 256) + 63] || g_tokOn[(((g_teller * 14) + q) * 256) + 85] || g_tokOn[(((g_teller * 14) + q) * 256) + 80] || g_tokOn[(((g_teller * 14) + q) * 256) + 81] || g_tokOn[(((g_teller * 14) + q) * 256) + 96] || g_tokOn[(((g_teller * 14) + q) * 256) + 138] || g_tokOn[(((g_teller * 14) + q) * 256) + 169] || g_tokOn[(((g_teller * 14) + q) * 256) + 178] || g_tokOn[(((g_teller * 14) + q) * 256) + 198]);
+    // 【僧侣保护】（用户 2026-11-18）：被保护的玩家当晚免疫恶魔能力造成的中毒 ----
+    //   普卡 63 / 诺-达鲺 80 / 亡骨魔 81 / 混沌 138 都是恶魔能力；
+    //   投毒者 7、舞蛇人 85、寡妇 96、限 169、食人族 178、蛊雕 198 不是恶魔能力，照旧生效。
+    //   （痢蛭 120 在 BOTC_SeatIsPoisoned 里单独判。）
+    if (!BOTC_MonkSafe(q)) {
+        if (g_tokOn[(((g_teller * 14) + q) * 256) + 63] || g_tokOn[(((g_teller * 14) + q) * 256) + 80] || g_tokOn[(((g_teller * 14) + q) * 256) + 81] || g_tokOn[(((g_teller * 14) + q) * 256) + 138]) {
+            return true;
+        }
+    }
+    return (g_tokOn[(((g_teller * 14) + q) * 256) + 7] || g_tokOn[(((g_teller * 14) + q) * 256) + 85] || g_tokOn[(((g_teller * 14) + q) * 256) + 96] || g_tokOn[(((g_teller * 14) + q) * 256) + 169] || g_tokOn[(((g_teller * 14) + q) * 256) + 178] || g_tokOn[(((g_teller * 14) + q) * 256) + 198]);
 }
 
 // 【「中毒（痢蛭）120」现在算不算数】（用户 2026-10-11）：官网口径 ——
@@ -41152,7 +41053,7 @@ bool BOTC_SeatIsPoisoned (int q) {
     //   首夜他选的玩家身上一定带着这枚标记；但只有「那名痢蛭现在清醒」且「这名玩家能因
     //   痢蛭而中毒」时才算真的中毒。士兵 11 / 莽夫 37 不会因痢蛭中毒 —— 那两枚标记等同
     //   官方规则的「倒转放置」：只提示「被痢蛭选择过」，没有任何效果（但宿主死亡时痢蛭仍会死）。
-    if (g_tokOn[(((g_teller * 14) + q) * 256) + 120] && BOTC_LleechPoisonOn()) {
+    if (g_tokOn[(((g_teller * 14) + q) * 256) + 120] && BOTC_LleechPoisonOn() && !BOTC_MonkSafe(q)) {
         if (BOTC_SeatRealRole(q) != 11 && BOTC_SeatRealRole(q) != 37) {
             return true;
         }
@@ -42136,7 +42037,9 @@ void BOTC_BoomKeepConfirm () {
     int a;
     int b;
     int c;
-    string killed;
+    int cur;
+    int start;
+    string order;
     if (!g_boomKeepPick) {
         return;
     }
@@ -42154,65 +42057,118 @@ void BOTC_BoomKeepConfirm () {
     g_boomKeepPick = false;
     for (i = 1; i <= 13; i += 1) {
         g_boomKeep[i] = false;
+        g_boomBlastList[i] = 0;
     }
     g_boomKeep[a] = true;
     g_boomKeep[b] = true;
     g_boomKeep[c] = true;
-    // 先快照所有免死 token，再同时结算死亡，避免来源先死导致后续 token 被提前清掉。
+    // 先快照所有免死 token，避免排队期间来源先死导致后续 token 被提前清掉。
     for (q = 2; q <= 13; q += 1) {
         if (!g_seatOn[q] || BOTC_SeatDead(q) || g_boomKeep[q]) {
             continue;
         }
-        if (BOTC_BoomHasImmuneToken(q)) {
+        // 免死 / 保护 token，以及水手、痢蛭、弄臣这类「不会死亡」的能力口径。
+        if (BOTC_BoomHasImmuneToken(q) || BOTC_SailorImmune(q) || BOTC_LleechImmune(q) || (BOTC_AbilityWorks(q, 34) && !g_foolUsed[q])) {
             g_boomKeep[q] = true;
             BOTC_PmStore(g_teller, "【炸弹人】" + BOTC_NameStr(q) + " 带免死 / 保护 token，爆炸未杀死他。");
         }
     }
     g_skillPicking[1] = false;
     DialogSetVisible(g_skillDlg[1], PlayerGroupSingle(g_teller), false);
-    // 【批量公告】（用户 2026-11-16）：爆炸会连续发十来条死亡公告，先关掉逐条重画聊天窗，
-    //   全部公告进列表后一次性重画，避免同一帧做几千次 SetDialogItemText 卡住整局。
-    g_chatBatch = true;
-    BOTC_PubAnnounce("炸弹人引爆，除保留者外的玩家死亡。");
-    killed = "";
+    // 【顺序爆炸】（用户 2026-11-18）：以炸弹人为起点、顺时针（座位号递增）每 3 秒炸死一名，
+    //   跳过保留者 / 已经死亡 / 带免死 token 的座位；队列全部结算完再开 10 秒指向投票。
+    start = g_boomSeat;
+    if (start < 2 || start > 13) {
+        start = 2;
+    }
+    g_boomBlastN = 0;
+    order = "";
+    cur = start;
+    for (i = 0; i < 12; i += 1) {
+        if (cur >= 2 && cur <= 13 && g_seatOn[cur] && !BOTC_SeatDead(cur) && !g_boomKeep[cur]) {
+            g_boomBlastN = g_boomBlastN + 1;
+            g_boomBlastList[g_boomBlastN] = cur;
+            if (StringLength(order) > 0) {
+                order = order + ",";
+            }
+            order = order + BOTC_NameStr(cur);
+        }
+        cur = cur + 1;
+        if (cur > 13) {
+            cur = 2;
+        }
+    }
+    g_boomBlastIdx = 0;
+    g_boomBlastTick = 6;               // 第一名 3 秒后爆炸
+    g_boomBlastOn = (g_boomBlastN > 0);
+    BOTC_PubAnnounce("炸弹人引爆！除保留者外的玩家将依次被炸死。");
+    if (StringLength(order) > 0) {
+        BOTC_PmStore(g_teller, "【炸弹人】保留：" + BOTC_NameStr(a) + "," + BOTC_NameStr(b) + "," + BOTC_NameStr(c) + "；从 " + BOTC_NameStr(start) + " 开始顺时针依次炸死：" + order + "（每 3 秒一名）。");
+    }
+    else {
+        BOTC_PmStore(g_teller, "【炸弹人】保留：" + BOTC_NameStr(a) + "," + BOTC_NameStr(b) + "," + BOTC_NameStr(c) + "；没有需要炸死的玩家。");
+    }
+    if (!g_boomBlastOn) {
+        BOTC_BoomVoteStart();
+    }
+}
+
+// 单座爆炸死亡结算：与原来的批量循环一致，只是改成每 3 秒结算一个座位。
+void BOTC_BoomBlastKillOne (int q) {
+    int i;
+    if (q < 2 || q > 13) {
+        return;
+    }
     BOTC_PlaySfx("Marine_Death");
-    for (q = 2; q <= 13; q += 1) {
-        if (!g_seatOn[q] || BOTC_SeatDead(q) || g_boomKeep[q]) {
-            continue;
+    BOTC_MarkDeathRowTok(q, BOTC_DeathRowOf(2, 0), -1, true);
+    if (BOTC_SeatDead(q) && g_goonChosenBy[q] != 0) {
+        BOTC_GoonRelease(q);      // 【莽夫死亡】醉酒（莽夫）61 随之消失（用户 2026-11-13）
+    }
+    g_deadShown[q] = true;
+    g_deadPending[q] = false;
+    BOTC_MoonChildCheck(q);
+    BOTC_KlutzCheck(q);
+    BOTC_DeclareRender();
+    BOTC_PubAnnounce("【死亡】" + BOTC_NameStr(q) + " 死亡");
+    BOTC_PmStore(g_teller, "【死亡类型】" + BOTC_NameStr(q) + "：" + BOTC_DeadKindStr(q) + "。");
+    BOTC_PeriodRecord("---- " + BOTC_PeriodStr() + "：" + BOTC_NameStr(q) + " 死亡（炸弹人）----");
+    for (i = 1; i <= 13; i += 1) {
+        BOTC_GrimRender(i);
+    }
+}
+
+// 0.5 秒一拍：每 3 秒炸死队列里的下一名，队列全部结算完再开 10 秒指向投票。
+void BOTC_BoomBlastTick () {
+    int q;
+    if (!g_boomBlastOn) {
+        return;
+    }
+    // 爆炸途中已经分出胜负（例如呆瓜选到邪恶）：停止后续爆炸和指向投票。
+    if (g_gameOver) {
+        g_boomBlastOn = false;
+        return;
+    }
+    if (g_boomBlastTick > 0) {
+        g_boomBlastTick = g_boomBlastTick - 1;
+        if (g_boomBlastTick > 0) {
+            return;
         }
-        BOTC_MarkDeathRowTok(q, BOTC_DeathRowOf(2, 0), -1, true);
-        if (BOTC_SeatDead(q) && g_goonChosenBy[q] != 0) {
-            BOTC_GoonRelease(q);      // 【莽夫死亡】醉酒（莽夫）61 随之消失（用户 2026-11-13）
+    }
+    if (g_boomBlastIdx < g_boomBlastN) {
+        g_boomBlastIdx = g_boomBlastIdx + 1;
+        q = g_boomBlastList[g_boomBlastIdx];
+        // 排队期间目标可能已经被别的效果杀掉 / 离开：直接跳过。
+        if (q >= 2 && q <= 13 && g_seatOn[q] && !BOTC_SeatDead(q) && !g_boomKeep[q]) {
+            BOTC_BoomBlastKillOne(q);
         }
-        g_deadShown[q] = true;
-        g_deadPending[q] = false;
-        BOTC_MoonChildCheck(q);
-        BOTC_KlutzCheck(q);
-        BOTC_DeclareRender();
-        BOTC_PubAnnounce("【死亡】" + BOTC_NameStr(q) + " 死亡");
-        BOTC_PmStore(g_teller, "【死亡类型】" + BOTC_NameStr(q) + "：" + BOTC_DeadKindStr(q) + "。");
-        if (StringLength(killed) > 0) {
-            killed = killed + "、";
-        }
-        killed = killed + BOTC_NameStr(q);
     }
-    // 【炸弹人 · 日志合并写入】同一批爆炸死亡只写一条时段记录。
-    //   原来每个死亡座位各写一条，日志满时每条都要整段搬移并重绘 13 人的聊天 / 日志，
-    //   十来个座位叠加会让同一帧做几十万次搬移，卡住整局（用户 2026-11-16）。
-    if (StringLength(killed) > 0) {
-        BOTC_PeriodRecord("---- " + BOTC_PeriodStr() + "：" + killed + " 死亡（炸弹人）----");
+    if (g_boomBlastIdx >= g_boomBlastN) {
+        g_boomBlastOn = false;
+        BOTC_BoomVoteStart();
     }
-    g_chatBatch = false;
-    for (q = 1; q <= 13; q += 1) {
-        BOTC_ChatRender(q);
+    else {
+        g_boomBlastTick = 6;           // 下一名 3 秒后
     }
-    for (q = 1; q <= 13; q += 1) {
-        BOTC_GrimRender(q);
-    }
-    if (StringLength(killed) > 0) {
-        BOTC_PmStore(g_teller, "【炸弹人】保留：" + BOTC_NameStr(a) + "、" + BOTC_NameStr(b) + "、" + BOTC_NameStr(c) + "；爆炸死亡：" + killed + "。");
-    }
-    BOTC_BoomVoteStart();
 }
 
 bool BOTC_BoomdandyTrigger (int q) {
@@ -45016,8 +44972,8 @@ void BOTC_UtPickOpen (int q) {
     if (!BOTC_SkillWorks(q)) {
         BOTC_PmStore(g_teller, "【送葬者】" + BOTC_NameStr(q) + " 中毒/酒鬼/提线木偶：可以给他错误的信息。");
     }
-    // 涡流：必须给错误的信息
-    if (g_tokOn[(((g_teller * 14) + q) * 256) + 84]) {
+    // 涡流：必须给错误的信息（被僧侣保护的玩家除外）
+    if (!BOTC_MonkSafe(q) && g_tokOn[(((g_teller * 14) + q) * 256) + 84]) {
         BOTC_PmStore(g_teller, "【送葬者】" + BOTC_NameStr(q) + " 带「信息错误（涡流）」：必须给他错误的信息。");
     }
 }
@@ -52711,6 +52667,10 @@ void BOTC_JudgeAnswer (int yes) {
             if (b == 1) {
                 BOTC_PubAnnounce("【处决】" + BOTC_NameStr(a) + " 被处决了，但不知道为什么，他并没有死亡。");
                 BOTC_PeriodRecord("---- " + BOTC_PeriodStr() + "：" + BOTC_NameStr(a) + " 被处决（没有死亡）----");
+                // 【炸弹人被处决但没死也触发】（用户 2026-11-18）
+                if (BOTC_BoomdandyTrigger(a)) {
+                    return;
+                }
                 if (g_phase != 0) {
                     BOTC_NomCloseEx(false);
                 }
@@ -62575,6 +62535,10 @@ void BOTC_PacifistAnswer (int ans) {
         // 走免死流程：公屏播报 + 结束提名
         BOTC_PubAnnounce("【处决】" + BOTC_NameStr(q) + " 被处决了，但不知道为什么，他并没有死亡。");
         BOTC_PeriodRecord("---- " + BOTC_PeriodStr() + "：" + BOTC_NameStr(q) + " 被处决（没有死亡）----");
+        // 【炸弹人被处决但没死也触发】（用户 2026-11-18）
+        if (BOTC_BoomdandyTrigger(q)) {
+            return;
+        }
         if (g_phase != 0) {
             BOTC_NomCloseEx(false);
         }
@@ -71135,6 +71099,10 @@ void BOTC_SeatChangeUiCancel () {
     }
     g_boomPending = false;
     g_boomResult = false;
+    g_boomBlastOn = false;
+    g_boomBlastN = 0;
+    g_boomBlastIdx = 0;
+    g_boomBlastTick = 0;
     g_twinPick = false;
     g_courtPick = false;
     g_scarletPick = false;
@@ -88817,6 +88785,12 @@ int BOTC_BiasRolePick (int mode, int self) {
         if (mode == 1 && BOTC_RoleInPlay(r)) {
             continue;
         }
+        // 【提线木偶假身份不与已发牌角色重复】（用户 2026-11-18）：随机配板发牌瞬间座位表
+        //   可能还没填全，BOTC_RoleInPlay 会漏判在场角色，导致「贵族 + 提线木偶贵族」同时出现。
+        //   非无神论者局再按 g_scrUsed 排一遍；无神论者局允许角色重复，保持原样。
+        if (mode == 1 && !g_athDeal && g_scrUsed[r]) {
+            continue;
+        }
         tier = BOTC_BiasRoleTier(r);
         if (tier <= 3) {
             cnt[tier] = cnt[tier] + 1;
@@ -88876,6 +88850,12 @@ int BOTC_BiasRolePick (int mode, int self) {
         if (mode == 1 && BOTC_RoleInPlay(r)) {
             continue;
         }
+        // 【提线木偶假身份不与已发牌角色重复】（用户 2026-11-18）：随机配板发牌瞬间座位表
+        //   可能还没填全，BOTC_RoleInPlay 会漏判在场角色，导致「贵族 + 提线木偶贵族」同时出现。
+        //   非无神论者局再按 g_scrUsed 排一遍；无神论者局允许角色重复，保持原样。
+        if (mode == 1 && !g_athDeal && g_scrUsed[r]) {
+            continue;
+        }
         if (BOTC_BiasRoleTier(r) != want) {
             continue;
         }
@@ -88913,6 +88893,10 @@ int BOTC_MarionetteFakeRole (int self) {
             if (BOTC_RoleInPlay(r)) {
                 continue;
             }
+            // 【提线木偶假身份不与已发牌角色重复】（用户 2026-11-18）：与 BOTC_BiasRolePick 同口径。
+            if (!g_athDeal && g_scrUsed[r]) {
+                continue;
+            }
             // 【提线木偶无神论概率 5%】（用户 2026-11-12）：兜底候选池同样按 5% 保留。
             if (r == 83 && !BOTC_DealAtheistKeep(5)) {
                 continue;
@@ -88938,7 +88922,10 @@ bool BOTC_MarionetteCanSwap (int q) {
         return false;
     }
     rt = BOTC_SeatTrueRole(q);
-    if (BOTC_RoleTeam(rt) != 0 && BOTC_RoleTeam(rt) != 1) {
+    // 【堤丰之首局与爪牙互换】（用户 2026-11-18）：堤丰之首要求全部邪恶连续相邻、恶魔坐正中，
+    //   恶魔两侧本来就是爪牙。提线木偶若没挨着恶魔，必须允许和那一侧的爪牙互换，
+    //   否则会一直卡在「没有善良邻居可换」→ 提线木偶永远坐不到恶魔邻座。
+    if (BOTC_RoleTeam(rt) != 0 && BOTC_RoleTeam(rt) != 1 && BOTC_RoleTeam(rt) != 2) {
         return false;
     }
     if (g_tokOn[(((g_teller * 14) + q) * 256) + 8]) {
@@ -89906,6 +89893,10 @@ void BOTC_Deal () {
     }
     g_boomSeat = 0;
     g_boomResult = false;
+    g_boomBlastOn = false;
+    g_boomBlastN = 0;
+    g_boomBlastIdx = 0;
+    g_boomBlastTick = 0;
 
     for (i = 2; i <= 13; i += 1) {
         g_mark[(g_teller * 14) + i] = 0;
@@ -90333,7 +90324,7 @@ void BOTC_Deal () {
         BOTC_PmStore(g_teller, "【配比】赶尸人在场 → 外来者 -1、镇民 +1。");
     }
     // 【小怪宝（112）】（用户 2026-10-10）：随机发牌抽到小怪宝 → **把他移除**，那一格（恶魔位）改发一个爪牙；
-    //   小怪宝本人不会发到任何玩家手里（只有疯子「以为自己是小怪宝」时才可能出现在魔典上）。
+    //   小怪宝本人不会发到任何玩家手里（疯子也不会认知自己是小怪宝，见下面疯子认知段）。
     //   于是这一局没有「真身是恶魔」的玩家 —— 恶魔身份完全靠「是恶魔（小怪宝）」那枚 token（说书人自己挪）。
     if (demonPick == 112) {
         r = BOTC_PickBoardRole(2);
@@ -91100,6 +91091,37 @@ void BOTC_Deal () {
                 r = g_mark[(g_teller * 14) + k] - 1;
             }
         }
+        // 【场上没有恶魔 · 疯子认知卡】（用户 2026-11-18）：发牌抽到小怪宝（112）时，恶魔那一格
+        //   已经被改发爪牙（见上面 demonPick == 112 那段），魔典里找不到任何恶魔标记。
+        //   原来这里直接跳过 → 疯子的认知卡停在「疯子」自己身上，旁边又挂着「是疯子」token。
+        //   兜底：从本剧本恶魔池里随机挑另一只恶魔（用排除 112 小怪宝，疯子不认知自己是小怪宝），
+        //   候选排除全员追忆占位身份 143..146；一只都没有时退回小恶魔（21）。
+        if (r <= 0) {
+            lunN = 0;
+            lunAlt = -1;
+            for (k = 0; k < g_boardRoleN[g_board]; k += 1) {
+                pick = g_boardRole[(g_board * 256) + k];
+                if (pick < 0 || pick > 163) {
+                    continue;
+                }
+                if (pick == 112 || (pick >= 143 && pick <= 146)) {
+                    continue;
+                }
+                if (BOTC_RoleTeam(pick) != 3) {
+                    continue;
+                }
+                lunN = lunN + 1;
+                if (RandomInt(1, lunN) == 1) {
+                    lunAlt = pick;
+                }
+            }
+            if (lunAlt >= 0) {
+                r = lunAlt;
+            }
+            else {
+                r = 21;
+            }
+        }
         if (r > 0) {
             realDemon = r;
             // 【军团 × 疯子】（用户 2026-11-10）：剧本里有军团（94）和疯子（38）时，
@@ -91119,7 +91141,7 @@ void BOTC_Deal () {
                     if (pick < 0 || pick > 163) {
                         continue;
                     }
-                    if (pick >= 143 && pick <= 146) {
+                    if (pick == 112 || (pick >= 143 && pick <= 146)) {
                         continue;
                     }
                     if (BOTC_RoleTeam(pick) != 3) {
@@ -91137,7 +91159,7 @@ void BOTC_Deal () {
             else {
                 // 【疯子 · 认知恶魔】（用户 2026-11-11）：本剧本里还有别的恶魔时，有 25% 概率
                 //   让疯子以为自己是另一只恶魔；只改他魔典上的认知卡，真恶魔和真身疯子都不变。
-                //   候选只取当前板子的恶魔池，排除真恶魔和全员追忆占位身份 143..146。
+                //   候选只取当前板子的恶魔池，排除真恶魔、小怪宝（112）和全员追忆占位身份 143..146。
                 if (r == realDemon) {
                     lunN = 0;
                     lunAlt = -1;
@@ -91146,7 +91168,7 @@ void BOTC_Deal () {
                         if (pick < 0 || pick > 163) {
                             continue;
                         }
-                        if (pick == realDemon || (pick >= 143 && pick <= 146)) {
+                        if (pick == realDemon || pick == 112 || (pick >= 143 && pick <= 146)) {
                             continue;
                         }
                         if (BOTC_RoleTeam(pick) != 3) {
@@ -94515,6 +94537,8 @@ bool BOTC_Tick_Func (bool testConds, bool runActions) {
     }
     // 【间谍 / 寡妇 · 延迟看魔典】（用户 2026-11-10）：唤醒后 1..5 秒自动摊开说书人魔典
     BOTC_PeekTick();
+    // 【炸弹人 · 顺序爆炸】（用户 2026-11-18）：每 3 秒炸死一名，结算完再开指向投票
+    BOTC_BoomBlastTick();
     // 【教父 · 首夜自动告知外来者】（用户 2026-11-14）：唤醒后 1..5 秒自动私聊在场外来者
     BOTC_GfTick();
     // 【痢蛭 · 恢复清醒时宿主已死】（用户 2026-11-13，官方规则）：0.5 秒一拍，

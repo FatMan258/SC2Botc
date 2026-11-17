@@ -697,7 +697,10 @@ class LogViewerTests(unittest.TestCase):
         picker_start = source[start:end]
 
         self.assertIn("BOTC_LogPickRender(p);", picker_start)
-        self.assertIn(
+        # 【防报错】（用户 2026-11-18）：打开当拍列表还没就绪，选中行改由下一拍
+        #   BOTC_LogMenuTick 执行，这里只记录目标行。
+        self.assertIn("g_logPickSel[p] = row - 1;", picker_start)
+        self.assertNotIn(
             "DialogControlSelectItem(g_logPickList, PlayerGroupSingle(p), 0);",
             picker_start,
         )
@@ -927,9 +930,17 @@ class LogIdentityTests(unittest.TestCase):
 
         # 【日志统一拆行】（用户 2026-11-13）：日志列表统一走 BOTC_LogAddLine，
         #   由它内部调用 BOTC_LogLineText 做名字替换并处理超宽换行。
-        self.assertGreaterEqual(source.count("BOTC_LogAddLine(p,"), 20)
-        self.assertIn("g_pubLog[i], g_pubWho[i]", source)
-        self.assertIn("g_pmLog[(p * 900) + i]", source)
+        # 【流式读取】（用户 2026-11-18）：普通日志只有 LogStreamStep 一个出口，
+        #   复盘另有 LogTaskStep，其余来源不再各自拼列表项。
+        self.assertIn("BOTC_LogAddLine(p, s, who);", source)
+        for owner in ("BOTC_LogStreamStep (int p) {", "BOTC_LogTaskStep (int p) {"):
+            body = source[source.index("void " + owner):]
+            body = body[: body.index("\n}\n") + 3]
+            self.assertIn("BOTC_LogAddLine(p,", body)
+        self.assertGreaterEqual(source.count("BOTC_LogAddLine(p,"), 10)
+        self.assertIn("s = g_pubLog[i];", source)
+        self.assertIn("who = g_pubWho[i];", source)
+        self.assertIn("s = g_pmLog[idx];", source)
 
 
 class BluffPanelRegressionTests(unittest.TestCase):

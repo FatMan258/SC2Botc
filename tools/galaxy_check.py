@@ -336,6 +336,38 @@ def find_array_capacity_errors(text: str) -> list[str]:
     return errors
 
 
+def find_trigger_callback_errors(text: str) -> list[str]:
+    """TriggerCreate uses a string, so normal call checks cannot verify its ABI."""
+    clean = mask_galaxy_comments_and_strings(text)
+    signatures = {
+        match.group(2): (match.group(1), match.group(3).strip())
+        for match in re.finditer(
+            r"^(\w+)\s+(\w+)\s*\(([^;{}]*)\)\s*\{", clean, re.MULTILINE
+        )
+    }
+    errors = []
+    for call in re.finditer(r"\bTriggerCreate\s*\(\s*", clean):
+        # Strings are masked in clean; take the literal from the original text.
+        literal = re.match(r'\bTriggerCreate\s*\(\s*"(\w+)"\s*\)', text[call.start():])
+        if literal is None:
+            continue
+        name = literal.group(1)
+        if name not in signatures:
+            # Included libraries may define callbacks outside this source file.
+            if name.startswith("BOTC_"):
+                errors.append(f"TriggerCreate 注册了未定义的回调 {name}")
+            continue
+        result, params = signatures[name]
+        types = [param.strip().split()[0] for param in params.split(",") if param.strip()]
+        if result != "bool" or types != ["bool", "bool"]:
+            line = text.count("\n", 0, call.start()) + 1
+            errors.append(
+                f"第 {line} 行 TriggerCreate 回调 {name} 的签名为 {result} ({params})，"
+                "必须为 bool (bool testConds, bool runActions)"
+            )
+    return errors
+
+
 def check_script(path: Path) -> tuple[list[str], list[str]]:
     path = require_file(Path(path), "Galaxy 脚本")
     raw = path.read_bytes()
@@ -376,6 +408,7 @@ def check_script(path: Path) -> tuple[list[str], list[str]]:
     errors.extend(find_reversed_array_declaration_errors(text))
     errors.extend(find_literal_array_index_errors(text))
     errors.extend(find_array_capacity_errors(text))
+    errors.extend(find_trigger_callback_errors(text))
 
     if "void BOTC_Init (" not in text and "void BOTC_Init()" not in text:
         errors.append("找不到 BOTC_Init()")
