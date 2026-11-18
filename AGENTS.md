@@ -434,6 +434,10 @@ rg -n -F -m 20 'BOTC_函数名' scripts\BOTC.galaxy
 - 白天 ↔ 黑夜切换解散全部私聊；私聊阶段 → 公聊阶段 / 进入提名阶段只保留说书人担任房主的
   私聊，说书人只是成员的私聊同样解散；夜间、公聊、提名阶段不得同意白天残留的私聊申请
   （`BOTC_DissolveAllSess()` / `BOTC_PmStageBlocked()`，说书人例外）。
+- 公聊 / 提名 / 夜晚阶段只能找说书人私聊：玩家向非说书人发起私聊（含加入别人的房间、
+  点说书人房间里的普通成员）一律拦下，只提示发起人，不向房主或被点成员发请求 / 提醒，
+  也不暴露对方是否正在和说书人私聊；点说书人本人或从列表选中含说书人的房间仍然只提醒
+  说书人（`BOTC_RequestChat()` / `BOTC_RequestJoinSessTo()`）。
 - 私聊阶段 → 公聊阶段切换必须先按当时是否还在私聊判断每个人的模式，再解散私聊：
   切换瞬间仍在私聊里的玩家保持【私聊】，不得自动拨回公聊；没有私聊对象时回车只弹提示，
   内容绝不进公聊（`BOTC_ChatModeSet()` / `BOTC_SayPmText()`）。
@@ -480,6 +484,14 @@ rg -n -F -m 20 'BOTC_函数名' scripts\BOTC.galaxy
   （`botc_exec_blue.dds`，按物理座位 `g_leftDeadP` 判定）。结算期间保留这些座位供全场复盘，
   由 `BOTC_WinRestart()` 调用 `BOTC_ClearLeftSeats()` 移除。`BOTC_BuildSeatList()`
   的在场判定为 `PlayerGroupHasPlayer(...) || g_leftKeepP[物理座位]`。
+- 魔典死亡叉按以下优先级取图：中途退出 → 蓝叉（`botc_exec_blue.dds`）；否则该格
+  `g_deadVoteUsed` 为真 → 黑叉（`botc_exec_black.dds`）；其余 → 红叉（`botc_exec.dds`）。
+  游戏正式开始后，登记死亡的玩家只要还没用掉死人票，就在真值行自动放一枚**所有人
+  （含说书人）都不可见**的「投票标记」token 212（由 `BOTC_DeadVoteSync()` 维护，
+  `BOTC_TokHidden()` / `BOTC_IsHiddenTok()` 固定隐藏）；`BOTC_NomTally()` 确认这一票
+  真的记进票数后立刻移除该 token，并重排全桌让红叉变黑叉。`g_deadVoteUsed` 是整局
+  一次的状态，复活不得清零，复活后再死仍是黑叉且不能再次使用死人票；中途退出玩家
+  不占投票标记。
 - 说书人退出与普通玩家一样在公聊播「离开了小镇」，并在 0.5 秒 tick 里由
   `BOTC_TellerLeftHandover()` 按 `stats.s`（说书人场次）自动交接：
   游戏未开始 → 取在场真人中 `s` 最高者；游戏进行中 → 先取死亡玩家（不分阵营）中

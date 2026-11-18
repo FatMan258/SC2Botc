@@ -21,6 +21,7 @@ bool[14]    g_leftShown;      // 这一局已经为他播过了
 //   退出造成的死亡画**蓝叉**（正常死亡仍是红叉）。两张表都按**物理座位**索引，换位时不用搬。
 bool[14]    g_leftKeepP;      // 物理座位：这一局退出后座位保留（胜利结算后统一清）
 bool[14]    g_leftDeadP;      // 物理座位：退出导致的死亡（画蓝叉）
+string[14]  g_leftNameP;      // 物理座位：退出前的真实战网名快照（退出后 PlayerName 拿不到时日志仍显示星际名）
 bool        g_leftMark;       // 【退出不触发死亡技能】（用户 2026-11-11）：正在给退出 / 掉线 / 被踢出的玩家打蓝叉
 // 【在场确认】（用户 2026-11-08）：物理座位曾经在 PlayerGroupActive() 里出现过。
 //   刚进地图那几拍 / 随机发牌重排座位的瞬间，PlayerGroupActive() 可能还没填全，
@@ -622,9 +623,6 @@ int          g_rpLCount;
 string[1000] g_rpLPm;
 int[1000]    g_rpLPmWho;
 int          g_rpLPmN;
-// 【结算日志名字快照】（用户 2026-11-13）：结算会清空随机名 / 自选名，说书人日志仍要按
-//   「昵称（星际名）」显示，所以清名前先把每个格子的昵称留一份。
-string[14]   g_logNameKeep;
 // 【复盘名字快照】（用户 2026-11-13）：复盘日志永远显示星际名，名字按结算时的座位快照取，
 //   换局洗座后看上一局复盘也不会串人。
 string[14]   g_rpSeatName;
@@ -1879,22 +1877,6 @@ int[196]    g_pairVSeen;
 int         g_regDisguiseChance;
 // 说书人专用：阵营一览按钮
 //--------------------------------------------------------------------------------------------------
-// 说书模式：false = 手动说书（所有判定由人说书人自己操作）
-//           true  = 智能说书（系统参与判定，会给邪恶角色分配伪装身份等）
-//--------------------------------------------------------------------------------------------------
-// 强制把玩家1 当成电脑（= 强制智能说书）：测试时懒得去大厅改，就把这里改成 true
-bool        g_p1ForceComputer;
-// 强制把玩家1 当成人（= 强制手动说书）：聊天里输入「手动」会点亮它；
-//   另外玩家1 真的动手点界面 / 打字时也会自动点亮（见 BOTC_Click_Func / BOTC_Chat_Func）
-bool        g_p1ForceManual;
-// 玩家1 到底是不是电脑：查一次就存下来，中途不再重查（BOTC_P1IsComputer 的缓存）
-bool        g_p1IsComp;
-bool        g_p1ChkDone;
-// 【诊断】查到的原始值，写进私聊日志方便核对：玩家类型 / 是否被 AI 接管 / AI 难度
-int         g_p1RawType;
-bool        g_p1RawAI;
-int         g_p1RawDiff;
-string      g_p1RawHandle;
 // 白天的发言时段：0 = 自由（公聊私聊都行）/ 1 = 只能私聊 / 2 = 只能公聊
 //   前 2 天由说书人（或智能说书）切成「私聊 → 公聊」，第 3 天起全程公聊；
 //   夜里和准备阶段一律是 0。
@@ -2083,6 +2065,8 @@ int         g_cfgOwner;           // 面板当前打开给哪个说书人（换�
 int         g_nameMode;           // 游戏内名称：0 自由取名 / 1 随机名称 / 2 星际名称
 int         g_nameModeFor;        // 已经从哪个说书人账号同步过（0 = 还没读）
 bool        g_nameStarMode;       // 本局使用星际名称（禁止随机名兜底）
+bool        g_testGame;           // 【测试模式】本局参与人数不足 6 人（说书人 + 5 名玩家）：提示且不记统计 / 评分
+bool        g_fakeSeatsOn;        // 【补假座位】进入地图总人数不足 6 人：魔典补满 12 个玩家座位（假座位）
 bool        g_swapOn;             // 【游戏配置 · 换座位】是否开启（默认关闭，按说书人账号保存）
 bool        g_pmVisOn;            // true = 恢复完整私聊列表；false = 非说书人只保留自己所在会话
 int         g_pmVisFor;           // 【跨局持久化】这份开关已经从哪个说书人账号读过（-1 / 0 = 还没读）
@@ -2748,6 +2732,8 @@ void   BOTC_HagBelieve (int role);
 int    BOTC_CannSeat ();                       // 【食人族（74）】坐在哪（0 = 没有）
 int    BOTC_CannAbilitySeat ();                // 借到食人族（74）能力的座位（0 = 没有）
 void   BOTC_CannSync ();                       // 食人族持续检测：同步「饱餐 / 中毒（食人族）」两枚标记
+void   BOTC_DeadVoteSync ();                   // 死人票：同步「投票标记」内部 token（所有人不可见）
+void   BOTC_DeadVoteMarkClear (int q);         // 死人票已用 / 复活：移除该座位的投票标记
 void   BOTC_CannOpen (int kind);               // 弹身份网格：只挑恶魔（疯子）
 void   BOTC_CannPick (int role);               // 说书人选完 → 食人族吃到这个能力
 void   BOTC_CannRevert ();                     // 变回食人族、摘掉「是食人族 / 是酒鬼 / 是疯子」
@@ -3473,7 +3459,7 @@ void   BOTC_WinRestart ();
 void   BOTC_BuildPromote ();
 void   BOTC_PromoteOpen ();
 void   BOTC_PromoteHide ();
-bool   BOTC_P1IsComputer ();
+
 void   BOTC_InitMode ();
 string BOTC_SeatListStr ();
 void   BOTC_ClaimOpen (int ob, int who);
@@ -4028,6 +4014,22 @@ bool BOTC_NameFallbackOk (int pid) {
     return (PlayerType(pid) == 1 || PlayerType(pid) == 2) && PlayerStatus(pid) != 2;
 }
 
+// 【真实星际名】（用户 2026-11-18）：优先 PlayerName；中途退出后拿不到时用退出前缓存的战网名。
+text BOTC_BattleNameText (int pid) {
+    string nm;
+    nm = "";
+    if (pid >= 1 && pid <= 13) {
+        // 【取消人机座位】（用户 2026-11-18）：电脑座位不显示 AI 名字，交给调用方显示「玩家N」。
+        if (PlayerType(pid) == 1) {
+            nm = TextToString(PlayerName(pid));
+        }
+        if (StringLength(nm) <= 0) {
+            nm = g_leftNameP[pid];
+        }
+    }
+    return StringToText(nm);
+}
+
 // 聊天 / 日志 / 统计里的显示名：非说书人优先用随机 / 自选名；
 // 说书人恒用战网名（换座位后也不沿用 / 继承自己原来的玩家名）。
 text BOTC_PlayerDisplayName (int pid) {
@@ -4037,16 +4039,16 @@ text BOTC_PlayerDisplayName (int pid) {
     }
     // 【点开始说书之前只显示星际名称】（用户 2026-11-13）：选剧本页面一律显示战网名
     if (g_boardOpen) {
-        return PlayerName(pid);
+        return BOTC_BattleNameText(pid);
     }
     // 【结算后也显示真实战网名】（用户 2026-11-13）：结算 / 复盘阶段所有人用星际名。
     if (g_gameOver) {
-        return PlayerName(pid);
+        return BOTC_BattleNameText(pid);
     }
     // 【说书人恒用战网名】（用户 2026-11-13）：换到说书人格的人不再显示自己原来的随机名 / 自选名，
     //   避免"说书人永远显示自己的玩家名、别人继承"的错位。
     if (pid == g_teller) {
-        return PlayerName(pid);
+        return BOTC_BattleNameText(pid);
     }
     nm = BOTC_RandomNameOf(pid);
     // 【兜底随机名】（用户 2026-11-13）：刚被换下来的旧说书人原来没有随机名，先补一个再显示。
@@ -4057,7 +4059,7 @@ text BOTC_PlayerDisplayName (int pid) {
     if (StringLength(nm) > 0) {
         return StringToText(nm);
     }
-    return PlayerName(pid);
+    return BOTC_BattleNameText(pid);
 }
 
 // 【随机取名】（用户 2026-11-12）：地图一开始就把 37 个名字洗牌后固定分配给 13 个玩家号，
@@ -4224,7 +4226,7 @@ text BOTC_SeatNameText (int pos) {
     nm = "";
     pid = g_who[pos];
     // 【结算后显示真实战网名】（用户 2026-11-13）：胜负已分就不再补随机名，避免清算时被重新随机。
-    if (!g_boardOpen && !g_gameOver && pid != g_teller) {
+    if (!g_boardOpen && !g_gameOver && !g_nameStarMode && pid != g_teller) {
         nm = BOTC_RandomNameOf(pid);
         // 【换下来的旧说书人兜底随机名】（用户 2026-11-13）：原来他没随机名 → 这里补一个，
         //   不再回退到战网名（会暴露身份）或显示空名。
@@ -4233,8 +4235,10 @@ text BOTC_SeatNameText (int pos) {
             nm = BOTC_RandomNameOf(pid);
         }
     }
+    // 【已退出玩家仍显示星际名】（用户 2026-11-18）：星际名称模式下退出后 PlayerName 可能为空，
+    //   BOTC_BattleNameText 会用退出前缓存的战网名兜底。
     if (StringLength(nm) <= 0) {
-        nm = TextToString(PlayerName(pid));
+        nm = TextToString(BOTC_BattleNameText(pid));
     }
     if (StringLength(nm) <= 0) {
         if (pos == 1) {
@@ -4281,29 +4285,6 @@ text BOTC_SeatLabelText (int pos) {
         return TextWithColor(nt, BOTC_SeatColor(pos));
     }
     return StringToText(IntToString(g_lab[pos] + g_nameNumShift) + " [") + TextWithColor(nt, BOTC_SeatColor(pos)) + StringToText("]");
-}
-
-// 【说书人视角的魔典座位名】（用户 2026-11-17）：说书人自己的魔典和伪造魔典，座位名一律显示
-//   **真实星际名称**，不显示玩家取名；公聊 / 私聊 / 日志 / 间谍与寡妇偷看的魔典仍走
-//   BOTC_SeatLabelText（显示取名），两者不能互相影响。
-text BOTC_SeatRealLabelText (int pos) {
-    string nm;
-    nm = TextToString(PlayerName(g_who[pos]));
-    if (StringLength(nm) <= 0) {
-        if (pos == 1) {
-            nm = "说书人";
-        }
-        else {
-            nm = "玩家" + IntToString(g_lab[pos]);
-        }
-    }
-    if (g_boardOpen) {
-        if (g_who[pos] == g_teller || pos == 1) {
-            return StringToText("说书人 [") + TextWithColor(StringToText(nm), BOTC_SeatColor(pos)) + StringToText("]");
-        }
-        return TextWithColor(StringToText(nm), BOTC_SeatColor(pos));
-    }
-    return StringToText(IntToString(g_lab[pos] + g_nameNumShift) + " [") + TextWithColor(StringToText(nm), BOTC_SeatColor(pos)) + StringToText("]");
 }
 
 // 【说话人占位符】（用户 2026-10-07）：公聊 / 私聊 / 邪恶小窗 / -laugh 的**说话人**不再按"格子"记，
@@ -4659,34 +4640,6 @@ text BOTC_NameSubstText (text t) {
     return t;
 }
 
-// 【日志专用】：说书人看到的其他玩家写成「[编号] 显示名（真实战网ID）」。
-text BOTC_LogPlayerNameText (int p) {
-    string shown;
-    string battle;
-    text base;
-    if (p < 1 || p > 13) {
-        return StringToText("");
-    }
-    if (p == 1 || g_who[p] == g_teller) {
-        return BOTC_PlayerNameText(p);
-    }
-    // 【结算后说书人日志仍用昵称 + 星际名】（用户 2026-11-13）：结算会清空随机名，
-    //   这里改用清名前留下的昵称快照，说书人日志格式保持「[编号] 昵称（星际名）」。
-    if (g_gameOver && StringLength(g_logNameKeep[p]) > 0) {
-        shown = g_logNameKeep[p];
-        base = StringToText(BOTC_NameTag(p)) + TextWithColor(StringToText(shown), BOTC_SeatColor(p));
-    }
-    else {
-        base = BOTC_PlayerNameText(p);
-        shown = BOTC_ChatNoColor(TextToString(BOTC_SeatNameText(p)));
-    }
-    battle = TextToString(PlayerName(g_who[p]));
-    if (StringLength(battle) <= 0 || shown == battle) {
-        return base;
-    }
-    return base + StringToText("（") + TextWithColor(StringToText(battle), Color(225, 225, 225)) + StringToText("）");
-}
-
 // 【提示条说话人】（用户 2026-11-13）：名字自带颜色标签时不再套一层座位色，
 //   避免嵌套标签把后面的聊天正文染色；普通名字仍按说话人颜色显示。
 text BOTC_SpeakerNameText (int p) {
@@ -4699,44 +4652,6 @@ text BOTC_SpeakerNameText (int p) {
         return t;
     }
     return TextWithColor(t, BOTC_SayColor(p));
-}
-
-// 与 BOTC_NameSubstText 相同的占位符替换，但玩家名走日志专用格式。
-text BOTC_LogNameSubstText (text t) {
-    int p;
-    int q;
-    int seat;
-    string h;
-    for (p = 13; p >= 2; p -= 1) {
-        t = TextReplaceWord(t, StringToText("玩家" + IntToString(p)), StringToText("@@" + IntToString(p) + "@@"), c_stringReplaceAll, true);
-        t = TextReplaceWord(t, StringToText("玩家" + IntToString(p - 1)), StringToText("@@" + IntToString(p) + "@@"), c_stringReplaceAll, true);
-    }
-    t = TextReplaceWord(t, StringToText("说书人："), StringToText("@@0@@"), c_stringReplaceAll, true);
-    for (p = 13; p >= 2; p -= 1) {
-        t = TextReplaceWord(t, StringToText("@@" + IntToString(p) + "@@"), BOTC_LogPlayerNameText(p), c_stringReplaceAll, true);
-    }
-    t = TextReplaceWord(t, StringToText("@@0@@"), BOTC_LogPlayerNameText(1) + StringToText("："), c_stringReplaceAll, true);
-    for (p = 1; p <= 13; p += 1) {
-        t = TextReplaceWord(t, StringToText(BOTC_SayToken(p)), BOTC_LogPlayerNameText(BOTC_PosOf(p)), c_stringReplaceAll, true);
-    }
-    for (p = 1; p <= 13; p += 1) {
-        // 【防报错】（用户 2026-11-13）：PlayerHandle 对电脑 / 空 / 已退出座位没有 gameUser，
-        //   直接调用会让整条渲染触发器报错中断（表现成全场按钮和聊天无响应），必须先判真人。
-        h = "";
-        if (PlayerType(p) == 1 && PlayerStatus(p) != 2) {
-            h = PlayerHandle(p);
-        }
-        if (StringLength(h) <= 0) {
-            h = TextToString(PlayerName(p));
-        }
-        if (StringLength(h) <= 0) {
-            h = "座位" + IntToString(p);
-        }
-        t = TextReplaceWord(t, StringToText(BOTC_HandleToken(p)), TextWithColor(StringToText(h), libNtve_gf_ConvertPlayerColorToColor(PlayerGetColorIndex(p, false))), c_stringReplaceAll, true);
-        t = TextReplaceWord(t, StringToText("@@HL" + IntToString(p) + "@@"), TextWithColor(StringToText("本地玩家"), libNtve_gf_ConvertPlayerColorToColor(PlayerGetColorIndex(p, false))), c_stringReplaceAll, true);
-        t = TextReplaceWord(t, StringToText("@@HN" + IntToString(p) + "@@"), TextWithColor(StringToText(h), libNtve_gf_ConvertPlayerColorToColor(PlayerGetColorIndex(p, false))), c_stringReplaceAll, true);
-    }
-    return t;
 }
 
 // 【复盘专用名字】（用户 2026-11-13）：复盘日志永远显示星际战网名，不显示随机名 / 自选名。
@@ -4857,10 +4772,9 @@ text BOTC_LogLineText (int viewer, string line, int who) {
     if (g_logRealName[viewer]) {
         t = BOTC_RealNameSubstText(viewer, t);
     }
-    else if (viewer == g_teller) {
-        t = BOTC_LogNameSubstText(t);
-    }
     else {
+        // 【日志名字跟随取名模式】（用户 2026-11-18）：说书人日志与聊天 / 魔典一致——
+        //   自由取名 / 随机名称显示昵称，星际名称显示战网名，结算后统一回退真实星际名。
         t = BOTC_NameSubstText(t);
     }
     if (who <= 0) {
@@ -4869,16 +4783,14 @@ text BOTC_LogLineText (int viewer, string line, int who) {
     return t;
 }
 
-// 【日志顶部过滤的名字】（用户 2026-11-17）：说书人日志顶部的「查看」按钮和下拉列表只显示
-//   玩家的真实星际名称，不再写成「昵称（真名）」；其他玩家看到的仍是游戏中显示取名、
-//   结算后显示真实战网名（由 BOTC_PlayerNameText 在清名后自动回退）。
+// 【日志顶部过滤的名字】与日志正文同一套取名口径（跟随取名模式，结算后回退星际名）。
 text BOTC_LogFilterText (int viewer, string line, int who) {
     text t;
     t = StringToText(line);
     if (who == 0) {
         t = BOTC_KeyColor(t);
     }
-    if (g_logRealName[viewer] || viewer == g_teller) {
+    if (g_logRealName[viewer]) {
         t = BOTC_RealNameSubstText(viewer, t);
     }
     else {
@@ -8125,8 +8037,8 @@ void BOTC_LogItemPop (int p) {
     g_logItems[p] = g_logItems[p] - 1;
 }
 
-// 【日志里名字多出的宽度】（用户 2026-11-13）：说书人看日志时名字会变成「[编号] 显示名（战网ID）」，
-//   比聊天窗预拆行时算的宽度更长；这里把每个名字占位符多出来的部分加起来，拆行时预留掉。
+// 【日志里名字多出的宽度】（用户 2026-11-13）：名字渲染后比存储时的「玩家N」占位名更长，
+//   这里把每个名字占位符多出来的部分加起来，拆行时预留掉（跟随取名模式 / 结算回退星际名）。
 int BOTC_LogNameExtra (int viewer, string s) {
     int i;
     int n;
@@ -8165,7 +8077,7 @@ int BOTC_LogNameExtra (int viewer, string s) {
                 w = w + BOTC_PlainWidth(TextToString(BOTC_RealPlayerNameText(viewer, pos))) - BOTC_NameWidth(pos);
             }
             else {
-                w = w + BOTC_PlainWidth(TextToString(BOTC_LogPlayerNameText(pos))) - BOTC_NameWidth(pos);
+                w = w + BOTC_PlainWidth(TextToString(BOTC_PlayerNameText(pos))) - BOTC_NameWidth(pos);
             }
         }
         i = end + 1;
@@ -10091,9 +10003,19 @@ void BOTC_RequestJoinSessTo (int p, int s, int tell) {
         BOTC_RefreshSessList(p);
         return;
     }
-    // 发言时段限制：公聊时间不能加入私聊（说书人本人、以及**含说书人的私聊**除外 ---- 跟发起私聊同一套破例）
-    if (g_chatMode == 2 && !g_cultOn && p != g_teller && !g_member[(s * 14) + g_teller]) {
-        BOTC_NoticeSub(p, "现在是公聊时间，不能加入私聊（跟说书人的私聊除外）。");
+    // 【非私聊阶段只能找说书人】（用户 2026-11-18）：公聊 / 提名 / 夜晚阶段，对非说书人发起私聊
+    //   一律拦下 ---- 只提示发起人，不给房主和被点的成员发请求 / 提醒；含说书人的房间也不再例外。
+    //   夜里找说书人仍走 BOTC_PmTellWant 的「只提醒说书人」。
+    if (p != g_teller && BOTC_PmStageBlocked()) {
+        if (g_isNight) {
+            BOTC_NoticeSub(p, "现在是夜晚：只能找说书人私聊，等说书人来找你。");
+        }
+        else if (g_chatMode == 2) {
+            BOTC_NoticeSub(p, "现在是公聊时间，不能加入别人的私聊；等私聊时间再找人聊（找说书人是可以的）。");
+        }
+        else {
+            BOTC_NoticeSub(p, "提名环节进行中，暂时不能加入别人的私聊（找说书人是可以的）。");
+        }
         return;
     }
     if (g_member[(s * 14) + p]) {
@@ -10903,9 +10825,7 @@ bool BOTC_ClickDo (bool testConds, bool runActions) {
         }
         return true;
     }
-    // 玩家1 真的在点界面 → 他百分之百是真人（电脑不会点）。
-    //   万一「玩家类型」那个原生函数判错了、把真人说书当成电脑，这里立刻纠回手动说书；
-    //   用聊天里的「AI」强制开启智能说书时不走这一步（那条由 g_p1ForceComputer 顶着）。
+    // 玩家1 真的在点界面 → 他百分之百是真人（电脑不会点）。智能说书已删除，这里不再切模式。
     // 胜负横幅上的【重新开始】：说书人点一下 = 清掉上一局并回到剧本选择页面（用户 2026-11-01）
     if (c == g_winBtn) {
         if (p == g_teller) {
@@ -14365,10 +14285,6 @@ bool BOTC_ChatDo (bool testConds, bool runActions) {
         BOTC_IntroTryMsg(p, msg);
         return true;
     }
-    // 切换说书模式：「AI」开智能说书、「手动」关掉。
-    //   玩家1（说书人位）和 玩家2 都能发 ---- 因为「玩家1 是电脑」时他不会打字，
-    //   而坐在玩家2 的那位（开发/测试的人）需要能把它打开。
-    //   这两条是「强制」开关，会盖过按玩家类型自动判断的结果（见 BOTC_P1IsComputer）。
     // 【查看句柄】：-handles 对所有真人开放，结果只发给发送者本人。
     if (msg == "-handles") {
         BOTC_HandleListToPm(p);
@@ -14424,8 +14340,6 @@ bool BOTC_ChatDo (bool testConds, bool runActions) {
         return true;
     }
     // 玩家1 自己打字了 → 他百分之百是真人（电脑不会打字）。
-    //   万一「玩家类型」那个原生函数判错了、把真人说书当成电脑，这里立刻纠回来。
-    //   用聊天里的「AI」强制开启时不走这一步（那条由 g_p1ForceComputer 顶着）。
     // 【调试】三条现场调试指令（只有玩家1 / 玩家2 能用）：
     //   style <样式名>  → 换「大提示」的字体样式并立刻弹一条「夜晚 1」试看
     //   big <文字>      → 直接用大提示弹一行字（试位置 / 试大小）
@@ -17607,7 +17521,7 @@ void BOTC_NightGo () {
         BOTC_VizierAnnounce();
         // 【决赛圈声望】（用户 2026-11-05）：进入白天后场上只剩 4 / 3 人，视为决赛圈，
         //   给当前说书人 +50 声望；每局最多一次（先在 4 人时加过，第二天 3 人不再加）。
-        if (g_started && !g_gameOver && !g_finalRepDone) {
+        if (g_started && !g_gameOver && !g_finalRepDone && !g_testGame) {
             alive = BOTC_AliveCountTrue();
             if (alive == 4 || alive == 3) {
                 g_finalRepDone = true;
@@ -18940,6 +18854,14 @@ void BOTC_GameStartGo () {
     // 【正式开局 · 首夜标记】（用户 2026-11-09）：占卜师 / 半兽人 / 解谜大师 / 水手 / 弄臣 /
     //   茶艺师 / 酒保 / 暴风捕手 全部改到这一刻结算；配板 / 随机发牌 / 确认发放不再提前打标记。
     BOTC_OpeningMarkSync();
+    // 【测试模式 · 人数不足 6 人】（用户 2026-11-18）：说书人 + 5 名真玩家才算正常局；
+    //   进图时不足 6 人的对局标记为测试模式：公聊提示，且不记场次统计与说书人评分。
+    //   电脑座位已取消参与（见 BOTC_BuildSeatList），不再作为测试模式判据。
+    BOTC_BuildSeatList();
+    g_testGame = g_fakeSeatsOn;
+    if (g_testGame) {
+        BOTC_PubAnnounce("【测试模式】本局人数不足 6 人（说书人 + 5 名玩家），不记录场次统计、积分与说书人评分。");
+    }
     g_started = true;
     g_isNight = true;
     // 【复盘】（用户 2026-11-11）：开局真实身份 / 认知偏差 / 阵营快照（必须在首个夜晚结算前拍下来）
@@ -19087,6 +19009,7 @@ void BOTC_ResetGameVars () {
     BOTC_RpSaveLast();
     BOTC_RpClear();
     g_statsDone = false;           // 新一局重新允许结算统计累计
+    g_testGame = false;            // 【测试模式】新一局按实际人数重新判定
     // 【每局刷新统计快照】（用户 2026-11-13）：下一局开局重取一次，统计页才会看到上一局结算后的新数字。
     g_statSnapOk = false;
     // 【提名阶段消息类声称预输入】（用户 2026-11-14）：新局清空待公布队列
@@ -19098,6 +19021,7 @@ void BOTC_ResetGameVars () {
     for (i = 1; i <= 13; i += 1) {
         g_leftKeepP[i] = false;
         g_leftDeadP[i] = false;
+        g_leftNameP[i] = "";           // 【中途退出】星际名快照不跨局
         g_ratedP[i] = false;           // 【说书人评分】新一局重新允许评分
         g_blockPick[i] = false;        // 【屏蔽】新一局不保留选人模式
         g_seatPickSec[i] = 0;          // 【选座超时】新一局重新计时
@@ -30130,6 +30054,9 @@ g_tokName[119] = "即将被处决（军团）"; g_tokShort[119] = "即将被处�
     g_tokName[210] = "死亡（精神病患者）";    g_tokShort[210] = "死亡";        g_tokIcon[210] = "botc_tk84.dds"; g_tokRole[210] = 84;
     // 【魔像（81）· 提名击杀死亡】（用户 2026-11-13）：专属死亡标记，用角色自己的 token 图标
     g_tokName[211] = "死亡（魔像）";          g_tokShort[211] = "死亡";        g_tokIcon[211] = "botc_tk81.dds"; g_tokRole[211] = 81;
+    // 【死人票 · 投票标记】（用户 2026-11-18）：死亡后自动记在真值行，仅作内部记账，所有玩家（含说书人）都不可见；
+    //   用掉唯一的死人票后立即移除，魔典上的红叉同步变成黑叉。
+    g_tokName[212] = "投票标记（死人票）";    g_tokShort[212] = "";           g_tokIcon[212] = ""; g_tokRole[212] = -1;
 
     // 【token 面板排序】名字全部登记完之后生成一次：死亡前置 → 免死 → 其余名称升序
     BOTC_TokOrderBuild();
@@ -31222,9 +31149,23 @@ bool BOTC_PlayerHere (int p) {
 
 // 参与座位表：玩家 2..13 里真正在游戏中的座位，写进 g_seatList[0..g_seatN-1]。
 // 发牌、开始校验、圆桌摆位都用这一套，避免「空位」和「在场玩家」对不上。
+// 【真人数量】（用户 2026-11-18）：只数真玩家，电脑 / 空位 / 已退出都不算。
+int BOTC_HumanN () {
+    int i;
+    int n;
+    n = 0;
+    for (i = 1; i <= 13; i += 1) {
+        if (PlayerType(i) == 1 && PlayerStatus(i) != 2) {
+            n = n + 1;
+        }
+    }
+    return n;
+}
+
 void BOTC_BuildSeatList () {
     int i;
     int n;
+    int j;
     playergroup ag;
 
     ag = PlayerGroupActive();
@@ -31243,15 +31184,30 @@ void BOTC_BuildSeatList () {
         // 【强制退出 / 掉线 / 原生投票踢出】（用户 2026-11-07）：这三类不一定会让
         //   PlayerStatus 变成 2，原条件会把座位直接删掉。已开局时只要这一格上一轮还在场、
         //   而人已经不在游戏里，就先保留座位，等 BOTC_LeftCheck() 补播报和蓝叉。
-        if ((PlayerGroupHasPlayer(ag, g_who[i]) || g_leftKeepP[g_who[i]] || (g_started && g_seatOn[i] && !BOTC_PlayerHere(g_who[i]))) && g_who[i] != g_hideSeat) {
+        // 【取消人机座位】（用户 2026-11-18）：电脑座位不进入魔典 / 发牌 / 投票，只认真玩家。
+        if (((PlayerGroupHasPlayer(ag, g_who[i]) && PlayerType(g_who[i]) == 1) || g_leftKeepP[g_who[i]] || (g_started && g_seatOn[i] && !BOTC_PlayerHere(g_who[i]))) && g_who[i] != g_hideSeat) {
             g_seatList[n] = i;
             n = n + 1;
         }
     }
-    if (n < 2) {
-        // 单人测试（只有说书人在场）：按满桌 12 席处理，方便调试
-        n = 0;
+    // 【人数不足 6 人补满假座位】（用户 2026-11-18）：进图总人数（含说书人）不足 6 人时，
+    //   把魔典玩家座位补到 12 个；补出来的只是假座位，不对应任何真玩家，也不参与真人统计。
+    if (g_fakeSeatsOn) {
         for (i = 2; i <= 13; i += 1) {
+            if (n >= 12) {
+                break;
+            }
+            if (i == g_hideSeat) {
+                continue;
+            }
+            for (j = 0; j < n; j += 1) {
+                if (g_seatList[j] == i) {
+                    break;
+                }
+            }
+            if (j < n) {
+                continue;
+            }
             g_seatList[n] = i;
             n = n + 1;
         }
@@ -31736,8 +31692,12 @@ void BOTC_GrimRelayout () {
             DialogControlSetVisible(g_grimDead[q], PlayerGroupAll(), BOTC_PublicDead(q));
             // 【退出导致的死亡画蓝叉】（用户 2026-11-01）：按物理座位记，换位后仍跟着人；
             //   正常死亡的座位继续用红叉。图片控件是全局共享的，这里按座位重新贴一次。
+            // 【死人票用掉后画黑叉】（用户 2026-11-18）：红叉 → 黑叉，全桌可见；退出玩家仍优先蓝叉。
             if (g_leftDeadP[g_who[q]]) {
                 libNtve_gf_SetDialogItemImage(g_grimDead[q], "botc_exec_blue.dds", PlayerGroupAll());
+            }
+            else if (g_deadVoteUsed[q]) {
+                libNtve_gf_SetDialogItemImage(g_grimDead[q], "botc_exec_black.dds", PlayerGroupAll());
             }
             else {
                 libNtve_gf_SetDialogItemImage(g_grimDead[q], "botc_exec.dds", PlayerGroupAll());
@@ -31836,8 +31796,8 @@ void BOTC_FakeRender () {
             libNtve_gf_SetDialogItemImage(g_fakeIcon[q], "botc_blank.dds", PlayerGroupSingle(g_teller));
         }
         libNtve_gf_SetDialogItemStyle(g_fakeRole[q], g_grimNameStyle, PlayerGroupSingle(g_teller));
-        // 【伪造魔典同样显示真实战网名】（用户 2026-11-17）：伪造魔典只有说书人可见。
-        libNtve_gf_SetDialogItemText(g_fakeName[q], BOTC_SeatRealLabelText(q), PlayerGroupSingle(g_teller));
+        // 【伪造魔典座位名跟随取名模式】（用户 2026-11-18）：与真实魔典保持同一口径。
+        libNtve_gf_SetDialogItemText(g_fakeName[q], BOTC_SeatLabelText(q), PlayerGroupSingle(g_teller));
         libNtve_gf_SetDialogItemStyle(g_fakeName[q], g_grimNameStyle, PlayerGroupSingle(g_teller));
         n = 0;
         for (k = 0; k < 2; k += 1) {
@@ -34809,6 +34769,7 @@ void BOTC_GrimRender (int ob) {
         //   中途被创造出来的食人族都会在下一次重画时自动补上标记。
         if (!fake) {
             BOTC_CannSync();
+            BOTC_DeadVoteSync();
         }
     }
     // 【换座位后的说书人也要看得见自己那格的头像】（用户 2026-10-18）：按「现在的」说书人设一次
@@ -34850,7 +34811,7 @@ void BOTC_GrimRender (int ob) {
     n = 0;
     for (k = 0; k < 2; k += 1) {
         for (t = 0; t < 256; t += 1) {
-            if (t == 18 || g_tokName[t] == "") {
+            if (t == 18 || t == 212 || g_tokName[t] == "") {
                 continue;
             }
             if (snap) {
@@ -34938,16 +34899,24 @@ void BOTC_GrimRender (int ob) {
         //   【换位 BUG】（用户 2026-10-07 报「换完我坐的那格不显示我的战网名」）：名字必须取
         //   `g_who[q]`（这个位置现在坐的**人**），不能写 `PlayerName(q)`（那是物理座位 q 上的人，
         //   换说书人时人对调了、物理座位没动 → 会显示成对方的名字）。颜色仍按位置 g_seatColor[q]。
-        // 【说书人看真实战网名】（用户 2026-11-17）：只有说书人自己那份魔典改成真实星际名称；
-        //   间谍 / 寡妇偷看（ob 不是说书人）仍显示玩家取名。
-        if (ob == g_teller) {
-            libNtve_gf_SetDialogItemText(g_grimName[q], BOTC_SeatRealLabelText(q), PlayerGroupSingle(ob));
-        }
-        else {
-            libNtve_gf_SetDialogItemText(g_grimName[q], BOTC_SeatLabelText(q), PlayerGroupSingle(ob));
-        }
+        // 【魔典座位名统一跟随取名模式】（用户 2026-11-18）：说书人自己的魔典与间谍 / 寡妇偷看
+        //   使用同一套名字——名称模式显示昵称 / 星际名称，结算后自动回退真实星际名。
+        libNtve_gf_SetDialogItemText(g_grimName[q], BOTC_SeatLabelText(q), PlayerGroupSingle(ob));
         // 【不再标「已退出」】（用户 2026-11-03）：进行中退出只保留座位和名字，不额外加退出后缀。
         libNtve_gf_SetDialogItemStyle(g_grimName[q], g_grimNameStyle, PlayerGroupSingle(ob));
+        // 【死人票用掉后画黑叉】（用户 2026-11-18）：每个观察者重画时按同一口径贴图，
+        //   退出玩家仍优先蓝叉；普通死亡是红叉。
+        if (!fake) {
+            if (g_who[q] >= 1 && g_who[q] <= 13 && g_leftDeadP[g_who[q]]) {
+                libNtve_gf_SetDialogItemImage(g_grimDead[q], "botc_exec_blue.dds", PlayerGroupSingle(ob));
+            }
+            else if (g_deadVoteUsed[q]) {
+                libNtve_gf_SetDialogItemImage(g_grimDead[q], "botc_exec_black.dds", PlayerGroupSingle(ob));
+            }
+            else {
+                libNtve_gf_SetDialogItemImage(g_grimDead[q], "botc_exec.dds", PlayerGroupSingle(ob));
+            }
+        }
         // 死亡红叉：只有「公开死亡」（处决 / 死亡标记 / 小恶魔天亮刀 / 猎手射中）才给全桌显示；
         //   单纯用死亡 token 记的（只给技能检测用）别人看不到红叉
         DialogControlSetVisible(g_grimDead[q], PlayerGroupSingle(ob), (!fake && BOTC_PublicDead(q) && g_seatOn[q]));
@@ -38531,6 +38500,10 @@ bool BOTC_TokHidden (int t, int ob) {
     if (t < 0 || t > 255) {
         return true;
     }
+    // 【死人票 · 投票标记 212】内部记账，所有人（含说书人）都不可见。
+    if (t == 212) {
+        return true;
+    }
     if (t == 18 || g_tokName[t] == "") {
         return true;
     }
@@ -38582,6 +38555,10 @@ bool BOTC_IsHiddenTok (int t) {
     }
     if (t == 18) {
         return true;               // 内部记账槽（镇长弹刀）
+    }
+    // 【死人票 · 投票标记 212】内部记账，所有人（含说书人）都不可见。
+    if (t == 212) {
+        return true;
     }
     // 14 / 15 = 善良 / 邪恶（用户 2026-09-20：重新启用 ---- 这两个 token 现在是能打的）
     //   莽夫（37）转变阵营就是用「邪恶」那一格记的，判胜负时 BOTC_WinAlignOf 会读它。
@@ -38713,6 +38690,35 @@ bool BOTC_SeatRegDead (int q) {
     return BOTC_SeatDead(q);
 }
 
+// 【死人票 · 投票标记 token】（用户 2026-11-18）：游戏正式开始后，任何登记为死亡的玩家（含僵怖假死）
+//   只要还没用掉唯一的死人票，就在真值行上自动放一枚「投票标记」token。
+//   这枚 token 是内部记账（BOTC_TokHidden / BOTC_IsHiddenTok 固定隐藏），所有玩家和说书人都看不到；
+//   复活、离场、用掉死人票或新局时移除。
+void BOTC_DeadVoteSync () {
+    int q;
+    bool want;
+    for (q = 2; q <= 13; q += 1) {
+        want = false;
+        if (g_started && g_seatOn[q] && g_who[q] >= 1 && g_who[q] <= 13
+                && !g_leftKeepP[g_who[q]] && !g_leftDeadP[g_who[q]]
+                && BOTC_SeatRegDead(q) && !g_deadVoteUsed[q]) {
+            want = true;
+        }
+        g_tokOn[(((g_teller * 14) + q) * 256) + 212] = want;
+    }
+}
+
+// 【死人票已用 / 复活】：把该座位的投票标记从所有观察者行里移除（正常只有真值行会写，这里整列清更稳）。
+void BOTC_DeadVoteMarkClear (int q) {
+    int ob;
+    if (q < 1 || q > 13) {
+        return;
+    }
+    for (ob = 1; ob <= 13; ob += 1) {
+        g_tokOn[(((ob * 14) + q) * 256) + 212] = false;
+    }
+}
+
 // 【疯子认知僵怖 · 第二次死亡】（用户 2026-11-16）：按僵怖的节拍照常演 ----
 //   第一次死亡后仍按僵怖节拍继续唤醒（BOTC_CanWakeAt 放行）；第二次死亡起不再自动唤醒，
 //   如同真僵怖第二次死亡。g_zombUsed 在这里借作「认知僵怖的第二次死亡已经发生」：
@@ -38754,6 +38760,7 @@ void BOTC_ClearLeftSeats () {
     for (i = 1; i <= 13; i += 1) {
         g_leftKeepP[i] = false;
         g_leftDeadP[i] = false;
+        g_leftNameP[i] = "";          // 【退出座位移除】星际名快照一起清，避免带进下一局
         // 【这里要一起把"这一格上一轮还在场"的缓存清掉】（用户 2026-11-07）：
         //   BOTC_BuildSeatList 现在会按 g_seatOn 兜底保留"人已不在游戏"的座位，
         //   不清掉的话结算后点【重新开始】座位会去不掉。
@@ -40007,6 +40014,9 @@ void BOTC_ClearDeath (int q) {
     g_deadShown[q] = false;
     g_deadPending[q] = false;
     g_bansheeSaid[q] = false;
+    // 【复活不恢复死人票】（用户 2026-11-18）：死人票一局只能用一次，复活只收掉「投票标记」，
+    //   g_deadVoteUsed 保持原值；下次再死时颜色仍按是否用过判定（用过就是黑叉）。
+    BOTC_DeadVoteMarkClear(q);
     // 僵怖（43）：复活之后他只是普通的活着，不再是「看起来死了其实活着」
     g_zombFake[q] = false;
     for (t = 0; t < g_deathN; t += 1) {
@@ -44238,31 +44248,6 @@ void BOTC_ClaimBtnRender () {
     }
 }
 
-// 【诊断】把「玩家1 是不是电脑」是怎么判出来的写进私聊日志
-//   同时写给 玩家1 和 玩家2：玩家1 是电脑时，读日志的是坐在玩家2 的那个人
-void BOTC_P1LogMode () {
-    string s;
-    string ai;
-    string verdict;
-    if (g_p1RawAI) {
-        ai = "是";
-    }
-    else {
-        ai = "否";
-    }
-    if (g_p1IsComp) {
-        verdict = "【诊断说书模式】判定：电脑说书 → 智能说书已启用";
-    }
-    else {
-        verdict = "【诊断说书模式】判定：真人说书 → 手动说书";
-    }
-    s = "【诊断说书模式】PlayerType(1)=" + IntToString(g_p1RawType) + "（实测：电脑=2 / 真人=1）｜被AI接管=" + ai + "｜难度=" + IntToString(g_p1RawDiff) + "｜句柄=" + g_p1RawHandle;
-    BOTC_DiagStore(g_teller, s);
-    BOTC_DiagStore(2, s);
-    BOTC_DiagStore(g_teller, verdict);
-    BOTC_DiagStore(2, verdict);
-}
-
 // 【临时测试】把「你」那个座位弄成猎手（索引 10）：
 //   场上本来有猎手就跟他整行对调（身份 + token），没有就跟一个镇民对调（不动配板）
 
@@ -44278,115 +44263,84 @@ void BOTC_P1LogMode () {
 // 【测试猎手弹窗】第 1 个白天：玩家2（座位 2）自动声称【猎手】、猎杀 玩家3（座位 3）
 //   开关是聊天指令 slay（真猎手）/ slayd（酒鬼猎手）/ slayp（中毒的猎手），只在第 1 个白天跑一次。
 
-// 玩家1（说书人位）是不是电脑控制？
-//   查的是原生函数（都在 TriggerLibs/natives.galaxy 里，参见桌面那份原生函数清单）：
-//     PlayerType(玩家)  → 玩家类型编号
-//     PlayerHandle(玩家) → Battle.net 句柄。**别调它**：对「没有 gameUser 的电脑座位」会直接报错，
-//       而且报错是在 BOTC_Init 里发生的 ---- 会把整条初始化打断（事件 / 计时器全不注册）。
-//     PlayerDifficulty(玩家) → AI 难度，只写进诊断日志
-//   【2026-09-16 实机实测】大厅里把玩家1 放成电脑时：PlayerType(1) = 2、句柄为空、难度 = 2。
-//     注意 `PlayerIsUnderAIControl(1)` 在这种大厅电脑上返回的是**否**（那个函数只反映
-//     「玩家被 AI 接管」这条开关，跟大厅里的电脑座位不是一回事），所以不能拿它当判据。
-//   ⚠ 不要用玩家名去猜（PlayerGetName 那类函数在编辑器里根本不存在，会直接编译不过）。
-//   三个来源，按优先级：
-//     ① g_p1ForceManual：强制当人（聊天里输入「手动」，或玩家1 自己动手了）
-//     ② g_p1ForceComputer：强制当电脑（聊天里输入「AI」，测试时懒得改大厅就用它）
-//     ③ 真身判定（缓存一次）：
-//          PlayerType = 1 → 真人（人类玩家的编号，待机房实测确认）
-//          PlayerType = 2 → 电脑（实测值）
-//          其它值 → 一律先当电脑（智能说书）；真人被误判时聊天里发「-手动」切回来
-bool BOTC_P1IsComputer () {
-    if (g_p1ForceManual) {
-        return false;
-    }
-    if (g_p1ForceComputer) {
-        return true;
-    }
-    if (!g_p1ChkDone) {
-        g_p1ChkDone = true;
-        g_p1RawType = PlayerType(1);
-        g_p1RawAI = PlayerIsUnderAIControl(1);
-        g_p1RawDiff = PlayerDifficulty(1);
-        g_p1RawHandle = "";
-        g_p1IsComp = false;
-        if (g_p1RawType == 1) {
-            g_p1IsComp = false;                    // 明确是真人
+// 【按说书人场数选说书人】（用户 2026-11-18）：队伍1 为空时，取说书人场次最高的真玩家；
+//   场数相同取玩家号较小的；电脑 / 已退出座位不参与。说书人一定是真玩家座位。
+int BOTC_PickTellerByStats () {
+    int i;
+    int best;
+    int bestS;
+    int s;
+    best = 0;
+    bestS = -1;
+    for (i = 1; i <= 13; i += 1) {
+        if (PlayerType(i) != 1 || PlayerStatus(i) == 2) {
+            continue;
         }
-        else {
-            if (g_p1RawType == 2) {
-                g_p1IsComp = true;                 // 实测：大厅里的电脑
-            }
-            else {
-                // 类型既不是 1 也不是 2 的少见情况：**绝不调 PlayerHandle** ----
-                //   PlayerHandle(1) 对「没有 gameUser 的电脑座位」会直接报错，而这一句是在
-                //   BOTC_Init 里跑的，报错会把整条初始化打断（后面所有事件 / 计时器都不注册），
-                //   表现就是「进游戏什么都不响应、AI 说书人像宕机」。
-                //   改成：这种说不清的情况一律先当**电脑**（= 智能说书），除非它已经被别的 AI 接管标志否定。
-                //   万一真人说书人被误判成电脑：聊天里发「-手动」就能切回来（见 BOTC_Chat_Func）。
-                g_p1IsComp = true;
-            }
+        // 【只读真玩家存档】（用户 2026-11-18）：不调用 BOTC_BankInit（它依赖 g_teller，此时可能还是电脑座位），
+        //   直接给每个真人座位按需 Load 一次，避免对电脑座位 BankWait 卡死。
+        g_bank[i] = BankLoad("BOTCSave2", i);
+        BankWait(g_bank[i]);
+        s = BOTC_StatsOwnGet(g_bank[i], "s");
+        if (best == 0 || s > bestS) {
+            best = i;
+            bestS = s;
         }
-        BOTC_P1LogMode();
     }
-    return g_p1IsComp;
+    return best;
 }
 
-// 设置说书模式：false = 手动说书，true = 智能说书
-//   （模式不由按钮切换，而是开局自动判定 + 选板子环节推断，见 BOTC_P1IsComputer / BOTC_BoardPick）
-
-// 开局定模式（判断方式见 BOTC_P1IsComputer 的说明）
+// 【进图定说书人】（用户 2026-11-18）：智能说书代码已删除，说书人只可能是真玩家座位。
+//   ① 大厅「队伍1」有真人 → 该玩家当说书人；
+//   ② 队伍1 为空 → 说书人场数最高的真玩家当说书人（同场数取玩家号小的）。
 void BOTC_InitMode () {
     int p;
-    // 【队伍1 = 说书人】（用户 2026-11-07）：大厅里的「队伍1」就是「说书人」队。
-    //   首次进游戏时，谁被分在队伍1 谁就当说书人（不再只看玩家1 的槽位有没有人）。
-    //   ⚠ 只在 BOTC_Init 里跑这一次；之后玩家与说书人换座位、重新开始都不再改说书人。
+    // 【进图总人数统计】（用户 2026-11-18）：说书人 + 真玩家不足 6 人 → 魔典补满 12 个假座位。
+    g_fakeSeatsOn = (BOTC_HumanN() < 6);
     p = BOTC_TeamTellerSeat();
-    if (p >= 2) {
-        g_teller = p;
-        // 【玩家1 还在场时不要把他踢出圈】（用户 2026-11-10 报「队伍1 的玩家当说书人后，
-        //   原来的说书人和新说书人共用一个名字、少一个座位号」）：
-        //   队伍1 的玩家不是玩家1 时，玩家1 只是普通玩家 —— 他应当坐进新说书人空出来的那一格，
-        //   圈里人数才不变；只有玩家1 本来就不在（不在场 / 是电脑）时才隐藏说书人原来那一格。
-        if (PlayerType(1) == 1 && PlayerStatus(1) != 2) {
-            g_hideSeat = 0;
-            g_who[1] = p;             // "说书人格"上坐的人
-            g_who[p] = 1;             // 玩家1 填进说书人原来那一格
+    if (p >= 1) {
+        if (p >= 2) {
+            g_teller = p;
+            // 【玩家1 还在场时不要把他踢出圈】（用户 2026-11-10）：队伍1 的玩家不是玩家1 时，
+            //   玩家1 只是普通玩家，应当坐进新说书人空出来的那一格；只有玩家1 本来就不在时才隐藏原来那一格。
+            if (PlayerType(1) == 1 && PlayerStatus(1) != 2) {
+                g_hideSeat = 0;
+                g_who[1] = p;             // "说书人格"上坐的人
+                g_who[p] = 1;             // 玩家1 填进说书人原来那一格
+            }
+            else {
+                g_hideSeat = p;           // 他原来那个玩家号不进圈
+                g_who[1] = p;             // "说书人格"上坐的人
+                g_who[p] = p;
+            }
+            BOTC_Notice(g_teller, "检测到你在大厅的「说书人」队伍：本局由你当说书人。");
+            BOTC_DiagStore(2, "【诊断说书模式】队伍1 的座位 " + IntToString(p) + " 当说书人");
         }
-        else {
-            g_hideSeat = p;           // 他原来那个玩家号不进圈
-            g_who[1] = p;             // "说书人格"上坐的人
-            g_who[p] = p;
-        }
-        BOTC_Notice(g_teller, "检测到你在大厅的「说书人」队伍：本局由你当说书人。");
-        BOTC_DiagStore(2, "【诊断说书模式】队伍1 的座位 " + IntToString(p) + " 当说书人（手动说书）");
         UIDisplayMessage(PlayerGroupAll(), c_messageAreaSubtitle, StringToText("本局：手动说书（队伍1 玩家当说书人）"));
         return;
     }
-    // 【玩家1 不在 → 顺位让"下一个进房间的人"当说书人】（用户 2026-10-07）：
-    //   以前"第一个进房间的人走了"会直接掉进【智能说书】那条老路（第 2 个人顶不上来）。
-    //   现在：只要场上还有真人，就由玩家号最小的那位（= 下一个进房间的）接手，模式走手动说书。
-    //   （玩家1 是**真电脑**时不算这种情况 —— 那是你自己要的智能说书。）
-    if (!(PlayerType(1) == 1 && PlayerStatus(1) != 2) && PlayerType(1) != 2) {
-        p = BOTC_FirstPresentSeat();
-        if (p >= 2) {
-            g_teller = p;
-            g_hideSeat = p;               // 他原来那个玩家号不进圈（用户 2026-10-07）
-            g_who[1] = p;                 // "说书人格"上坐的人
-            g_who[p] = p;                 // 玩家1 那一格本来就没人，保持原样
-            BOTC_Notice(g_teller, "玩家1 不在场：按进房间顺序，本局由你当说书人。");
-            BOTC_DiagStore(2, "【诊断说书模式】玩家1 不在场 → 顺位由座位 " + IntToString(p) + " 当说书人（手动说书）");
-            UIDisplayMessage(PlayerGroupAll(), c_messageAreaSubtitle, StringToText("本局：手动说书（玩家1 不在，顺位接手）"));
-            return;
-        }
+    // 【队伍1 为空 → 说书人场数最高的真玩家接手】
+    p = BOTC_PickTellerByStats();
+    if (p < 1) {
+        return;                            // 场上没有任何真人座位：保持默认，不再启用智能说书
     }
-    if (BOTC_P1IsComputer()) {
-        BOTC_Notice(g_teller, "检测到玩家1 是电脑：本局由系统自动推进。");
-        BOTC_DiagStore(2, "【诊断说书模式】检测到玩家1 是电脑：本局由系统自动推进。");
-        UIDisplayMessage(PlayerGroupAll(), c_messageAreaSubtitle, StringToText("本局：智能说书"));
+    g_teller = p;
+    if (p == 1) {
+        g_hideSeat = 0;
+        g_who[1] = 1;
+    }
+    else if (PlayerType(1) == 1 && PlayerStatus(1) != 2) {
+        g_hideSeat = 0;
+        g_who[1] = p;
+        g_who[p] = 1;                      // 玩家1 只是普通玩家，坐进说书人原来那一格
     }
     else {
-        UIDisplayMessage(PlayerGroupAll(), c_messageAreaSubtitle, StringToText("本局：手动说书"));
+        g_hideSeat = p;
+        g_who[1] = p;
+        g_who[p] = p;
     }
+    BOTC_Notice(g_teller, "大厅「说书人」队伍为空：本局按说书人场数由你当说书人。");
+    BOTC_DiagStore(2, "【诊断说书模式】队伍1 为空 → 按说书人场数由座位 " + IntToString(p) + " 当说书人");
+    UIDisplayMessage(PlayerGroupAll(), c_messageAreaSubtitle, StringToText("本局：手动说书（队伍1 为空，按说书人场数接手）"));
 }
 
 //==================================================================================================
@@ -68662,7 +68616,6 @@ void BOTC_ShowWin (int side, string why1, string why2) {
 //   政客判定问完（或者根本不需要问）之后才走到这里，全图仍然只有这一个封盘出口。
 void BOTC_WinFinalize (int side, string why1, string why2) {
     int p;
-    int q;
     // 【幂等】（2026-11-16）：BOTC_PhaseUiForceClose 在政客待答时也会调进来，
     //   WinFinalize 内部 ChatModeSet(2) 又会回调 PhaseUiForceClose → 同一局会封盘两遍。
     if (g_winFinalized) {
@@ -68677,22 +68630,11 @@ void BOTC_WinFinalize (int side, string why1, string why2) {
     BOTC_RpCapture(false);
     // 【场次统计】（用户 2026-10-20）：唯一胜负出口只记一次；此时阵营 / 说书人座位都已经确定。
     BOTC_StatsRecord(side);
-    // 【结算日志昵称快照】（用户 2026-11-13）：BOTC_ResetPlayerNames() 会清空随机名 / 自选名，
-    //   说书人日志在结算后仍要显示「昵称（星际名）」，所以清名前先把各格昵称留一份。
-    for (p = 0; p <= 13; p += 1) {
-        g_logNameKeep[p] = "";
-    }
-    for (p = 2; p <= 13; p += 1) {
-        q = g_who[p];
-        if (q >= 1 && q <= 13 && q != g_teller) {
-            g_logNameKeep[p] = BOTC_ChatNoColor(g_dispName[q]);
-        }
-    }
     // 【结算即恢复战网名】（用户 2026-11-12）：复盘仍已由上一行之前拍下；
     //   桌面和魔典从结算这一刻起显示各人的真实战网名。
     BOTC_ResetPlayerNames();
     // 【结算日志名字刷新】（用户 2026-11-13）：正开着日志的玩家立即按新口径重画
-    //   （玩家日志转星际名，说书人日志保持「昵称（星际名）」）。
+    //   （玩家与说书人日志都显示星际名）。
     for (p = 1; p <= 13; p += 1) {
         if (g_logOpen[p]) {
             BOTC_LogRender(p);
@@ -69010,6 +68952,10 @@ void BOTC_RateShowAll () {
         DialogControlSetVisible(g_rateBtn[i], PlayerGroupAll(), false);
     }
     g_rateTeller = 0;                      // 面板没发出去就作废，避免给未出场的说书人评分
+    // 【测试模式】（用户 2026-11-18）：人数不足 6 人的对局不弹说书人评分，避免污染声望。
+    if (g_testGame) {
+        return;
+    }
     if (g_teller < 1 || g_teller > 13) {
         return;
     }
@@ -71054,7 +71000,8 @@ void BOTC_ShuffleSeats () {
             }
         }
         else {
-            if (PlayerGroupHasPlayer(ag, i)) {
+            // 【取消人机座位】（用户 2026-11-18）：电脑不参与洗座位 / 发牌。
+            if (PlayerGroupHasPlayer(ag, i) && PlayerType(i) == 1) {
                 active = 1;
             }
         }
@@ -71422,7 +71369,7 @@ void BOTC_AfterSeatChange (int who) {
     //   不再只在 g_started 时补：换座位本来只允许正式开始前用，旧条件会让被换下来的旧说书人一直没名字。
     if (!g_boardOpen && !g_introOn) {
         for (p = 1; p <= 13; p += 1) {
-            if ((PlayerType(p) == 1 || PlayerType(p) == 2) && PlayerStatus(p) != 2) {
+            if (PlayerType(p) == 1 && PlayerStatus(p) != 2) {
                 BOTC_RandomNameEnsure(p);
             }
         }
@@ -72594,12 +72541,6 @@ void BOTC_BoardOpen () {
     TimerStart(g_tBoard, 30.0, false, c_timeGame);
     BOTC_MusicStart();             // 选板子时就开始循环放背景音乐（一直到正式开始才停）
     BOTC_BsBtnRender();            // 选板子页面打开时把【切换板子】收起来
-    // 【单机测试：玩家1 是电脑时自动选板并开始】（用户 2026-11-12）
-    //   这样真人坐在其他座位即可直接测试 -名字；真人玩家1不受影响。
-    if (BOTC_P1IsComputer()) {
-        BOTC_BoardSelect(1);
-        BOTC_BoardStart();
-    }
 }
 
 // 刷新选板子页面：标题、说明、板子按钮和票数（倒计时单独走 BoardTick，避免整块重刷导致闪）
@@ -72920,11 +72861,7 @@ void BOTC_BoardTimeout () {
     if (!g_boardOpen) {
         return;
     }
-    // ⚠ 这里**不再**因为「玩家1 一直没点」就自动切智能说书 ---- 真人说书人临时走开、
-    //   或只是想多看两眼板子，就会被误判成电脑，然后整局被 AI 接管（很难发现原因）。
-    //   现在判定智能说书只有两个来源（用户 2026-09-25：选板子时「别人点了」那条也删了）：
-    //     ① g_p1ForceComputer（BOTC_Init 里的手动开关 / 说书人在聊天里输入 -AI）；
-    //     ② 真身判定：玩家1 是大厅里的电脑（见 BOTC_P1IsComputer）。
+    // ⚠ 这里**不**因为「玩家1 一直没点」就自动定板子或切换说书模式（智能说书已删除）。
     // 【真人说书 · 不限时间】（用户 2026-09-21）：时间到了什么都不做，
     //   等说书人自己点一个板子；原来的「到点默认用第一个板子」已经删掉。
     return;
@@ -87476,6 +87413,11 @@ void BOTC_StatsRecord (int winSide) {
         return;
     }
     g_statsDone = true;
+    // 【测试模式】（用户 2026-11-18）：参与人数不足 6 人的对局不写场次统计 / 积分。
+    if (g_testGame) {
+        BOTC_PmStore(g_teller, "【测试模式】本局人数不足 6 人，已跳过场次统计与积分记录。");
+        return;
+    }
     // 【场次统计按玩家自己的 bank 保存】（用户 2026-10-20）：
     //   以前统一写当前说书人的 bank，导致「只有自己换到说书人座位时才会累计」。
     //   现在每名真人只把自己的场次写进 `g_bank[物理玩家号]`，统计页也逐人读取自己的 bank。
@@ -88359,7 +88301,7 @@ bool BOTC_TokVisibleFor (int ob, int t) {
     }
     // 【伪造魔典 token 面板】（用户 2026-11-07）：伪造面板列全部具名 token，不按板子过滤。
     if (g_tokFake) {
-        return (t != 18 && g_tokName[t] != "");
+        return (t != 18 && t != 212 && g_tokName[t] != "");
     }
     return !BOTC_TokHidden(t, ob);
 }
@@ -88539,7 +88481,7 @@ void BOTC_TokToggleAt (int ob, int seat, int t) {
         if (seat < 2 || seat > 13 || t < 0 || t > 255) {
             return;
         }
-        if (t == 18 || g_tokName[t] == "") {
+        if (t == 18 || t == 212 || g_tokName[t] == "") {
             return;
         }
         // 【善良 / 邪恶 相克】（用户 2026-11-08）：同一玩家身上不能同时存在这两枚，
@@ -89984,6 +89926,7 @@ void BOTC_Deal () {
         g_mark[(g_teller * 14) + i] = 0;
         // 【玩家离开游戏】那条公聊提示：新一局重新记账（用户 2026-10-02）
         g_leftShown[i] = false;
+        g_leftNameP[i] = "";           // 【中途退出】星际名快照一起清
         g_kickVote[i] = 0;             // 【投票踢人】的票也一起清（用户 2026-10-02）
         g_exec[i] = false;
         g_regTeam[i] = -1;
@@ -92957,10 +92900,12 @@ void BOTC_NomTally () {
     int alive;
     int need;
     int w;
+    bool deadVoteJustUsed;
     string s;
     yes = 0;
     no = 0;
     none = 0;
+    deadVoteJustUsed = false;
     // 只统计在场的座位：空位不算「未投」
     BOTC_BuildSeatList();
     for (t = 0; t < g_seatN; t += 1) {
@@ -92970,7 +92915,13 @@ void BOTC_NomTally () {
                 w = BOTC_BansheeVoteWeight(q);
                 yes = yes + w;
                 if (g_voteWasDead[q] && w < 2) {
-                    g_deadVoteUsed[q] = true;      // 这一票是「死后投的」而且真的记进票数了 → 他的死人票就此用掉
+                    // 【死人票用掉】（用户 2026-11-18）：这一票真的记进票数才用掉；
+                    //   立刻摘掉「投票标记」内部 token，并把全桌红叉改成黑叉。
+                    if (!g_deadVoteUsed[q]) {
+                        deadVoteJustUsed = true;
+                        BOTC_DeadVoteMarkClear(q);
+                    }
+                    g_deadVoteUsed[q] = true;
                 }
             }
             else {
@@ -92983,6 +92934,10 @@ void BOTC_NomTally () {
         if (g_vote[q] == 0) {
             none = none + 1;
         }
+    }
+    // 【死人票刚用完】：全桌重排一次圆桌，把红叉换成黑叉（图片按 g_deadVoteUsed 统一贴）。
+    if (deadVoteJustUsed) {
+        BOTC_GrimRelayout();
     }
     alive = BOTC_AliveCount();
     need = (alive + 1) / 2;
@@ -94133,6 +94088,11 @@ void BOTC_LeftCheck () {
         if (!g_seatOn[q]) {
             continue;
         }
+        // 【退出前缓存星际名】（用户 2026-11-18）：玩家退出后 PlayerName 可能拿不到，
+        //   这里趁他还在场先把真实战网名留一份，日志里已退出玩家仍能显示星际名。
+        if (g_who[q] >= 1 && g_who[q] <= 13 && StringLength(g_leftNameP[g_who[q]]) <= 0) {
+            g_leftNameP[g_who[q]] = TextToString(PlayerName(g_who[q]));
+        }
         if (BOTC_PlayerHere(g_who[q])) {        // 【座位机制】q 是格子 → 查"坐这格的人"在不在
             continue;                            //   强制退出 / 掉线 / 原生踢出也走这里判断（用户 2026-11-07）
         }
@@ -94186,6 +94146,11 @@ void BOTC_TellerLeftHandover () {
     }
     if (PlayerType(g_teller) != 1) {
         return;                            // 电脑说书人不会"退出游戏"，不触发自动交接
+    }
+    // 【退出前缓存星际名】（用户 2026-11-18）：说书人退出后 PlayerName 可能拿不到，
+    //   趁他还在场先把战网名留一份，日志里仍能显示星际名。
+    if (StringLength(g_leftNameP[g_teller]) <= 0) {
+        g_leftNameP[g_teller] = TextToString(PlayerName(g_teller));
     }
     if (g_leftShown[1]) {
         return;
@@ -95280,9 +95245,7 @@ void BOTC_Init () {
     BOTC_BuildMenuBtn();
     BOTC_BuildIntro();
 
-    // 开局定模式：玩家1是电脑就走智能说书
-    //   ⚠ 想「强制」按智能说书跑（测试时懒得去大厅把玩家1 改成电脑）：把下面这行改成 true
-    g_p1ForceComputer = false;
+    // 【进图定说书人】（用户 2026-11-18）：智能说书已删除，说书人只会是真玩家座位。
     BOTC_InitMode();
     // 【入场前不洗座位、不取随机名】（用户 2026-11-12）：先让所有人按自己的物理座位
     //   显示战网名；说书人选定板子并走完 20 秒取名阶段后才统一执行。
