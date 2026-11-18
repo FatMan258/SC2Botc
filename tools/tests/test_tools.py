@@ -414,7 +414,7 @@ class RoleSpecTests(unittest.TestCase):
             "g_tokName[201]",
             "g_tokName[202]",
             "g_tokName[204]",
-            "g_deathN = 25;",
+            "g_deathN = 26;",
             "g_deathTok[22] = 204;",
             "g_roleDeathTok[163] = 204;",
             "if (r == 163) {",
@@ -698,8 +698,9 @@ class LogViewerTests(unittest.TestCase):
 
         self.assertIn("BOTC_LogPickRender(p);", picker_start)
         # 【防报错】（用户 2026-11-18）：打开当拍列表还没就绪，选中行改由下一拍
-        #   BOTC_LogMenuTick 执行，这里只记录目标行。
-        self.assertIn("g_logPickSel[p] = row - 1;", picker_start)
+        #   BOTC_LogMenuTick 执行，这里只记录目标行；行号从 1 起算，不能再减 1。
+        self.assertIn("g_logPickSel[p] = row;", picker_start)
+        self.assertNotIn("g_logPickSel[p] = row - 1;", picker_start)
         self.assertNotIn(
             "DialogControlSelectItem(g_logPickList, PlayerGroupSingle(p), 0);",
             picker_start,
@@ -824,11 +825,8 @@ class IntroNameFlowTests(unittest.TestCase):
         self.assertEqual(source.count("BOTC_AssignRandomNames();"), 1)
         board_open = source[source.index("void BOTC_BoardOpen () {"):]
         board_open = board_open[: board_open.index("\n}\n") + 3]
-        self.assertIn("if (BOTC_P1IsComputer()) {", board_open)
-        self.assertLess(
-            board_open.index("BOTC_BoardSelect(1);"),
-            board_open.index("BOTC_BoardStart();"),
-        )
+        # 【取消人机座位】（用户 2026-11-18）：选板页不再给玩家 1 的电脑座位自动选板 / 开局。
+        self.assertNotIn("BOTC_P1IsComputer", source)
         self.assertIn("BOTC_BoardSelect(b);", source)
         self.assertIn("g_boardStartBtn = BOTC_NewButton(g_boardDlg, 280, 50, 1600, 930", source)
         self.assertIn("DialogSetPosition(g_tmShowDlg, c_anchorTopLeft, 1600, 990);", source)
@@ -911,22 +909,29 @@ class AmnesiaViewTests(unittest.TestCase):
 
 
 class LogIdentityTests(unittest.TestCase):
-    def test_only_storyteller_logs_append_real_battle_ids(self) -> None:
+    def test_log_names_follow_naming_mode_and_replay_uses_battle_ids(self) -> None:
         source = (PROJECT_ROOT / "scripts" / "BOTC.galaxy").read_text(
             encoding="utf-8-sig"
         )
-        player_name = source[source.index("text BOTC_LogPlayerNameText (int p) {"):]
-        player_name = player_name[: player_name.index("\n}\n") + 3]
-        self.assertIn("g_who[p] == g_teller", player_name)
-        self.assertIn("shown == battle", player_name)
-        self.assertIn('StringToText("（")', player_name)
-        self.assertIn('StringToText("）")', player_name)
-
+        # 【日志名字跟随取名模式】（用户 2026-11-18）：正文默认按当前取名模式替换，
+        #   只有复盘（g_logRealName）才强制使用真实战网名。
         line_text = source[source.index("text BOTC_LogLineText (int viewer, string line, int who) {"):]
         line_text = line_text[: line_text.index("\n}\n") + 3]
-        self.assertIn("viewer == g_teller", line_text)
-        self.assertIn("BOTC_LogNameSubstText(t)", line_text)
+        self.assertIn("if (g_logRealName[viewer])", line_text)
+        self.assertIn("BOTC_RealNameSubstText(viewer, t)", line_text)
         self.assertIn("BOTC_NameSubstText(t)", line_text)
+
+        battle = source[source.index("text BOTC_BattleNameText (int pid) {"):]
+        battle = battle[: battle.index("\n}\n") + 3]
+        self.assertIn("PlayerName(pid)", battle)
+        self.assertIn("g_leftNameP[pid]", battle)
+
+        display = source[source.index("text BOTC_PlayerDisplayName (int pid) {"):]
+        display = display[: display.index("\n}\n") + 3]
+        self.assertIn("if (g_boardOpen)", display)
+        self.assertIn("if (g_gameOver)", display)
+        self.assertIn("if (pid == g_teller)", display)
+        self.assertIn("BOTC_BattleNameText(pid)", display)
 
         # 【日志统一拆行】（用户 2026-11-13）：日志列表统一走 BOTC_LogAddLine，
         #   由它内部调用 BOTC_LogLineText 做名字替换并处理超宽换行。

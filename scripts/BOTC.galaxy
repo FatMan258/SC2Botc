@@ -1727,9 +1727,8 @@ int         g_widowPoison;    // 被寡妇毒的人（0 = 没有）
 // 【间谍 / 寡妇 · 唤醒延迟看魔典】（用户 2026-11-10）：唤醒后 1..5 秒自动摊开说书人魔典
 int[14]     g_peekWait;       // 剩余拍数（0.5 秒一拍；0 = 没在等）
 bool[14]    g_peekWaitWidow;  // 这次等待结束后走寡妇流程（看完选抄录 → 下毒面板）
-// 【教父 · 首夜得知外来者】（用户 2026-11-14）：唤醒后 1..5 秒弹窗让说书人确认是否照场上告知；
+// 【教父 · 首夜得知外来者】（用户 2026-11-18）：唤醒后立刻弹窗让说书人确认是否照场上告知；
 //   点取消改为说书人在角色网格里手选 0~4 个本剧本的外来者。
-int[14]     g_gfWait;         // 剩余拍数（0.5 秒一拍；0 = 没在等）
 int[14]     g_gfInfoNight;    // 已经告知过的夜数（同一夜重复唤醒不重复发）
 // 【教父 · 首夜外来者 · 说书人确认】（用户 2026-11-14）：不再自动发，先问说书人是否照场上告知；
 //   点取消改用角色网格手选 0~4 个本剧本的外来者，再取消则什么都不发。
@@ -2335,7 +2334,7 @@ string[164]  g_roleName;
 string[256]  g_tokName;
 string[256]  g_tokShort;
 string[256]  g_tokIcon;         // 这个 token 用哪张图（空 = 没有图，只显示文字）
-int[256]     g_tokOrder;        // 【token 面板排序】（用户 2026-11-17）：死亡类 → 免死类 → 其余按名称升序
+int[256]     g_tokOrder;        // 【token 面板排序】（用户 2026-11-18）：善良/邪恶 → 是X → 按来源的死亡/无敌 → 其余名称升序
 bool         g_tokOrderOk;      // g_tokOrder 是否已经生成过
 int[164]     g_roleDeathTok;    // 【角色 → 专属死亡 token】-1 = 这个角色没有专属死因，用大类 token（用户 2026-09-20）
 bool[164]    g_scrUsed;          // 随机发牌用过的身份（下标 = 身份索引；扩到 64，黯月初升 22..46 也要用）
@@ -6948,7 +6947,10 @@ void BOTC_LogPickStart (int p) {
     // 【防报错】（用户 2026-11-18）：打开当拍刚 RemoveAllItems + AddItem 完，列表还没就绪，
     //   立刻 DialogControlSelectItem 会被 SC2 当成内部选中项 -1 抛「参数超出界限」，整次点击中断。
     //   改成把目标行记到 g_logPickSel，交给下一拍 BOTC_LogMenuTick 在列表就绪后再选。
-    g_logPickSel[p] = row - 1;
+    // 【行号从 1 开始】（用户 2026-11-18）：DialogControlSelectItem 和 GetSelectedItem 一样是
+    //   1 起算，这里减 1 会让控件选中上一行 —— 再打开下拉时显示的选项整体上移一格，
+    //   而且点它以为的「所有公聊记录」时因为控件本来就停在那行、没有选中变化而毫无反应。
+    g_logPickSel[p] = row;
 }
 
 // 把下拉列表填满（用户 2026-11-18 固定顺序）：所有公聊记录 → 所有私聊记录 → 系统记录
@@ -7031,9 +7033,13 @@ void BOTC_LogMenuTick (int p) {
     if (!g_logPickOn[p]) {
         return;
     }
-    if (g_logPickSel[p] >= 0) {
-        DialogControlSelectItem(g_logPickList, PlayerGroupSingle(p), g_logPickSel[p]);
+    // 【行号从 1 起算】（用户 2026-11-18）：DialogControlSelectItem 的有效行号是 1..N，
+    //   传 0 会被 SC2 内部算成 -1 抛「参数超出界限」，而且报错会中断本线程，
+    //   所以先把 g_logPickSel 清成 -1 再调用，报错也不会下一拍反复重试。
+    if (g_logPickSel[p] >= 1) {
+        sel = g_logPickSel[p];
         g_logPickSel[p] = -1;
+        DialogControlSelectItem(g_logPickList, PlayerGroupSingle(p), sel);
     }
     sel = DialogControlGetSelectedItem(g_logPickList, p);
     if (g_logMenuSel[p] < 0) {
@@ -7894,8 +7900,11 @@ int BOTC_PlainWidth (string s) {
             if (StringSub(s, i, i + 1) == "<c" || StringSub(s, i, i + 2) == "</c" ||
                 StringSub(s, i, i + 1) == "<s" || StringSub(s, i, i + 2) == "</s") {
                 gt = StringFind(StringSub(s, i, n), ">", false);
-                if (gt >= 0) {
-                    i = i + gt + 1;
+                // 【1-based 下标】（用户 2026-11-18）：'>' 的绝对位置是 i + gt - 1，
+                //   下一个字符从 i + gt 开始；原来的 i + gt + 1 会多跳一个字，
+                //   标签后面的名字少量一个字宽、中文还会从半个字开始扫描。
+                if (gt > 0) {
+                    i = i + gt;
                     continue;
                 }
             }
@@ -7939,8 +7948,11 @@ int BOTC_TextUnitEnd (string s, int i, int n) {
     if (StringSub(s, i, i) == "<") {
         if (StringSub(s, i, i + 1) == "<c" || StringSub(s, i, i + 2) == "</c" ||
             StringSub(s, i, i + 1) == "<s" || StringSub(s, i, i + 2) == "</s") {
+            // 【1-based 下标】（用户 2026-11-18）：StringFind 命中时返回 1-based 下标，
+            //   '>' 的绝对位置是 i + gt - 1；写成 i + gt 会把 '>' 后面一个字吞进标签单元，
+            //   下一个单元又从再后一个字开始，带颜色名字的宽度会整体少算。
             gt = StringFind(StringSub(s, i, n), ">", false);
-            if (gt >= 0) { return i + gt; }
+            if (gt > 0) { return i + gt - 1; }
         }
         return i;
     }
@@ -19042,9 +19054,8 @@ void BOTC_ResetGameVars () {
         g_peekWait[i] = 0;
         g_peekWaitWidow[i] = false;
     }
-    // 【教父 · 首夜外来者 / 送葬者】（用户 2026-11-14）：新一局清空待发计时
+    // 【教父 · 首夜外来者 / 送葬者】（用户 2026-11-14）：新一局清空已告知记录
     for (i = 1; i <= 13; i += 1) {
-        g_gfWait[i] = 0;
         g_gfInfoNight[i] = 0;
         g_gfPickN[i] = 0;
         g_gfPickSeat[i] = 0;
@@ -28106,18 +28117,46 @@ void BOTC_AbilCatMark (int r, int c) {
 
 
 
-// 【token 面板排序】（用户 2026-11-17）：0 死亡类前置，1 免死类紧随其后，2 其余按名称升序
+// 【token 面板排序】（用户 2026-11-18）：置顶组的先后完全按用户给定顺序，其余按名称升序
+//   0 善良 / 1 邪恶
+//   2 是酒鬼 / 3 是疯子 / 4 是提线木偶 / 5 是炼金术士 / 6 是哲学家 / 7 是悟道者
+//   8 恶魔造成的死亡 / 9 爪牙造成的死亡 / 10 其他角色造成的死亡
+//   11 恶魔的无敌 / 12 爪牙的无敌 / 13 其他角色的无敌 / 14 其余
 int BOTC_TokSortCat (int t) {
     string nm;
+    int r;
+    int team;
     nm = g_tokName[t];
-    if (StringFind(nm, "死亡", false) == 0) { return 0; }
-    if (StringFind(nm, "死于今日", false) == 0) { return 0; }
-    if (StringFind(nm, "无敌", false) == 0) { return 1; }
-    if (StringFind(nm, "不会死亡", false) == 0) { return 1; }
-    if (StringFind(nm, "免死", false) == 0) { return 1; }
-    if (StringFind(nm, "处决不死", false) == 0) { return 1; }
-    if (StringFind(nm, "首次未死", false) == 0) { return 1; }
-    return 2;
+    if (StringCompare(nm, "善良", true) == 0) { return 0; }
+    if (StringCompare(nm, "邪恶", true) == 0) { return 1; }
+    if (StringCompare(nm, "是酒鬼", true) == 0) { return 2; }
+    if (StringCompare(nm, "是疯子", true) == 0) { return 3; }
+    if (StringCompare(nm, "是提线木偶", true) == 0) { return 4; }
+    if (StringCompare(nm, "是炼金术士", true) == 0) { return 5; }
+    if (StringCompare(nm, "是哲学家", true) == 0) { return 6; }
+    if (StringCompare(nm, "是悟道者", true) == 0) { return 7; }
+    r = g_tokRole[t];
+    team = -1;
+    if (r >= 0 && r <= 163) {
+        team = g_roleTeam[r];
+    }
+    // 【前缀判断】（用户 2026-11-18）：Galaxy 的 StringFind 是 1-based，
+    //   命中字符串开头时返回 1（不是 0）；写成 == 0 会让死亡 / 无敌分组永远不命中。
+    if (StringFind(nm, "死亡", false) == 1) {
+        if (team == 3) { return 8; }
+        if (team == 2) { return 9; }
+        return 10;
+    }
+    if (StringFind(nm, "无敌", false) == 1
+        || StringFind(nm, "不会死亡", false) == 1
+        || StringFind(nm, "免死", false) == 1
+        || StringFind(nm, "处决不死", false) == 1
+        || StringFind(nm, "首次未死", false) == 1) {
+        if (team == 3) { return 11; }
+        if (team == 2) { return 12; }
+        return 13;
+    }
+    return 14;
 }
 
 // 生成 g_tokOrder：插入排序，先类别、再名称（StringCompare）、最后槽位号
@@ -29748,7 +29787,7 @@ g_jinxCount = 139;
     // 死亡类型表：**大类** = kind（1 夜间 / 2 白天 / 3 处决）+ byDemon（是不是恶魔造成）；
     //   **小类** = 每条自己的 token 槽（面板上那一格）。大类决定判定（守鸦人 / 贤者看 kind + byDemon），
     //   小类决定「具体是哪一种死」（自刀传位只认 g_deathImp 的那一条）。
-    g_deathN = 25;    // 道士的专属死因走角色专属 token 143，不塞进大类表；牙噶巴卜 / 奥赫 / 卡扎力 / 书生 / 饕餮 / 典狱长 / 精神病患者 / 魔像见末几条
+    g_deathN = 26;    // 道士的专属死因走角色专属 token 143，不塞进大类表；牙噶巴卜 / 奥赫 / 卡扎力 / 书生 / 饕餮 / 典狱长 / 精神病患者 / 魔像 / 炸弹人见末几条
     // 大类：死亡[夜间/恶魔]
     g_deathTok[0] = 16;   g_deathKind[0] = 1;   g_deathByDemon[0] = 1;   g_deathImp[0] = 1;   // 死亡（小恶魔）---- 自刀传位只认这一条
     g_deathTok[1] = 21;   g_deathKind[1] = 1;   g_deathByDemon[1] = 1;   g_deathImp[1] = 0;   // 死亡（普卡）---- 同样夜间 / 恶魔杀，但不传位
@@ -29784,6 +29823,8 @@ g_deathTok[8] = 67;   g_deathKind[8] = 1;   g_deathByDemon[8] = 1;   g_deathImp[
     g_deathTok[23] = 210; g_deathKind[23] = 2; g_deathByDemon[23] = 0; g_deathImp[23] = 0;  // 死亡（精神病患者）：白天、非恶魔杀
     // 【魔像（81）】（用户 2026-11-13）：提名击杀用魔像自己的死亡标记，不再借用精神病患者 / 猎手那一格
     g_deathTok[24] = 211; g_deathKind[24] = 2; g_deathByDemon[24] = 0; g_deathImp[24] = 0;  // 死亡（魔像）：白天、非恶魔杀
+    // 【炸弹人（138）】（用户 2026-11-18）：爆炸死亡用炸弹人自己的死亡标记，不再借用魔像那一格
+    g_deathTok[25] = 213; g_deathKind[25] = 2; g_deathByDemon[25] = 0; g_deathImp[25] = 0;  // 死亡（炸弹人）：白天、非恶魔杀
     // 【角色 → 它专属的死亡 token】（用户 2026-09-20）：有专属死因的角色，死亡时打自己那一格；
     //   没有的（例如镇长替死）继续用大类 token（死亡（夜间·其他）这种）。
     for (i = 0; i <= 163; i += 1) {
@@ -29826,6 +29867,7 @@ g_deathTok[8] = 67;   g_deathKind[8] = 1;   g_deathByDemon[8] = 1;   g_deathImp[
     g_roleDeathTok[135] = 160;  // 卡扎力
     g_roleDeathTok[154] = 175;  // 饕餮
     g_roleDeathTok[163] = 204;  // 典狱长
+    g_roleDeathTok[138] = 213;  // 炸弹人（爆炸死亡）
 
     // 21..31 先留空：以后新板子要加 token 就从这里往后填（名字空着 = 面板里不出现这一格）
     for (i = 21; i <= 31; i += 1) {
@@ -30057,8 +30099,10 @@ g_tokName[119] = "即将被处决（军团）"; g_tokShort[119] = "即将被处�
     // 【死人票 · 投票标记】（用户 2026-11-18）：死亡后自动记在真值行，仅作内部记账，所有玩家（含说书人）都不可见；
     //   用掉唯一的死人票后立即移除，魔典上的红叉同步变成黑叉。
     g_tokName[212] = "投票标记（死人票）";    g_tokShort[212] = "";           g_tokIcon[212] = ""; g_tokRole[212] = -1;
+    // 【炸弹人（138）· 爆炸死亡】（用户 2026-11-18）：专属死亡标记，用角色自己的 token 图标
+    g_tokName[213] = "死亡（炸弹人）";        g_tokShort[213] = "死亡";        g_tokIcon[213] = "botc_tk138.dds"; g_tokRole[213] = 138;
 
-    // 【token 面板排序】名字全部登记完之后生成一次：死亡前置 → 免死 → 其余名称升序
+    // 【token 面板排序】名字全部登记完之后生成一次：按用户指定的置顶顺序，其余名称升序
     BOTC_TokOrderBuild();
 
 
@@ -42133,7 +42177,7 @@ void BOTC_BoomKeepConfirm () {
     int c;
     int cur;
     int start;
-    string order;
+    string blastOrder;
     if (!g_boomKeepPick) {
         return;
     }
@@ -42176,16 +42220,16 @@ void BOTC_BoomKeepConfirm () {
         start = 2;
     }
     g_boomBlastN = 0;
-    order = "";
+    blastOrder = "";
     cur = start;
     for (i = 0; i < 12; i += 1) {
         if (cur >= 2 && cur <= 13 && g_seatOn[cur] && !BOTC_SeatDead(cur) && !g_boomKeep[cur]) {
             g_boomBlastN = g_boomBlastN + 1;
             g_boomBlastList[g_boomBlastN] = cur;
-            if (StringLength(order) > 0) {
-                order = order + ",";
+            if (StringLength(blastOrder) > 0) {
+                blastOrder = blastOrder + ",";
             }
-            order = order + BOTC_NameStr(cur);
+            blastOrder = blastOrder + BOTC_NameStr(cur);
         }
         cur = cur + 1;
         if (cur > 13) {
@@ -42196,8 +42240,8 @@ void BOTC_BoomKeepConfirm () {
     g_boomBlastTick = 6;               // 第一名 3 秒后爆炸
     g_boomBlastOn = (g_boomBlastN > 0);
     BOTC_PubAnnounce("炸弹人引爆！除保留者外的玩家将依次被炸死。");
-    if (StringLength(order) > 0) {
-        BOTC_PmStore(g_teller, "【炸弹人】保留：" + BOTC_NameStr(a) + "," + BOTC_NameStr(b) + "," + BOTC_NameStr(c) + "；从 " + BOTC_NameStr(start) + " 开始顺时针依次炸死：" + order + "（每 3 秒一名）。");
+    if (StringLength(blastOrder) > 0) {
+        BOTC_PmStore(g_teller, "【炸弹人】保留：" + BOTC_NameStr(a) + "," + BOTC_NameStr(b) + "," + BOTC_NameStr(c) + "；从 " + BOTC_NameStr(start) + " 开始顺时针依次炸死：" + blastOrder + "（每 3 秒一名）。");
     }
     else {
         BOTC_PmStore(g_teller, "【炸弹人】保留：" + BOTC_NameStr(a) + "," + BOTC_NameStr(b) + "," + BOTC_NameStr(c) + "；没有需要炸死的玩家。");
@@ -42214,7 +42258,7 @@ void BOTC_BoomBlastKillOne (int q) {
         return;
     }
     BOTC_PlaySfx("Marine_Death");
-    BOTC_MarkDeathRowTok(q, BOTC_DeathRowOf(2, 0), -1, true);
+    BOTC_MarkDeathRowTok(q, BOTC_DeathRowByTok(213), 213, true);
     if (BOTC_SeatDead(q) && g_goonChosenBy[q] != 0) {
         BOTC_GoonRelease(q);      // 【莽夫死亡】醉酒（莽夫）61 随之消失（用户 2026-11-13）
     }
@@ -45018,11 +45062,11 @@ void BOTC_UtPickOpen (int q) {
 
 //--------------------------------------------------------------------------------------------------
 // 【教父（39）· 首夜得知所有在场外来者】（用户 2026-11-14）
-//   · 不再自动发：唤醒后延迟 1..5 秒弹窗，把场上外来者列给说书人，由他选【照此告知】或【取消：自己选】。
+//   · 不再自动发：唤醒后立刻弹窗，把场上外来者列给说书人，由他选【照此告知】或【取消：自己选】（用户 2026-11-18 去掉延迟）。
 //   · 取消 → 角色网格里多选 0~4 个本剧本的外来者（点角色切换选中），点【确定（发送）】才发出；
 //     一个都不选就点确定 = 告知「没有外来者」。
 //   · 网格再取消 / 收回唤醒 / 天亮未作答 → 什么都不发。
-//   · 中毒 / 醉酒：唤醒时在私聊提醒说书人「应当发放错误的外来者信息」。
+//   · 中毒 / 醉酒：照常弹窗，另在私聊提醒说书人「应当发放错误的外来者信息」。
 //   外来者按说书人真值行的真实身份判定，变脸师临时借来的外观不算在场。
 //--------------------------------------------------------------------------------------------------
 string BOTC_GfOutsiderList () {
@@ -45221,6 +45265,7 @@ void BOTC_GfInfoDawnClear () {
     }
 }
 
+// 【唤醒即弹】（用户 2026-11-18）：去掉 1..5 秒延迟，教父一被唤醒就直接弹给说书人。
 void BOTC_GfInfoQueue (int q) {
     if (q < 1 || q > 13) {
         return;
@@ -45228,42 +45273,10 @@ void BOTC_GfInfoQueue (int q) {
     if (g_gfInfoNight[q] == g_nightNum) {
         return;
     }
-    if (g_gfWait[q] > 0) {
+    if (g_gfAskSeat == q) {
         return;
     }
-    g_gfWait[q] = RandomInt(2, 10);       // 0.5 秒一拍：2..10 拍 = 1..5 秒
-}
-
-void BOTC_GfWaitClear (int q) {
-    if (q < 1 || q > 13) {
-        return;
-    }
-    g_gfWait[q] = 0;
-}
-
-void BOTC_GfTick () {
-    int q;
-    for (q = 1; q <= 13; q += 1) {
-        if (g_gfWait[q] <= 0) {
-            continue;
-        }
-        g_gfWait[q] = g_gfWait[q] - 1;
-        if (g_gfWait[q] > 0) {
-            continue;
-        }
-        // 到点时人已经不在夜里 / 已被收回唤醒 / 座位上没人：直接作废
-        if (!g_started || !g_isNight || !g_awake[q]) {
-            continue;
-        }
-        if (q >= 2 && (!g_seatOn[q] || BOTC_SeatDead(q))) {
-            continue;
-        }
-        // 已经在等这一位的回答就不重复弹
-        if (g_gfAskSeat == q) {
-            continue;
-        }
-        BOTC_GfAskOpen(q);
-    }
+    BOTC_GfAskOpen(q);
 }
 
 void BOTC_SpyPeek (int p) {
@@ -46402,10 +46415,11 @@ void BOTC_BuildGfRecluse () {
 //--------------------------------------------------------------------------------------------------
 // 【教父 · 首夜外来者 · 确认框】（用户 2026-11-14）：唤醒后把场上外来者列给说书人，
 //   【是：照此告知】= 直接发这份；【取消：自己选】/ 右上角 X = 打开角色网格，手选 0~4 个外来者。
-//   和上面两个判定框错开摆放，三个框同时出现时不会互相盖住。
+//   位置固定在魔典正中（用户 2026-11-18）。
 //--------------------------------------------------------------------------------------------------
 void BOTC_BuildGfAsk () {
-    DialogCreate(684, 183, c_anchorCenter, 0, -180, false);
+    // 【居中到魔典】（用户 2026-11-18）：魔典 1053 宽、贴右、纵向 -70，弹窗 684 宽，按魔典中心对齐。
+    DialogCreate(684, 183, c_anchorRight, -184, -70, false);
     g_gfAskDlg = DialogLastCreated();
     DialogSetVisible(g_gfAskDlg, PlayerGroupAll(), false);
     g_gfAskTitle = BOTC_NewLabel(g_gfAskDlg, 666, 80, 18, 10, StringToText("【教父】首夜外来者"));
@@ -58914,7 +58928,6 @@ void BOTC_WakeApply (int q, bool manual) {
     if (g_awake[q]) {
         // 【间谍 / 寡妇】（用户 2026-11-10）：收回唤醒 = 还没到点的自动看魔典一起取消
         BOTC_PeekWaitClear(q);
-        BOTC_GfWaitClear(q);           // 【教父】收回唤醒 = 还没到点的首夜外来者信息一起取消
         // 【中毒 / 醉酒间谍或寡妇】本人还没作答的「真实/伪造魔典」弹窗也一起静默作废
         if (g_fakeAskP == q) {
             BOTC_FakeAskAnswer(-2);
@@ -59212,8 +59225,8 @@ void BOTC_WakeApply (int q, bool manual) {
     if (r == 6) {
         BOTC_UtPickOpen(q);
     }
-    // 【教父（39）· 首夜得知外来者】（用户 2026-11-14）：延迟 1..5 秒后弹窗让说书人确认；
-    //   中毒 / 醉酒时在唤醒的同时私聊提醒说书人应当发错误的外来者信息。
+    // 【教父（39）· 首夜得知外来者】（用户 2026-11-18）：去掉延迟，唤醒后立刻弹窗让说书人确认；
+    //   中毒 / 醉酒时同样弹窗，并额外私聊提醒说书人应当发错误的外来者信息。
     if (r == 39 && BOTC_ActingIsFirstNight(q)) {
         if (BOTC_SeatImpaired(q)) {
             BOTC_PmStore(g_teller, "【教父】" + BOTC_NameStr(q) + " 中毒/醉酒：这次应当给他错误的外来者信息。");
@@ -67067,14 +67080,21 @@ void BOTC_TestHag (int role) {
 // 【查看某个座位】（用户 2026-09-21）：把那个座位现在的身份 / 阵营 / 标记写进说书人日志
 void BOTC_SeatDump (int q) {
     int t;
+    int oi;
     string tk;
     string st;
     string s;
     if (q < 2 || q > 13) {
         return;
     }
+    // 【查看座位 · token 顺序】（用户 2026-11-18）：和手动打 token 面板共用 g_tokOrder，
+    //   不再按 0..255 原始槽位输出，保证死亡类排在免死 / 无敌前面。
+    if (!g_tokOrderOk) {
+        BOTC_TokOrderBuild();
+    }
     tk = "";
-    for (t = 0; t < 256; t += 1) {
+    for (oi = 0; oi < 256; oi += 1) {
+        t = g_tokOrder[oi];
         if (!g_tokOn[(((g_teller * 14) + q) * 256) + t]) {
             continue;
         }
@@ -67360,7 +67380,6 @@ void BOTC_DawnResolve () {
     // 【间谍 / 寡妇 · 延迟看魔典】（用户 2026-11-10）：天亮把还没到点的自动看魔典一起取消
     for (q = 1; q <= 13; q += 1) {
         BOTC_PeekWaitClear(q);
-        BOTC_GfWaitClear(q);          // 【教父】天亮把还没到点的首夜外来者信息一起取消
     }
     // 【中毒 / 醉酒间谍或寡妇】还没作答的「真实/伪造魔典」弹窗一起静默作废
     BOTC_FakeAskAnswer(-2);
@@ -94586,8 +94605,6 @@ bool BOTC_Tick_Func (bool testConds, bool runActions) {
     BOTC_PeekTick();
     // 【炸弹人 · 顺序爆炸】（用户 2026-11-18）：每 3 秒炸死一名，结算完再开指向投票
     BOTC_BoomBlastTick();
-    // 【教父 · 首夜自动告知外来者】（用户 2026-11-14）：唤醒后 1..5 秒自动私聊在场外来者
-    BOTC_GfTick();
     // 【痢蛭 · 恢复清醒时宿主已死】（用户 2026-11-13，官方规则）：0.5 秒一拍，
     //   中毒 / 醉酒期间宿主先死 → 他一恢复清醒 / 健康就立即死亡。
     BOTC_LleechRecoverCheck();
@@ -95056,6 +95073,11 @@ void BOTC_Init () {
         //   取名阶段（随机名还没分配）走到 BOTC_SeatNameText 的 StringLength 会直接报错。
         g_dispName[i] = "";
         g_introName[i] = "";
+        // 【空串初始化 · 星际名快照】（用户 2026-11-18）：g_leftNameP 同样是全局 string 数组，默认 0。
+        //   开局 BOTC_ResetPlayerNames / BOTC_GrimRender 就会对空座位走 BOTC_BattleNameText，
+        //   未初始化时 StringToText(0) 直接报错，BOTC_Init 末尾的 BOTC_BoardOpen 整段中断，
+        //   表现为进图后所有按钮都不出现。
+        g_leftNameP[i] = "";
     }
     // 【空串初始化 · 名字快照与语音词】（用户 2026-11-18）：g_rpSeatName / g_rpSeatNameBySeat /
     //   g_mezeWord / g_yaggaWord 同样是全局 string，默认 0（null）。倒计时 BOTC_StartCdFunc 走
