@@ -51,6 +51,7 @@ int         g_kickMine;       // 【投票后保留面板】（用户 2026-11-10
 //--------------------------------------------------------------------------------------------------
 int[14]     g_pmEdit;
 int[14]     g_pmSend;
+int[14]     g_title;           // 【左上角私聊面板 · 自己的座位标题】（用户 2026-11-18）：【收起】右侧那一行
 int[14]     g_tip;
 int[14]     g_leaveBtn;
 int[14]     g_joinBtn;
@@ -529,6 +530,10 @@ int         g_logTickNext;     // 【轮转】下一拍从哪个玩家开始，�
 int         g_pubLogBase;      // 公聊日志已丢弃的最旧行数（绝对基准）
 int[14]     g_pmLogBase;       // 每人私聊日志已丢弃的最旧行数（绝对基准）
 int         g_voteLogBase;     // 投票日志已丢弃的最旧行数（绝对基准）
+// 【截断提示】（用户 2026-11-18）：日志写满回卷时累计丢了多少条，打开日志时在列表顶部明示。
+int         g_pubSkip;         // 公聊日志累计丢弃条数
+int[14]     g_pmSkip;          // 每人私聊日志累计丢弃条数
+int         g_voteSkip;        // 投票日志累计丢弃条数
 int[118272] g_logTaskIdx;      // 复盘用：每人 8448 槽（正数 = 主来源索引+1，负数 = 私聊索引+1 取反）
 int[14]     g_sayCool;         // 【切换限频】公聊 / 私聊切换冷却（单位：1/16 秒拍）
 int         g_logBatch;        // 本拍最多画多少项（多页签同时加载时由 tick 统一分配预算）
@@ -4328,6 +4333,41 @@ int BOTC_PosOf (int seat) {
     return seat;
 }
 
+// 【左上角私聊面板 · 自己的座位标题】（用户 2026-11-18）：恢复【收起】右侧那一行，
+//   但改为显示**真实星际名称**，座位号与魔典保持同一口径（g_lab + g_nameNumShift）；
+//   说书人格显示「说书人 [真实星际名称]」。必须按 g_who / g_lab 实时计算 ----
+//   换座位、重新洗座、队伍1 的玩家被强制指定为说书人之后都要跟着变。
+text BOTC_PanelTitleText (int p) {
+    int q;
+    string nm;
+    q = BOTC_PosOf(p);
+    nm = TextToString(PlayerName(g_who[q]));
+    if (StringLength(nm) <= 0) {
+        nm = "玩家" + IntToString(g_lab[q]);
+    }
+    if (q == 1 || g_who[q] == g_teller) {
+        return StringToText("说书人 [") + TextWithColor(StringToText(nm), BOTC_SeatColor(1)) + StringToText("]");
+    }
+    if (g_boardOpen) {
+        return TextWithColor(StringToText(nm), BOTC_SeatColor(q));
+    }
+    return StringToText(IntToString(g_lab[q] + g_nameNumShift) + " [") + TextWithColor(StringToText(nm), BOTC_SeatColor(q)) + StringToText("]");
+}
+
+void BOTC_PanelTitleRender (int p) {
+    if (p < 1 || p > 13) {
+        return;
+    }
+    libNtve_gf_SetDialogItemText(g_title[p], BOTC_PanelTitleText(p), PlayerGroupSingle(p));
+}
+
+void BOTC_PanelTitleRenderAll () {
+    int i;
+    for (i = 1; i <= 13; i += 1) {
+        BOTC_PanelTitleRender(i);
+    }
+}
+
 // 【说话人那一行的名字颜色】（用户 2026-10-07 报「换位后颜色不对」）：公聊 / 私聊 / 邪恶小窗
 //   右上角弹的那一行按**位置**取色（不吃大厅自选色）；说书人那一格 = 粉 Color(255,105,180)（判据跟 BOTC_PlayerNameText
 //   一致：位置 p 的 g_who[p] == g_teller）。原来这里用的是 PlayerGetColorIndex（大厅色）→ 现在 0 处。
@@ -5525,6 +5565,7 @@ void BOTC_EnterScript (bool assignNames) {
             BOTC_GrimRender(p);
         }
     }
+    BOTC_PanelTitleRenderAll();             // 【自己的座位标题】洗座后按新座位重刷
     // 名字与座位已经应用完毕，阶段结束时第二次清空聊天。
     BOTC_ClearAllLogs();
 }
@@ -5695,6 +5736,7 @@ void BOTC_PubLogStore (string s) {
         }
         g_pubLogCount = 2400;
         g_pubLogBase = g_pubLogBase + 1200;    // 【绝对基准】游标按绝对位置计算，回卷不用重画
+        g_pubSkip = g_pubSkip + 1200;          // 【截断提示】累计被丢弃的公聊条数
     }
     g_pubLog[g_pubLogCount] = s;
     g_pubWho[g_pubLogCount] = g_chatWhoNow;
@@ -5779,6 +5821,7 @@ void BOTC_VoteLogAdd (string s) {
         }
         g_voteLogCount = 600;
         g_voteLogBase = g_voteLogBase + 300;    // 【绝对基准】游标按绝对位置计算
+        g_voteSkip = g_voteSkip + 300;          // 【截断提示】累计被丢弃的投票条数
     }
     g_voteLog[g_voteLogCount] = s;
     g_voteLogCount = g_voteLogCount + 1;
@@ -5838,6 +5881,7 @@ void BOTC_PmStoreRaw (int p, string s) {
         }
         g_pmLogCount[p] = 600;
         g_pmLogBase[p] = g_pmLogBase[p] + 300;    // 【绝对基准】游标按绝对位置计算
+        g_pmSkip[p] = g_pmSkip[p] + 300;          // 【截断提示】累计被丢弃的私聊条数
     }
     g_pmLog[(p * 900) + g_pmLogCount[p]] = s;
     g_pmWho[(p * 900) + g_pmLogCount[p]] = g_chatWhoNow;
@@ -6121,6 +6165,9 @@ void BOTC_LogWrapAdd (int p, string s, int who) {
 void BOTC_RpSaveLast () {
     int i;
     int q;
+    // 【彻底停用】（用户 2026-11-18）：日志【复盘】跟【全部私聊】一样停用，不再记录也不再备份。
+    //   参数和调用点保持不变，这里直接返回。
+    return;
     if (!g_rpOn) {
         return;
     }
@@ -6233,6 +6280,8 @@ int BOTC_RpN (bool last) {
 // 追加一条过程记录（只在正式开局后记录；超出容量时丢掉最早的一条）
 void BOTC_RpAdd (string s) {
     int i;
+    // 【彻底停用】（用户 2026-11-18）：日志【复盘】跟【全部私聊】一样停用，不再记录过程记录。
+    return;
     // 【暂时停用】（用户 2026-11-17）：日志【复盘】关闭期间不再写入过程记录。
     if (g_logRpOff) {
         return;
@@ -6270,6 +6319,8 @@ void BOTC_RpCapture (bool opening) {
     int i;
     int r;
     int seen;
+    // 【彻底停用】（用户 2026-11-18）：日志【复盘】跟【全部私聊】一样停用，不再拍身份快照。
+    return;
     // 【暂时停用】（用户 2026-11-17）：日志【复盘】关闭期间不再拍身份快照。
     if (g_logRpOff) {
         return;
@@ -6604,6 +6655,7 @@ void BOTC_LogRender (int p) {
 // 【日志分帧 · 真正重画】（用户 2026-11-18）：清空列表后按当前页签重置来源游标，
 //   之后由 BOTC_LogStreamStep 从下一拍开始逐条读取（不再预先扫描整表）。
 void BOTC_LogRenderNow (int p) {
+    int n;
     if (p < 1 || p > 13) { return; }
     BOTC_LogViewBtnRender(p);      // 按钮文字始终显示当前查看目标（用户 2026-11-03）
     DialogControlRemoveAllItems(g_logList, PlayerGroupSingle(p));
@@ -6612,6 +6664,24 @@ void BOTC_LogRenderNow (int p) {
     g_logRpStage[p] = 0;
     g_logRealName[p] = false;
     g_logRealLast[p] = false;
+    // 【截断提示】（用户 2026-11-18）：当前视图对应的日志曾被回卷丢弃过，就在列表最上方明示条数，
+    //   避免玩家以为「最早的记录凭空消失」。打开期间才发生的回卷不补提示，按下次打开时显示。
+    n = 0;
+    if (g_logMode[p] == 2) {
+        n = g_voteSkip;
+    }
+    else if (g_logMode[p] == 1) {
+        n = g_pmSkip[p];
+    }
+    else if (g_logMode[p] == 3) {
+        n = g_pubSkip + g_pmSkip[p];
+    }
+    else {
+        n = g_pubSkip;
+    }
+    if (n > 0) {
+        BOTC_LogAddLine(p, "（较早的 " + IntToString(n) + " 条记录已省略）", 0);
+    }
     BOTC_LogTaskStart(p);
 }
 
@@ -6672,17 +6742,23 @@ void BOTC_LogTaskStep (int p) {
 }
 
 // 【日志流式读取】（用户 2026-11-18）：两个来源各自维护绝对游标，读一条、判一条、画一条。
-//   被过滤掉的行同样消耗预算，避免别人的发言 / 坏行把某个玩家永远卡在同一位置。
-//   回卷只前移存储起点（g_pubLogBase / g_pmLogBase / g_voteLogBase），游标 clamp 后继续，不重画。
+//   过滤行只读不画、不占绘制预算（见下方 scan）；回卷只前移存储起点
+//   （g_pubLogBase / g_pmLogBase / g_voteLogBase），游标 clamp 后继续，不重画。
 void BOTC_LogStreamStep (int p) {
     int i;
     int idx;
     int vw;
     int who;
+    int scan;
     string s;
     bool show;
     vw = g_logViewWho[p];
-    while (g_logBatch > 0) {
+    // 【过滤视图不占绘制预算】（用户 2026-11-18）：被「看某玩家」/ 屏蔽 / 系统消息页签过滤掉的行
+    //   只读不画，成本远低于绘制，所以不再消耗 g_logBatch；另用 scan 限制每拍最多扫多少行，
+    //   避免整表都被过滤时一拍扫完几千行造成瞬时卡顿。
+    scan = 800;
+    while (g_logBatch > 0 && scan > 0) {
+        scan = scan - 1;
         show = true;
         if (g_logMode[p] == 2) {
             if (g_logReadMain[p] < g_voteLogBase) { g_logReadMain[p] = g_voteLogBase; }
@@ -6727,8 +6803,10 @@ void BOTC_LogStreamStep (int p) {
             }
             else { g_logTaskN[p] = 0; return; }
         }
-        g_logBatch = g_logBatch - 1;
-        if (show) { BOTC_LogAddLine(p, s, who); }
+        if (show) {
+            g_logBatch = g_logBatch - 1;
+            BOTC_LogAddLine(p, s, who);
+        }
     }
 }
 
@@ -6893,13 +6971,13 @@ void BOTC_LogViewBtnRender (int p) {
         return;
     }
     if (g_logMode[p] == 3) {
-        lab = "查看：系统消息 ▼";
+        lab = "查看：系统记录 ▼";
     }
     else if (g_logMode[p] == 2) {
         lab = "查看：投票统计 ▼";
     }
     else if (g_logMode[p] == 1) {
-        lab = "查看：私聊信息 ▼";
+        lab = "查看：所有私聊记录 ▼";
     }
     else if (g_logViewWho[p] == 1) {
         lab = "查看：说书人 ▼";
@@ -6908,7 +6986,7 @@ void BOTC_LogViewBtnRender (int p) {
         lab = "查看：" + BOTC_NameStr(g_logViewWho[p]) + " ▼";
     }
     else {
-        lab = "查看：所有玩家 ▼";
+        lab = "查看：所有公聊记录 ▼";
     }
     libNtve_gf_SetDialogItemText(g_logViewBtn, BOTC_LogFilterText(p, lab, 0), PlayerGroupSingle(p));
 }
@@ -6927,15 +7005,15 @@ void BOTC_LogPickStart (int p) {
     // 每次打开都按当前 g_seatOn 重建：玩家掉线后座位会压缩，缓存旧列表会把行号映射到相邻座位。
     BOTC_LogPickRender(p);
     // 【选中当前视图】（用户 2026-11-17）：下拉默认选中的行必须等于当前正在看的视图，
-    //   否则用户从私聊信息切回「所有玩家」时，控件本来就停在第一行，点它不会产生选中变化。
+    //   否则用户从所有私聊记录切回「所有公聊记录」时，控件本来就停在第一行，点它不会产生选中变化。
     row = 1;
-    if (g_logMode[p] == 3) {
+    if (g_logMode[p] == 1) {
         row = 2;
     }
-    else if (g_logMode[p] == 2) {
+    else if (g_logMode[p] == 3) {
         row = 3;
     }
-    else if (g_logMode[p] == 1) {
+    else if (g_logMode[p] == 2) {
         row = 4;
     }
     else if (g_logViewWho[p] == 1) {
@@ -6961,15 +7039,15 @@ void BOTC_LogPickStart (int p) {
     g_logPickSel[p] = row - 1;
 }
 
-// 把下拉列表填满（用户 2026-11-17 固定顺序）：所有玩家 → 系统消息 → 投票统计 → 私聊信息
-//   → 说书人 → 当前在场玩家。前四项是固定视图，私聊信息固定显示自己所在的全部私聊房间。
+// 把下拉列表填满（用户 2026-11-18 固定顺序）：所有公聊记录 → 所有私聊记录 → 系统记录
+//   → 投票统计 → 说书人 → 当前在场玩家。前四项是固定视图，所有私聊记录固定显示自己所在的全部私聊房间。
 void BOTC_LogPickRender (int p) {
     int i;
     DialogControlRemoveAllItems(g_logPickList, PlayerGroupSingle(p));
-    DialogControlAddItem(g_logPickList, PlayerGroupSingle(p), BOTC_LineText("所有玩家", 0));
-    DialogControlAddItem(g_logPickList, PlayerGroupSingle(p), BOTC_LineText("系统消息", 0));
+    DialogControlAddItem(g_logPickList, PlayerGroupSingle(p), BOTC_LineText("所有公聊记录", 0));
+    DialogControlAddItem(g_logPickList, PlayerGroupSingle(p), BOTC_LineText("所有私聊记录", 0));
+    DialogControlAddItem(g_logPickList, PlayerGroupSingle(p), BOTC_LineText("系统记录", 0));
     DialogControlAddItem(g_logPickList, PlayerGroupSingle(p), BOTC_LineText("投票统计", 0));
-    DialogControlAddItem(g_logPickList, PlayerGroupSingle(p), BOTC_LineText("私聊信息", 0));
     DialogControlAddItem(g_logPickList, PlayerGroupSingle(p), BOTC_LineText("说书人", 1));
     for (i = 2; i <= 13; i += 1) {
         // 【换座后仍按格子判定】（2026-11-10 修正）：g_seatOn 由 BOTC_GrimRelayout 按**格子**写入
@@ -6980,8 +7058,8 @@ void BOTC_LogPickRender (int p) {
     }
 }
 
-// 把"当前选中的那一行"应用成视图：1 = 所有玩家 / 2 = 系统消息 / 3 = 投票统计 / 4 = 私聊信息 /
-//   5 = 说书人 / 之后按在场顺序数玩家。
+// 把"当前选中的那一行"应用成视图：1 = 所有公聊记录 / 2 = 所有私聊记录 / 3 = 系统记录 /
+//   4 = 投票统计 / 5 = 说书人 / 之后按在场顺序数玩家。
 void BOTC_LogPickTake (int p) {
     int sel;
     int i;
@@ -6998,15 +7076,15 @@ void BOTC_LogPickTake (int p) {
     g_logPickOn[p] = false;
     DialogSetVisible(g_logPickDlg, PlayerGroupSingle(p), false);
     if (sel == 2) {
-        BOTC_LogSetMode(p, 3);
+        BOTC_LogSetMode(p, 1);
         return;
     }
     if (sel == 3) {
-        BOTC_LogSetMode(p, 2);
+        BOTC_LogSetMode(p, 3);
         return;
     }
     if (sel == 4) {
-        BOTC_LogSetMode(p, 1);
+        BOTC_LogSetMode(p, 2);
         return;
     }
     if (sel == 5) {
@@ -7026,7 +7104,7 @@ void BOTC_LogPickTake (int p) {
             return;
         }
     }
-    BOTC_LogSetMode(p, 0);             // 第 1 行「所有玩家」或行号越界
+    BOTC_LogSetMode(p, 0);             // 第 1 行「所有公聊记录」或行号越界
 }
 
 // 【看某玩家 · 下拉】每 0.5 秒对一次选中项（列表点选不一定触发控件事件，跟【请求加入】同一个套路）
@@ -15146,6 +15224,9 @@ void BOTC_BuildPanel (int p) {
     // ---- 用户 2026-09-19：聊天改成顶部那个【聊天：公聊/私聊】开关之后，
     //      面板里的私聊输入框 + 发送按钮撤掉，整个面板 Y 再缩 200（398 -> 198） ----
     g_hideBtn[p] = BOTC_NewButton(DialogLastCreated(), 84, 22, 10, 6, "收起");
+    // 【自己的座位标题】（用户 2026-11-18）：【收起】右侧恢复显示「座位号 [真实星际名称]」，
+    //   文字由 BOTC_PanelTitleRender 在换座 / 洗座 / 强制队伍1当说书人后刷新。
+    g_title[p] = BOTC_NewLabel(DialogLastCreated(), 380, 22, 104, 6, BOTC_PanelTitleText(p));
 
     // 三个私聊按钮：挪到面板顶部（原来在座位编号那排下面），尺寸保持原样
     g_leaveBtn[p] = BOTC_NewButton(DialogLastCreated(), 160, 30, 10, 34, "退出私聊");
@@ -15301,7 +15382,7 @@ void BOTC_BuildLog () {
     g_logList = BOTC_NewList(g_logDlg, 980, 880, 10, 36);
     // 【查看入口全收进顶部下拉】（用户 2026-11-17）：公聊 / 系统消息 / 投票 / 私聊信息 / 说书人 /
     //   玩家全部改由顶端这一枚按钮切换，底部只留【关闭日志】。
-    g_logViewBtn = BOTC_NewButton(g_logDlg, 300, 30, 10, 4, "查看：所有玩家 ▼");
+    g_logViewBtn = BOTC_NewButton(g_logDlg, 300, 30, 10, 4, "查看：所有公聊记录 ▼");
     g_logClose = BOTC_NewButton(g_logDlg, 110, 30, 10, 926, "关闭日志");
     libNtve_gf_SetDialogItemStyle(g_logViewBtn, "ModLeftSize16Bold", PlayerGroupAll());
     libNtve_gf_SetDialogItemStyle(g_logClose, "ModLeftSize16Bold", PlayerGroupAll());
@@ -15309,7 +15390,7 @@ void BOTC_BuildLog () {
 
 // 【查看】的下拉列表：X 对齐日志顶端那枚【查看】按钮（按钮左边缘 = 屏幕 930）。
 //   按钮在顶端，所以下拉从按钮下方往下弹（屏幕 y=92），不再贴屏幕底边向上弹。
-//   固定顺序（用户 2026-11-17）：所有玩家 → 系统消息 → 投票统计 → 私聊信息 → 说书人 →
+//   固定顺序（用户 2026-11-18）：所有公聊记录 → 所有私聊记录 → 系统记录 → 投票统计 → 说书人 →
 //   当前在场玩家（「[座位号] + 战网名」，编号用**游戏里的号**，所以这里写的是 i 而不是 i-1）。
 // 【下拉的样式】（用户 2026-10-07）：改回**列表框**（自带滚轮）—— 老毛病"一有新消息就自己关掉"
 //   不是列表框的错，是轮询读法的错，已经在 BOTC_LogPickStart / BOTC_LogMenuTick 里堵住了（见上面的长注释）。
@@ -18959,15 +19040,18 @@ void BOTC_ClearAllLogs () {
     g_allPmCount = 0;
     g_pubLogCount = 0;
     g_pubLogBase = 0;              // 【绝对基准】新局从零开始，读游标同步归位
+    g_pubSkip = 0;                 // 【截断提示】新局没有省略记录
     g_pubSeqN = 0;
     g_voteLogCount = 0;
     g_voteLogBase = 0;
+    g_voteSkip = 0;
     g_logTickNext = 1;
     g_rpPmTmpN = 0;
     g_rpCollect = false;
     for (p = 1; p <= 13; p += 1) {
         g_pmLogCount[p] = 0;
         g_pmLogBase[p] = 0;
+        g_pmSkip[p] = 0;
         g_logReadMain[p] = 0;
         g_logReadPm[p] = 0;
         g_logRefresh[p] = false;
@@ -68589,11 +68673,8 @@ void BOTC_WinFinalize (int side, string why1, string why2) {
     // 【声称队列 · 结算兜底】（用户 2026-11-16）：封盘这一刻把还没公布的条目一次播完，
     //   既不会漏掉，也不会在胜利面板出来之后继续刷；放在改名之前，播报里还是局内昵称。
     BOTC_PendClaimFlush();
-    // 【复盘】（用户 2026-11-11）：结算那一刻拍下结束身份 / 认知偏差 / 阵营，之后才允许在日志里查看
+    // 【复盘 · 彻底停用】（用户 2026-11-18）：跟【全部私聊】一样不再记录，也不再生成复盘。
     BOTC_RpCapture(false);
-    if (!g_logRpOff) {
-        g_rpOn = true;
-    }
     // 【场次统计】（用户 2026-10-20）：唯一胜负出口只记一次；此时阵营 / 说书人座位都已经确定。
     BOTC_StatsRecord(side);
     // 【结算日志昵称快照】（用户 2026-11-13）：BOTC_ResetPlayerNames() 会清空随机名 / 自选名，
@@ -71447,6 +71528,7 @@ void BOTC_AfterSeatChange (int who) {
     BOTC_GrimShareRender();
     BOTC_DeclareRender();
     BOTC_RefreshSessListAll();              // 私聊名单
+    BOTC_PanelTitleRenderAll();             // 【自己的座位标题】按换位后的 g_who / g_lab 重刷
     // 【换位收尾兜底】（用户 2026-11-07 报「说书人换座位后，新说书人右下角没有发送不在场身份的面板」）：
     //   上面逐人重刷魔典 / 聊天 / 私聊名单时都可能再动到右下角这块面板的显隐，这里在函数最后
     //   统一给当前说书人再开一次父对话框（子控件已由 BOTC_BluffTellerUI 放好，父对话框不可见
@@ -95052,6 +95134,7 @@ void BOTC_Init () {
         }
         g_grimOn[p] = false;
         g_pmLogCount[p] = 0;
+        g_pmSkip[p] = 0;           // 【截断提示】地图初始化时没有省略记录
         g_chatCount[p] = 0;
         g_pickMode[p] = 0;
         g_pickBluffSlot[p] = 0;
@@ -95082,6 +95165,8 @@ void BOTC_Init () {
     }
     g_pubLogCount = 0;
     g_voteLogCount = 0;
+    g_pubSkip = 0;                 // 【截断提示】地图初始化时没有省略记录
+    g_voteSkip = 0;
     g_started = false;
     g_dayNum = 0;
     g_nightNum = 0;
@@ -95210,6 +95295,7 @@ void BOTC_Init () {
     BOTC_BluffTellerUI();
 
     BOTC_RefreshSessListAll();
+    BOTC_PanelTitleRenderAll();             // 【自己的座位标题】按最终说书人（含队伍1强制）重刷
 
     g_tClick = TriggerCreate("BOTC_Click_Func");
     TriggerAddEventDialogControl(g_tClick, c_playerAny, c_invalidDialogControlId, c_triggerControlEventTypeClick);
