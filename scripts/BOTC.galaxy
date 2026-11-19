@@ -5320,6 +5320,45 @@ void BOTC_IntroColorRender (int p) {
     libNtve_gf_SetDialogItemText(g_introColorBtn2, t2, PlayerGroupSingle(p));
 }
 
+// 【彩色名字标签闭合】（用户 2026-11-18）：取名输入框允许手写 `<c val="RRGGBB">…</c>`。
+//   只写开标签、漏写 `</c>` 时，颜色会顺着名字一直染到聊天正文和后续日志行（别人打字也跟着变色）。
+//   入库前统一收口：多余的 `</c>` 直接丢弃，未闭合的 `<c val="…">` 在名字末尾补足 `</c>`。
+string BOTC_NameCloseColor (string s) {
+    int i;
+    int n;
+    int depth;
+    string ch;
+    string out;
+    out = "";
+    depth = 0;
+    n = StringLength(s);
+    i = 1;
+    while (i <= n) {
+        ch = StringSub(s, i, i);
+        if (ch == "<") {
+            if (StringSub(s, i, i + 3) == "</c>") {
+                // 没有对应开标签的闭合标签丢掉，避免提前截断前面的系统配色。
+                if (depth > 0) {
+                    depth = depth - 1;
+                    out = out + "</c>";
+                }
+                i = i + 4;
+                continue;
+            }
+            if (StringSub(s, i, i + 7) == "<c val=\"") {
+                depth = depth + 1;
+            }
+        }
+        out = out + ch;
+        i = i + 1;
+    }
+    while (depth > 0) {
+        out = out + "</c>";
+        depth = depth - 1;
+    }
+    return out;
+}
+
 void BOTC_IntroTryName (int p, string name) {
     int q;
     string oldName;
@@ -5365,6 +5404,8 @@ void BOTC_IntroTryName (int p, string name) {
             return;
         }
     }
+    // 【彩色标签闭合】（用户 2026-11-18）：手写颜色码漏写 `</c>` 时补足，避免聊天气泡继承名字颜色。
+    name = BOTC_NameCloseColor(name);
     // 【渐变 / 随机彩色】（用户 2026-11-15）：勾选了彩色按钮时，按勾选模式给名字逐字上色。
     if (g_introColorMode[p] != 0 && BOTC_IntroCanColor(p)) {
         name = BOTC_IntroStyledName(p, name);
@@ -33347,15 +33388,10 @@ bool BOTC_PreGrantStep () {
             return true;
         }
     }
-    // 4. 小精灵（借到该能力的座位，例如食人族）：还没挑过镇民玩家 → 先让说书人挑一个在场的镇民玩家
-    for (i = 2; i <= 13; i += 1) {
-        if (BOTC_SeatDead(i) == false && BOTC_HasAbility(i, 91) && BOTC_SeatTrueRole(i) != 91 && g_pixieRoleBy[i] <= 0 && !g_pixieAsked[i]) {
-            g_pixieAsked[i] = true;
-            BOTC_MiFnOpen(i, 26);
-            return true;
-        }
-    }
-    // 5. 小精灵：得知的镇民已经死亡，且还没用掉机会
+    // 【小精灵不提前唤醒】（用户 2026-11-20）：借到小精灵能力的座位（失忆者 / 食人族 / 变脸师 / 说书人赋予）
+    //   一律等到小精灵自己的夜序唤醒，由 r == 91 的唤醒分支发放「得知一个在场的镇民」；
+    //   这里不再提前弹信息面板，避免同一个能力在同一夜被发两次。
+    // 4. 小精灵：得知的镇民已经死亡，且还没用掉机会
     for (i = 2; i <= 13; i += 1) {
         if (BOTC_SeatDead(i) == false && g_pixieRoleBy[i] > 0 && !g_pixieDone[i] && BOTC_HasAbility(i, 91)) {
             role = g_pixieRoleBy[i] - 1;
@@ -45705,6 +45741,15 @@ void BOTC_DClaimOpen (int p) {
         s = s + "猜落难";
         k = k + 1;
     }
+    // 【异教领袖（106）】（用户 2026-11-20）：死后声称面板也要有入口 —— 死亡玩家同样能公开声称
+    //   异教领袖（任何人都能声称，能力真假由说书人结算）。入口固定显示，时机（提名 / 已处决 /
+    //   私聊阶段）改由点击时统一提示，避免面板打开时机的不同造成「有人有、有人没有」。
+    if (amne || BOTC_BoardHasRole(106)) {
+        BOTC_DeclareSlot(p, 56, 106, k, g_roleName[106]);
+        if (StringLength(s) > 0) { s = s + " / "; }
+        s = s + g_roleName[106];
+        k = k + 1;
+    }
     if (StringLength(s) <= 0) {
         s = "本局没有可以公开声称的角色";
     }
@@ -45876,9 +45921,11 @@ void BOTC_DeclareOpen (int p) {
         s = s + g_roleName[99];
         k = k + 1;
     }
-    // 【异教领袖（106）】（用户 2026-10-10，2026-11-14 扩展）：**任何人都可以声称**自己是异教领袖 → 开 20 秒全员投票
-    //   提名阶段 / 有人被处决后 / 私聊阶段一律不给入口（用户 2026-11-14）。
-    if ((amne || BOTC_BoardHasRole(106)) && !nom && !g_execUsedToday && g_chatMode != 1) {
+    // 【异教领袖（106）】（用户 2026-10-10，2026-11-20 修订）：**任何人都可以声称**自己是异教领袖 → 开 20 秒全员投票。
+    //   入口对板子上有异教领袖的所有存活玩家一律显示；提名阶段 / 当天已处决 / 私聊阶段不再隐藏入口，
+    //   改由点击时提示（原先把时机判断放在打开面板那一刻，20 秒教派投票期间才打开面板的人就看不到入口，
+    //   造成同一时刻有的玩家有、有的没有）。
+    if (amne || BOTC_BoardHasRole(106)) {
         BOTC_DeclareSlot(p, 56, 106, k, g_roleName[106]);
         if (StringLength(s) > 0) { s = s + " / "; }
         s = s + g_roleName[106];
