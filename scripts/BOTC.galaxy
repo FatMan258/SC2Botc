@@ -36,7 +36,7 @@ bool[14]    g_hereSeen;
 
 int         g_kickTar;        // 被投票踢的人（0 = 没有投票在跑）
 int         g_kickMode;       // 谁正在用 -kick 选人（0 = 没人在选）
-int         g_kickBy;         // 这次投票是谁发起的（发起人一定能投，说书人发起时也能投）
+int         g_kickBy;         // 这次投票是谁发起的（仅记录来源，不限制投票资格）
 int[14]     g_kickVote;       // 每人投的：0 没投 / 1 是 / 2 否
 int         g_kickSec;        // 剩余秒数（超时作废）
 int         g_kickHalf;       // 0.5 秒 tick 里数到 2 才算 1 秒
@@ -3751,7 +3751,6 @@ int    BOTC_TeamTellerSeat ();                // 【队伍1 = 说书人】大厅
 int    BOTC_KickNeed ();
 int    BOTC_KickCountYes ();
 int    BOTC_KickCountVoted ();
-int    BOTC_KickPresentN ();
 int    BOTC_KickVoterN ();
 void   BOTC_KickPass ();
 void   BOTC_KickFail (string why);
@@ -11040,7 +11039,7 @@ bool BOTC_ClickDo (bool testConds, bool runActions) {
             return true;
         }
     }
-    // 【投票踢人】的两个按钮：谁都能点，但说书人 / 被踢的人那份本来就是隐藏的（点了也不生效）
+    // 【投票踢人】的两个按钮：除被踢的人以外谁都能点（含说书人），被踢者那份本来就是隐藏的
     if (c == g_kickYes) {
         BOTC_KickCast(p, 1);
         return true;
@@ -94270,7 +94269,8 @@ void BOTC_TellerLeftHandover () {
 //==================================================================================================
 // 【投票踢人】（用户 2026-10-02）
 //   发 -kick → 弹魔典点座位 → 发起投票；公聊播报 + 屏幕中间无背景对话框（是 / 否 + 底部票数）；
-//   赞成票到「在场人数的 2/3（向上取整）」就 KickFromGame；60 秒没投完作废。被踢的人不能投自己。
+//   赞成票到「投票人数的 2/3（向上取整）」就 KickFromGame；60 秒没投完作废。
+//   【2026-11-20】除被踢的人以外全员可投（含说书人），门槛按可投票人数算。
 //==================================================================================================
 void BOTC_BuildKick () {
     DialogCreate(700, 280, c_anchorCenter, 0, 0, false);
@@ -94291,37 +94291,17 @@ void BOTC_BuildKick () {
     libNtve_gf_SetDialogItemAcceptMouse(g_kickMine, false, PlayerGroupAll());
 }
 
-// 场上人数（在座、还没走的）
-int BOTC_KickPresentN () {
-    int i;
-    int q;
-    int n;
-    n = 0;
-    BOTC_BuildSeatList();
-    for (i = 0; i < g_seatN; i += 1) {
-        q = g_seatList[i];
-        if (q < 2) {
-            continue;
-        }
-        if (PlayerStatus(g_who[q]) == 2) {      // 【座位机制】q 是格子 → 查"坐这格的人"
-            continue;
-        }
-        n = n + 1;
-    }
-    return n;
-}
-
-
-// 门槛（用户 2026-10-02 改成 2/3）：在场人数的 2/3，**向上取整**（票必须是整数）
-//   例：6 人 = 4 票、5 人 = 4 票、10 人 = 7 票、12 人 = 8 票
+// 门槛（用户 2026-10-02 改成 2/3）：可投票人数的 2/3，**向上取整**（票必须是整数）
+//   【2026-11-20】分母改成「除被踢者以外的在场人数（含说书人）」
+//   例：13 人在场、踢其中一名 → 12 名投票玩家 = 8 票；6 人 = 4 票、10 人 = 7 票
 int BOTC_KickNeed () {
     int n;
-    n = BOTC_KickPresentN();
+    n = BOTC_KickVoterN();
     return ((n * 2) + 2) / 3;
 }
 
-// 这一轮「能投票的人」有几个（用户 2026-10-02）：场上的人（被踢的那个除外）；
-//   说书人在「不是他发起、也不是被踢的那个」时不能投，所以只有他发起时才 +1。
+// 这一轮「能投票的人」有几个（2026-11-20 用户要求）：除被踢者以外的全部在场玩家，含说书人。
+//   目标就是说书人时，说书人本人不在投票名单里。
 int BOTC_KickVoterN () {
     int i;
     int q;
@@ -94341,8 +94321,9 @@ int BOTC_KickVoterN () {
         }
         n = n + 1;
     }
-    if (g_kickBy == g_teller && g_kickTar != 1) {
-        n = n + 1;                 // 说书人发起的：他自己也投
+    // 说书人不坐 2..13 格，单独补一份（被踢的就是说书人时不补）
+    if (g_kickTar != 1 && BOTC_PlayerHere(g_teller) && PlayerType(g_teller) == 1 && PlayerStatus(g_teller) != 2) {
+        n = n + 1;
     }
     if (n < 1) {
         n = 1;
@@ -94471,10 +94452,6 @@ void BOTC_KickStart (int by, int q) {
     DialogSetVisible(g_kickDlg, PlayerGroupAll(), true);
     DialogControlSetVisible(g_kickYes, PlayerGroupAll(), true);
     DialogControlSetVisible(g_kickNo, PlayerGroupAll(), true);
-    if (g_kickBy != g_teller) {
-        DialogControlSetVisible(g_kickYes, PlayerGroupSingle(g_teller), false);   // 说书人不投 ---- 除非这个投票就是他发起的
-        DialogControlSetVisible(g_kickNo, PlayerGroupSingle(g_teller), false);
-    }
     DialogControlSetVisible(g_kickYes, PlayerGroupSingle(g_who[q]), false);   // 被踢的人不能投自己
     DialogControlSetVisible(g_kickNo, PlayerGroupSingle(g_who[q]), false);
     BOTC_PmStore(g_teller, "【踢人投票】" + BOTC_NameStr(BOTC_PosOf(by)) + " 发起：是否踢出 " + BOTC_NameStr(q) + "（门槛 " + IntToString(BOTC_KickNeed()) + " 票，60 秒）。");
@@ -94517,9 +94494,6 @@ void BOTC_KickCast (int p, int yes) {
     }
     if (p < 1 || p > 13 || p == g_who[g_kickTar]) {   // g_kickTar 是格子：被踢的人不投自己
         return;                       // 被踢的人不投自己
-    }
-    if (p == g_teller && g_kickBy != g_teller) {
-        return;                       // 说书人不投 ---- 除非这个投票就是他发起的（用户 2026-10-02）
     }
     if (PlayerStatus(p) == 2) {
         return;
