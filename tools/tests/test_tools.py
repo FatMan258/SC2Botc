@@ -474,8 +474,15 @@ class RoleSpecTests(unittest.TestCase):
         source = (PROJECT_ROOT / "scripts" / "BOTC.galaxy").read_text(
             encoding="utf-8-sig"
         )
-        for marker in (
+        # 开局只做小怪宝检测；恶人频道改到小怪宝自己的夜序位再开，
+        # 避免抢在夜序之前拉群（2026-11-20）。
+        self.assertIn("BOTC_LmDetectNoDemon();", source)
+        self.assertIn("BOTC_LmGroupChat();", source)
+        self.assertNotIn(
             "BOTC_LmDetectNoDemon();\n    if (g_lmOn) {\n        BOTC_LmGroupChat();",
+            source,
+        )
+        for marker in (
             "if (g_lmOn && q == g_lmSeat) {\n        r = 112;",
             "showRole[112] = true;",
             "if (g_noAllFirst[112] <= 0) {\n            g_noAllFirst[112] = 26;",
@@ -1050,17 +1057,21 @@ class MergeRegressionTests(unittest.TestCase):
             source, "void BOTC_HandleListToPm (int viewer) {"
         )
 
+        # 仅说书人、且已进入剧本（选剧本页不响应，避免私聊关闭时误发公聊）。
         self.assertIn(
-            'if (msg == "-handles") {\n        BOTC_HandleListToPm(p);',
+            'if (msg == "-handles") {\n'
+            "        if (p == g_teller && !g_boardOpen) {\n"
+            "            BOTC_HandleListToPm(p);",
             source,
         )
         self.assertNotIn('BOTC_DevPlayer(p) && msg == "-handles"', source)
         self.assertIn("BOTC_PmStore(viewer,", handles)
         self.assertNotIn("BOTC_PmStore(g_teller,", handles)
-        self.assertIn('"【句柄】" + IntToString(p) + "：" + tok', handles)
-        self.assertIn("h = PlayerHandle(p);", handles)
-        self.assertIn("tok = BOTC_HandleToken(p);", handles)
-        self.assertIn('tok = "@@HL" + IntToString(p) + "@@";', handles)
+        # 编号按魔典座位口径输出（说书人 / [n]），所以用 lab 而不是物理座位号。
+        self.assertIn('"【句柄】" + lab + " " + nm + "：" + tok', handles)
+        self.assertIn("h = PlayerHandle(seat);", handles)
+        self.assertIn("tok = BOTC_HandleToken(seat);", handles)
+        self.assertIn('tok = "@@HL" + IntToString(seat) + "@@";', handles)
         self.assertNotIn("物理座位", handles)
         self.assertIn("PlayerGetColorIndex(p, false)", source)
         stats = self._function_text(source, "void BOTC_StatsRender (int p) {")
@@ -1288,8 +1299,10 @@ class MergeRegressionTests(unittest.TestCase):
             encoding="utf-8-sig"
         )
         self.assertIn("BOTC_PukkaExorcistResolve (int p);", source)
+        # 借来的普卡能力（食人族 / 说书人赋予）也要走驱魔人 × 普卡结算，
+        # 所以按能力层判断，不再只认真身角色 44（2026-11-20）。
         self.assertIn(
-            "if (BOTC_SeatTrueRole(t) == 44) {\n                    BOTC_PukkaExorcistResolve(t);",
+            "if (BOTC_HasAbility(t, 44)) {\n                    BOTC_PukkaExorcistResolve(t);",
             source,
         )
         start = source.index("void BOTC_PukkaExorcistResolve (int p) {")
