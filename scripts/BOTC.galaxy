@@ -1,4 +1,4 @@
-﻿﻿//==================================================================================================
+﻿//==================================================================================================
 //  血染钟楼（Blood on the Clocktower）- 说书人地图
 //  玩家1 = 说书人，玩家2..13 = 参与者
 //  公屏：直接用星际自带聊天（回车键）打字，脚本监听后同步到面板记录区
@@ -565,6 +565,8 @@ int         g_logPickList;     // 【看某玩家】下拉的列表框（自带�
 int[14]     g_logViewWho;      // 每个玩家各自在看谁（0 = 所有玩家 = 正常日志）
 bool[14]    g_logPickOn;       // 【看某玩家】下拉当前是不是开着（再点一次按钮 = 关掉）
 bool        g_inClick;         // 正在处理"点界面"的事件里：这时候冒出来的提示不进私聊日志（用户 2026-09-30）
+int         g_uiGuardSec;      // 【界面兜底】补回按钮后的冷却拍数，避免每拍重复补（用户 2026-11-20）
+int         g_uiGuardN;        // 【界面兜底】本局最多补几次，避免界面真的建不起来时无限报错（用户 2026-11-20）
 int[14]     g_logMode;
 bool[14]    g_logOpen;
 bool[14]    g_abOpen;
@@ -1255,7 +1257,6 @@ bool        g_cultOn;        // 正在教派投票
 int         g_cultWho;       // 提议人（格子）
 int         g_cultHead;      // 【教派投票】自己的标题标签（用户 2026-10-10：比提名标题左移 80，不共用那个标签）
 int         g_cultPhaseBak;  // 进教派投票之前的阶段（结束后还原，不要变成"开了提名环节"）
-int[14]     g_cultVote;      // 1 = 投票（同意加入）；2 = 弃权；0 = 还没投
 timer       g_tCult;
 trigger     g_tCultTrig;
 // 【异教领袖（106）· 夜间改阵营弹窗】（用户 2026-11-07）：不唤醒、不私聊，到夜序时弹窗
@@ -4994,6 +4995,9 @@ void BOTC_IntroBegin () {
     g_introShownSec = -1;
     g_boardFade = 4;
     BOTC_BoardFadeRender();
+    // 【兜底】（用户 2026-11-20）：先把取名框放出来，再收其它界面。这样即使下面
+    //   IntroCanColor / IntroColorRender 等任何一步出错，玩家至少还能看到取名框，不会满屏无按钮。
+    DialogSetVisible(g_introDlg, PlayerGroupAll(), true);
     BOTC_HideAllUI();
     DialogSetVisible(g_menuBtnDlg, PlayerGroupAll(), false);
     DialogSetVisible(g_preDlg, PlayerGroupAll(), false);
@@ -31659,7 +31663,6 @@ void BOTC_PhaseUiForceClose () {
         g_boomKeep[q] = false;
         g_boomVote[q] = 0;
         g_boomCount[q] = 0;
-        g_cultVote[q] = 0;
         g_wikiOpen[q] = false;
         g_artOpen[q] = false;
     }
@@ -32582,7 +32585,6 @@ void BOTC_CultStart (int q) {
     for (i = 0; i <= 13; i += 1) {
         g_vote[i] = 0;                 // 原生那张投票表：这一轮重新投
         g_voteWasDead[i] = false;
-        g_cultVote[i] = 0;
     }
     g_cultPhaseBak = g_phase;          // 【借代码不照搬】记下进来之前的阶段，结束以后原样还原
     //   ⚠ 不是"开提名环节"：投票期间那颗【进入提名环节】按钮由 NomUI 收着
@@ -32607,8 +32609,12 @@ void BOTC_CultVoteAt (int p, int v) {
     if (p < 1 || p > 13) {
         return;
     }
-    g_cultVote[p] = v;
+    // 【和原生提名共用一张票表】（用户 2026-11-20）：BOTC_CultAllAgreed / BOTC_CultRender 读的都是 g_vote，
+    //   这里原来写在另一张独立票表里，会让面板上点【投票】的票永远不算数（结算判没投、名单一直挂着）。
+    g_vote[p] = v;
+    g_voteWasDead[p] = false;          // 教派投票不消耗死人票（与 BOTC_VoteSet 的教派分支同一口径）
     BOTC_CultRender();
+    BOTC_NomUI();                      // 座位上的投票标记跟着刷新
     // 【必须等满 20 秒】（用户 2026-10-10）：这里**不**提前结算，到点由 g_tCult 计时器统一结算
 }
 
@@ -32683,7 +32689,6 @@ void BOTC_CultEnd (bool timeout) {
     side = BOTC_SeatAlign(g_cultWho);
     g_cultOn = false;
     for (i = 0; i <= 13; i += 1) {
-        g_cultVote[i] = 0;               // 【倒计时一结束就清空】（用户 2026-10-10）
         g_vote[i] = 0;                   // 原生那张投票表也清掉（原生收尾口径）
         g_voteWasDead[i] = false;
     }
@@ -32715,7 +32720,6 @@ void BOTC_CultCancel (string why) {
     }
     g_cultOn = false;
     for (i = 0; i <= 13; i += 1) {
-        g_cultVote[i] = 0;
         g_vote[i] = 0;
         g_voteWasDead[i] = false;
     }
@@ -71615,7 +71619,6 @@ void BOTC_SeatChangeUiCancel () {
         g_boomKeep[q] = false;
         g_boomVote[q] = 0;
         g_boomCount[q] = 0;
-        g_cultVote[q] = 0;
         g_wikiOpen[q] = false;
         g_artOpen[q] = false;
     }
@@ -72892,6 +72895,7 @@ void BOTC_BoardSwitch () {
 void BOTC_BoardOpen () {
     int i;
     g_introOn = false;
+    g_uiGuardN = 0;                // 【界面兜底】新一局重新计数，最多补 5 次
     DialogSetVisible(g_introDlg, PlayerGroupAll(), false);
     BOTC_ResetPlayerNames();
     BOTC_BvReset();                // 本局设置投票：每局重新来（顺便把默认值填上）
@@ -94955,10 +94959,32 @@ bool BOTC_Tick_Func (bool testConds, bool runActions) {
     int i;
     int by;
     bool nomUiRefresh;
+    bool uiMiss;
     if (!runActions) {
         return true;
     }
     nomUiRefresh = false;
+    // 【界面兜底】（用户 2026-11-20）：选板页 / 取名页以外，任何一名真人的功能按钮栏
+    //   都应该看得见。若不可见，说明某条「隐藏 → 恢复」被错误中断了（初始化或某次切界面
+    //   中途抛错），这里补一次 BOTC_ShowAllUI() 把按钮全部放回来，最多每 10 秒补一次。
+    if (!g_boardOpen && !g_introOn) {
+        if (g_uiGuardSec > 0) {
+            g_uiGuardSec = g_uiGuardSec - 1;
+        }
+        uiMiss = false;
+        for (p = 1; p <= 13; p += 1) {
+            if (PlayerType(p) == 1 && PlayerStatus(p) != 2) {
+                if (!DialogIsVisible(g_sayBtnDlg[p], p)) {
+                    uiMiss = true;
+                }
+            }
+        }
+        if (uiMiss && g_uiGuardSec <= 0 && g_uiGuardN < 5) {
+            BOTC_ShowAllUI();
+            g_uiGuardN = g_uiGuardN + 1;
+            g_uiGuardSec = 20;
+        }
+    }
     if (g_introOn) {
         BOTC_IntroRender();
     }

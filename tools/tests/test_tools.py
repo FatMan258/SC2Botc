@@ -29,6 +29,8 @@ from galaxy_check import (
     find_forward_call_errors,
     find_literal_array_index_errors,
     find_reversed_array_declaration_errors,
+    mask_galaxy_comments_and_strings,
+    matching_brace,
     scan_galaxy,
 )
 from private_dependency import render_impl
@@ -937,12 +939,45 @@ class LogIdentityTests(unittest.TestCase):
         #   由它内部调用 BOTC_LogLineText 做名字替换并处理超宽换行。
         # 【流式读取】（用户 2026-11-18）：普通日志只有 LogStreamStep 一个出口，
         #   复盘另有 LogTaskStep，其余来源不再各自拼列表项。
+        # 【统一出口】（用户 2026-11-20）：所有 g_logList 写入必须位于 BOTC_LogAddLine
+        #   函数体内，不能有来源直接往列表里塞未经名字替换 / 超宽拆行的裸文本。
+        #   这里按字符位置校验，而不是数调用次数，避免新增第七、八个绕过点后测试仍然通过。
+        clean = mask_galaxy_comments_and_strings(source)
+        log_add_start = source.index("void BOTC_LogAddLine (int p, string s, int who) {")
+        opening = source.index("{", log_add_start)
+        log_add_end = matching_brace(clean, opening) + 1
+        self.assertGreater(log_add_end, opening)
+        writes = [
+            match.start()
+            for match in re.finditer(r"DialogControlAddItem\s*\(\s*g_logList\b", clean)
+        ]
+        self.assertTrue(writes, "没有找到任何 g_logList 写入")
+        for offset in writes:
+            line_no = source.count("\n", 0, offset) + 1
+            self.assertGreaterEqual(
+                offset,
+                log_add_start,
+                f"第 {line_no} 行直接写 g_logList，绕过了 BOTC_LogAddLine",
+            )
+            self.assertLess(
+                offset,
+                log_add_end,
+                f"第 {line_no} 行直接写 g_logList，绕过了 BOTC_LogAddLine",
+            )
+            line_end = source.find("\n", offset)
+            if line_end < 0:
+                line_end = len(source)
+            write_line = source[offset:line_end]
+            self.assertIn(
+                "BOTC_LogLineText(p,",
+                write_line,
+                f"第 {line_no} 行写 g_logList 时没有经过 BOTC_LogLineText",
+            )
         self.assertIn("BOTC_LogAddLine(p, s, who);", source)
         for owner in ("BOTC_LogStreamStep (int p) {", "BOTC_LogTaskStep (int p) {"):
             body = source[source.index("void " + owner):]
             body = body[: body.index("\n}\n") + 3]
             self.assertIn("BOTC_LogAddLine(p,", body)
-        self.assertGreaterEqual(source.count("BOTC_LogAddLine(p,"), 10)
         self.assertIn("s = g_pubLog[i];", source)
         self.assertIn("who = g_pubWho[i];", source)
         self.assertIn("s = g_pmLog[idx];", source)
@@ -1352,6 +1387,49 @@ class MergeRegressionTests(unittest.TestCase):
         self.assertIn(
             "DialogSetVisible(g_bluffDlg, PlayerGroupSingle(g_teller), true);",
             source,
+        )
+
+
+class CultVoteTests(unittest.TestCase):
+    """教派投票（异教领袖 106）读写同一张票表，并保留全员同意判胜。"""
+
+    def _source(self) -> str:
+        return (PROJECT_ROOT / "scripts" / "BOTC.galaxy").read_text(
+            encoding="utf-8-sig"
+        )
+
+    def test_vote_writes_and_reads_the_same_table(self) -> None:
+        source = self._source()
+        start = source.index("void BOTC_CultVoteAt (int p, int v) {")
+        end = source.index("bool BOTC_CultAllAgreed () {", start)
+        vote_at = source[start:end]
+        # 写入必须是原生那张 g_vote（座位投票标记与 BOTC_VoteSet 教派分支同一口径）
+        self.assertIn("g_vote[p] = v;", vote_at)
+        self.assertNotIn("g_cultVote", vote_at)
+        # 单独一张教派票表已经删除，避免再次写读分叉
+        self.assertNotIn("g_cultVote", source)
+
+        agreed_start = source.index("bool BOTC_CultAllAgreed () {")
+        agreed_end = source.index("void BOTC_CultRender () {", agreed_start)
+        self.assertIn("g_vote[i] != 1", source[agreed_start:agreed_end])
+
+        render_start = source.index("void BOTC_CultRender () {")
+        render_end = source.index("void BOTC_CultEnd (bool timeout) {", render_start)
+        render = source[render_start:render_end]
+        self.assertIn("g_vote[i] == 1", render)
+        self.assertNotIn("g_cultVote", render)
+
+    def test_all_agreed_triggers_win(self) -> None:
+        source = self._source()
+        start = source.index("void BOTC_CultEnd (bool timeout) {")
+        end = source.index("void BOTC_CultCancel (string why) {", start)
+        cult_end = source[start:end]
+        # 结算先读全员同意，再（能力可用时）按提议人阵营判胜
+        self.assertIn("ok = BOTC_CultAllAgreed();", cult_end)
+        self.assertIn("if (ok) {", cult_end)
+        self.assertIn(
+            'BOTC_ShowWin(side, "所有善良玩家都加入了异教领袖的教派，", "小镇从此只有一种声音。");',
+            cult_end,
         )
 
 
