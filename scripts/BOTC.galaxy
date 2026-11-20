@@ -1084,9 +1084,10 @@ int         g_winBg;
 int         g_winLabel;
 int         g_winSub;
 int         g_winBtn;
-int         g_winSide;            // 0 = 善良胜 / 1 = 邪恶胜
+int         g_winSide;            // 0 = 善良胜 / 1 = 邪恶胜 / 2 = 说书人特殊胜 / 3 = 平局（说书人退出）
 bool        g_gameOver;           // 本局已经分出胜负
 bool        g_winFinalized;       // 【防重入】本局封盘是否已经执行过（政客待答时 PhaseUiForceClose 会嵌套回调 WinFinalize）
+bool        g_winDraw;            // 【说书人退出 · 平局】本局不记场次 / 积分，只摊开魔典供赛后复盘
 // 【说书人评分】（用户 2026-11-02）：结算阶段每个玩家（除说书人）给说书人打 1..5 分；
 //   分数累加进说书人自己账号 bank 的 stats/rs、stats/rc，统计页显示平均分；
 //   同时按 1/2/3/4/5 分给 stats/rep 增减 -5/0/+5/+10/+15（最低 0），用于称号判定。
@@ -3751,7 +3752,7 @@ void   BOTC_KickEnd ();
 void   BOTC_KickTick ();
 void   BOTC_KickPickStart (int p);   // -kick → 弹魔典点座位（用户 2026-10-02 改回这版）
 void   BOTC_TellerHandover (int p, int seat); // 【换说书人】点座位 → 完成交接
-void   BOTC_TellerLeftHandover ();            // 【说书人退出】（用户 2026-11-01）：按统计自动交接
+void   BOTC_TellerLeftHandover ();            // 【说书人退出】播报 + 蓝叉；自动交接已停用，随即平局封盘
 void   BOTC_SwapSeatStart (int p);            // 【测试·换座位】（用户 2026-10-07）：点按钮 → 选两格
 void   BOTC_SeatSwap (int x, int y);          // 【测试·换座位】：真换（身份/token/死亡/在场 + 谁坐哪格）
 void   BOTC_AfterSeatChange (int who);        // 【换位后统一重刷】（用户 2026-10-07）
@@ -3848,6 +3849,7 @@ bool   BOTC_Tick_Func (bool testConds, bool runActions);
 bool   BOTC_DawnFunc (bool testConds, bool runActions);
 void   BOTC_DawnReveal (int q, int kind);
 void   BOTC_Init ();
+void   BOTC_BoardSwitch ();   // 【换座位 · 说书人换人】在 BOTC_SeatSwap 里调用（后定义，需前置声明）
 
 bool   BOTC_Click_Func (bool testConds, bool runActions);
 bool   BOTC_Chat_Func (bool testConds, bool runActions);
@@ -10908,7 +10910,11 @@ bool BOTC_ClickDo (bool testConds, bool runActions) {
     }
     // 玩家1 真的在点界面 → 他百分之百是真人（电脑不会点）。智能说书已删除，这里不再切模式。
     // 胜负横幅上的【重新开始】：说书人点一下 = 清掉上一局并回到剧本选择页面（用户 2026-11-01）
+    //   【说书人退出 · 平局】（用户 2026-11-20）：禁止重开，保持结算阶段供全场查看魔典。
     if (c == g_winBtn) {
+        if (g_winSide == 3) {
+            return true;
+        }
         if (p == g_teller) {
             BOTC_WinRestart();
         }
@@ -19151,6 +19157,7 @@ void BOTC_ResetGameVars () {
     BOTC_RpSaveLast();
     BOTC_RpClear();
     g_statsDone = false;           // 新一局重新允许结算统计累计
+    g_winDraw = false;             // 新一局取消平局封盘标记
     g_testGame = false;            // 【测试模式】新一局按实际人数重新判定
     // 【每局刷新统计快照】（用户 2026-11-13）：下一局开局重取一次，统计页才会看到上一局结算后的新数字。
     g_statSnapOk = false;
@@ -31293,6 +31300,7 @@ g_noAllOther[102] = 28;     // 恐惧之灵（其他夜第 28）
     g_manualWin = false;
     g_gameOver = false;
     g_winFinalized = false;        // 【幂等】取消正式开始 / 收面板后允许下一局重新封盘
+    g_winDraw = false;             // 【说书人退出 · 平局】取消正式开始 / 重开后清掉平局标记
 }
 
 // 【这个人还在不在游戏里】（用户 2026-11-07）：主动点「离开游戏」时 PlayerStatus 会变成 2，
@@ -31366,7 +31374,10 @@ void BOTC_BuildSeatList () {
         //   PlayerStatus 变成 2，原条件会把座位直接删掉。已开局时只要这一格上一轮还在场、
         //   而人已经不在游戏里，就先保留座位，等 BOTC_LeftCheck() 补播报和蓝叉。
         // 【取消人机座位】（用户 2026-11-18）：电脑座位不进入魔典 / 发牌 / 投票，只认真玩家。
-        if (((PlayerGroupHasPlayer(ag, g_who[i]) && PlayerType(g_who[i]) == 1) || g_leftKeepP[g_who[i]] || (g_started && g_seatOn[i] && !BOTC_PlayerHere(g_who[i]))) && g_who[i] != g_hideSeat) {
+        // 【hideSeat 按格子排除】（用户 2026-11-20）：BOTC_ShuffleSeats 里 g_hideSeat 就是"位置/格子"号，
+        //   这里必须同口径。按人判（g_who[i] != g_hideSeat）时，说书人换过人之后幽灵格和旧说书人
+        //   坐的新格会被同时剔掉 → 整圈少一格、旧说书人从圆桌上消失。
+        if (((PlayerGroupHasPlayer(ag, g_who[i]) && PlayerType(g_who[i]) == 1) || g_leftKeepP[g_who[i]] || (g_started && g_seatOn[i] && !BOTC_PlayerHere(g_who[i]))) && i != g_hideSeat) {
             g_seatList[n] = i;
             n = n + 1;
         }
@@ -68935,7 +68946,10 @@ void BOTC_WinFinalize (int side, string why1, string why2) {
     // 【复盘 · 彻底停用】（用户 2026-11-18）：跟【全部私聊】一样不再记录，也不再生成复盘。
     BOTC_RpCapture(false);
     // 【场次统计】（用户 2026-10-20）：唯一胜负出口只记一次；此时阵营 / 说书人座位都已经确定。
-    BOTC_StatsRecord(side);
+    // 【说书人退出 · 平局】（用户 2026-11-20）：这种封盘只用于复盘，不算场次、不记胜负积分。
+    if (!g_winDraw) {
+        BOTC_StatsRecord(side);
+    }
     // 【结算即恢复战网名】（用户 2026-11-12）：复盘仍已由上一行之前拍下；
     //   桌面和魔典从结算这一刻起显示各人的真实战网名。
     BOTC_ResetPlayerNames();
@@ -69247,10 +69261,20 @@ void BOTC_ShowWinNow () {
             }
         }
         else {
-            libNtve_gf_SetDialogItemText(g_winLabel, StringToText("善良阵营胜利"), PlayerGroupAll());
-            BOTC_PubAnnounce("【胜负】善良阵营胜利 ---- " + g_winChat1);
-            if (StringLength(g_winChat2) > 0) {
-                BOTC_PubAnnounce(g_winChat2);
+            if (g_winSide == 3) {
+                // 【说书人退出 · 平局】（用户 2026-11-20）：不算任何阵营胜利，只供赛后复盘。
+                libNtve_gf_SetDialogItemText(g_winLabel, StringToText("平局"), PlayerGroupAll());
+                BOTC_PubAnnounce("【胜负】平局 ---- " + g_winChat1);
+                if (StringLength(g_winChat2) > 0) {
+                    BOTC_PubAnnounce(g_winChat2);
+                }
+            }
+            else {
+                libNtve_gf_SetDialogItemText(g_winLabel, StringToText("善良阵营胜利"), PlayerGroupAll());
+                BOTC_PubAnnounce("【胜负】善良阵营胜利 ---- " + g_winChat1);
+                if (StringLength(g_winChat2) > 0) {
+                    BOTC_PubAnnounce(g_winChat2);
+                }
             }
         }
     }
@@ -69271,18 +69295,26 @@ void BOTC_ShowWinNow () {
     //   中途退出的玩家也照样列出（名称 / 句柄取退出前快照）。
     BOTC_HandleListAnnounce();
     DialogControlSetVisible(g_winBtn, PlayerGroupAll(), false);
-    DialogControlSetVisible(g_winBtn, PlayerGroupSingle(g_teller), true);
+    if (g_winSide != 3) {
+        // 【说书人退出 · 平局】不提供重新开始，结算页常驻供全场查看魔典。
+        DialogControlSetVisible(g_winBtn, PlayerGroupSingle(g_teller), true);
+    }
     // 结算时已经自动公开真魔典，不再保留单独的复盘按钮。
     DialogControlSetVisible(g_replayBtn, PlayerGroupAll(), false);
     DialogControlSetVisible(g_grimStart, PlayerGroupAll(), false);
     // 胜利面板上面那条「恭喜...获胜」（名字带各自的颜色）
     //   【2026-09-16 用户要求】要的是「去掉对话框（黑框）、信息留住」---- 所以这里照常显示，
     //   黑底在 BOTC_BuildWinCongrats() 里已经关掉了（那两行注释）。
-    if (g_winSide == 2) {
-        libNtve_gf_SetDialogItemText(g_congratsLbl, BOTC_CongratsStText(), PlayerGroupAll());
+    if (g_winSide == 3) {
+        libNtve_gf_SetDialogItemText(g_congratsLbl, StringToText("本局平局（不计胜负）"), PlayerGroupAll());
     }
     else {
-        libNtve_gf_SetDialogItemText(g_congratsLbl, BOTC_CongratsText(), PlayerGroupAll());
+        if (g_winSide == 2) {
+            libNtve_gf_SetDialogItemText(g_congratsLbl, BOTC_CongratsStText(), PlayerGroupAll());
+        }
+        else {
+            libNtve_gf_SetDialogItemText(g_congratsLbl, BOTC_CongratsText(), PlayerGroupAll());
+        }
     }
     DialogSetVisible(g_congratsDlg, PlayerGroupAll(), true);
 }
@@ -69604,6 +69636,10 @@ void BOTC_WinClose () {
 // 【重新开始】（用户 2026-11-01）：结算面板上原来那个【继续】改成【重新开始】，
 //   点一下就把这一局清干净（等同【取消正式开始】）并回到剧本选择页面。
 void BOTC_WinRestart () {
+    // 【说书人退出 · 平局】（用户 2026-11-20）：封盘后不提供重新开始，持续停留在结算阶段。
+    if (g_winDraw) {
+        return;
+    }
     // 【延后保存】重新开始前先把结算时攒下的场次 / 积分写完，避免玩家直接退出漏存。
     BOTC_StatsSaveFlush();
     BOTC_WinClose();
@@ -71996,6 +72032,12 @@ void BOTC_SeatAskSend (int p, int cell) {
         return;
     }
     to = g_who[cell];                              // 那一格现在坐的**人**（物理座位）
+    // 【假座位 / 空位不能当换座位目标】（用户 2026-11-20）：人数不足 6 人时补出来的假座位也会显示在
+    //   圆桌上，但 g_who 指向的并不是真人；请求发出去没有人能点【同意】，只会白等 15 秒超时。
+    if (to < 1 || to > 13 || PlayerType(to) != 1 || PlayerStatus(to) == 2) {
+        BOTC_Notice(p, "那个座位上没有玩家，换一个吧。");
+        return;
+    }
     if (to == p) {
         BOTC_Notice(p, "那是你自己那一格，换一个吧。");
         return;
@@ -72554,6 +72596,19 @@ void BOTC_SwapSkinState (int x, int y) {
     else if (g_choiceOrigT3 == y) { g_choiceOrigT3 = x; }
 }
 
+// 【说书人换人后释放隐藏格】（用户 2026-11-20）：g_hideSeat 记的是"玩家1 不在场、由 2..13 号位里
+//   顺位接手说书人"时那个不进圈的玩家号。说书人一旦换成别人，这个人已经变成普通玩家：
+//   · 幽灵格 g_who[hideSeat] 还指着他本人 → 换完会和他新坐的那一格重复，必须清成 0；
+//   · g_hideSeat 必须归零，否则重新选剧本时 BOTC_ShuffleSeats 会把他漏在牌池外，场上少一个人。
+void BOTC_HideSeatRelease () {
+    if (g_hideSeat >= 1 && g_hideSeat <= 13) {
+        if (g_who[g_hideSeat] == g_hideSeat) {
+            g_who[g_hideSeat] = 0;
+        }
+    }
+    g_hideSeat = 0;
+}
+
 void BOTC_SeatSwap (int x, int y) {
     int q;
     int t;
@@ -72649,7 +72704,6 @@ void BOTC_SeatSwap (int x, int y) {
                 g_tokOn[(((g_teller * 14) + q) * 256) + t] = g_swapTruthTok[(q * 256) + t];
             }
         }
-        // ⚠ g_hideSeat 不动（同上：换说书人不改玩家人数）
         BOTC_PubAnnounce("【换座位】" + nx + " ↔ " + ny + "：说书人格换人了");
         BOTC_PmStore(g_teller, "【换座位】你现在是新的说书人。");
         BOTC_BsBtnRender();
@@ -72658,6 +72712,21 @@ void BOTC_SeatSwap (int x, int y) {
         DialogSetVisible(g_tmMiniDlg, PlayerGroupAll(), false);
         DialogControlSetVisible(g_bluffSendAllBtn, PlayerGroupAll(), false);
         DialogSetVisible(g_tmMiniDlg, PlayerGroupSingle(g_teller), true);
+        // 【说书人换人 → 立刻回到剧本选择页】（用户 2026-11-20）：换完之后"当前这局"已经不可信
+        //   （身份是原说书人配的、换座位 / 取名设置跟原说书人账号、私聊也围着原说书人建立）。
+        //   直接复用【切换板子】那套收尾：收回已下发身份、清日志、清全场魔典、解散全部私聊，
+        //   再回到选板子页面；重新选剧本后重新洗座、重新取名。这样也绕开了"新说书人账号里没开换座位"
+        //   和"含说书人私聊匿名显示"这类换人后的语义问题。
+        BOTC_HideSeatRelease();
+        if (g_started) {
+            BOTC_AfterSeatChange(g_swapPickBy);
+        }
+        else {
+            BOTC_ChatModeSet(2);
+            BOTC_DissolveAllSess(false);
+            BOTC_BoardSwitch();
+        }
+        return;
     }
     // ⑥ 留档 + 重刷全场魔典（两格的名字都变了）
     s = "【换座位】" + nx + " ↔ " + ny;
@@ -72862,9 +72931,9 @@ void BOTC_TellerHandover (int p, int seat) {
             g_tokOn[(((g_teller * 14) + q) * 256) + t] = g_swapTruthTok[(ib * 256) + t];
         }
     }
-    // ⚠【这里不要动 g_hideSeat】（用户 2026-10-07 实测：一动就"点换说书人会掉一格"）：
-    //   换说书人只是"谁当说书人"换人 —— 玩家人数没变，圈里该有的格子数也没变。
-    //   g_hideSeat 只在"刚进游戏顺位接手"那一次设置（BOTC_InitMode），之后整局不再改。
+    // 【说书人换人要释放隐藏格】（用户 2026-11-20）：g_hideSeat 记的是原说书人的玩家号，
+    //   他现在已经是普通玩家：幽灵格清 0、hideSeat 归零，否则重新洗座会漏人 / 座位表少一格。
+    BOTC_HideSeatRelease();
     BOTC_PubAnnounce("【换说书人】" + nOld + " → " + nNew + "（接下来的说书人操作请找他）");
     BOTC_PmStore(g_teller, "【换说书人】你现在是新的说书人（原说书人在 " + BOTC_NameStr(posOld) + " 那一格）。");
     BOTC_BsBtnRender();
@@ -94530,13 +94599,19 @@ void BOTC_LeftCheck () {
     BOTC_TellerLeftHandover();
 }
 
-// 【说书人中途退出】（用户 2026-11-01 / 2026-11-03；自动交接已于 2026-11-17 暂时禁用）：
+// 【说书人中途退出】（用户 2026-11-01 / 2026-11-03 / 2026-11-20）：
 //   ① 跟普通玩家一样在公聊播一句「[编号] 战网名 离开了小镇」；
-//   ② 不再自动把说书人交给其他玩家（原「按说书场次 / 死亡玩家 / 善良阵营挑人」整段停用）；
-//   ③ 游戏已开始时，说书人本人按退出死亡处理（蓝叉，座位保留到结算）。
+//   ② 游戏正式开始前：按说书场次 stats.s 把说书人交给在场真人中最高者（并列取玩家号较小者）；
+//      游戏正式开始后：不再自动交接，说书人本人按退出死亡处理（蓝叉，座位保留到结算）；
+//   ③ 正式开始后随即立刻按平局封盘（2026-11-20）：不算阵营胜负、不记场次 / 积分、不弹评分，
+//      自动公开真魔典（身份 + token）供赛后复盘；平局结算后禁止【重新开始】，停留在结算阶段。
 void BOTC_TellerLeftHandover () {
     int q;
     int p;
+    int best;
+    int bestS;
+    int v;
+    int seat;
     int oldTeller;
     bool kickQuiet;
     if (g_teller < 1 || g_teller > 13) {
@@ -94568,13 +94643,50 @@ void BOTC_TellerLeftHandover () {
         BOTC_RateCloseAll();               // 【说书人退出】结算阶段立刻收起全场打分面板并作废评分
     }
     oldTeller = g_teller;
-    // 【暂时禁用自动交接】（用户 2026-11-17）：说书人因任何原因离开游戏后都不再让其他玩家
-    //   自动接替；说书人身份保持原样，不会再把说书人转给场上玩家。
+    // 【未开局 → 按说书场次继承】（用户 2026-11-20 恢复）：游戏正式开始前说书人退出，
+    //   直接把说书人交给在场真人中 stats.s（说书人场次）最高者；并列取玩家号较小者；
+    //   已退出 / 电脑玩家不参与评选。只读开局缓存，不在这里 BankLoad / BankWait，
+    //   避免 0.5 秒 tick 被掉线账号的存档等待卡住。
     if (!g_started) {
-        BOTC_GrimRelayout();               // 未开局：只保留离开播报，不动座位和死亡标记
+        best = 0;
+        bestS = 0;
+        BOTC_BuildSeatList();
+        for (q = 2; q <= 13; q += 1) {
+            if (!g_seatOn[q]) {
+                continue;
+            }
+            p = g_who[q];
+            if (p < 2 || p > 13) {
+                continue;
+            }
+            if (PlayerType(p) != 1) {
+                continue;
+            }
+            if (!BOTC_PlayerHere(p)) {
+                continue;
+            }
+            v = 0;
+            if (g_bankInit) {
+                v = BOTC_StatsOwnGet(g_bank[p], "s");
+            }
+            if (best == 0 || v > bestS) {
+                best = p;
+                bestS = v;
+            }
+        }
+        if (best == 0) {
+            best = BOTC_FirstPresentSeat();    // 兜底：座位表还没搭好 / 统计全是 0
+        }
+        if (best != 0) {
+            seat = BOTC_PosOf(best);
+            if (seat >= 2 && seat <= 13) {
+                BOTC_TellerHandover(best, seat);
+            }
+        }
+        BOTC_GrimRelayout();
         return;
     }
-    // 【无人接替 → 说书人座位打蓝叉】（用户 2026-11-17）：跟普通退出玩家一样保留座位到结算；
+    // 【正式开始后 → 无人接替 → 打蓝叉】（用户 2026-11-17）：跟普通退出玩家一样保留座位到结算；
     //   说书人格（通常就是格 1）的叉改成蓝色，被投票踢出同样按退出处理。
     q = BOTC_PosOf(oldTeller);
     if (q < 1 || q > 13) {
@@ -94596,7 +94708,12 @@ void BOTC_TellerLeftHandover () {
             BOTC_GrimRender(p);
         }
     }
-    BOTC_CheckWin();
+    // 【说书人退出 → 立刻平局封盘】（用户 2026-11-20）：没有自动继承，也不再走正常胜负判定；
+    //   本局只摊开真魔典供赛后复盘，不算任何阵营胜利、不增加场次、不给离开的说书人评分。
+    if (!g_gameOver) {
+        g_winDraw = true;
+        BOTC_WinFinalize(3, "说书人已离开游戏，本局不计胜负，判为平局。", "真实魔典已公开，仅供赛后复盘。");
+    }
 }
 
 //==================================================================================================
