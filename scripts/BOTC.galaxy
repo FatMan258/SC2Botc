@@ -4069,7 +4069,12 @@ text BOTC_PlayerDisplayName (int pid) {
     }
     // 【说书人恒用战网名】（用户 2026-11-13）：换到说书人格的人不再显示自己原来的随机名 / 自选名，
     //   避免"说书人永远显示自己的玩家名、别人继承"的错位。
+    // 【随机彩色】（用户 2026-11-21）：说书人勾选随机彩色后，g_dispName 里存的是上色后的战网名。
     if (pid == g_teller) {
+        nm = BOTC_RandomNameOf(pid);
+        if (StringLength(nm) > 0) {
+            return StringToText(nm);
+        }
         return BOTC_BattleNameText(pid);
     }
     nm = BOTC_RandomNameOf(pid);
@@ -4095,7 +4100,10 @@ void BOTC_AssignRandomNames () {
     int n;
     string nm;
     for (i = 1; i <= 13; i += 1) {
-        g_dispName[i] = "";
+        // 【说书人彩名保留】（用户 2026-11-21）：说书人在取名阶段选的随机彩色名字不能被洗掉。
+        if (i != g_teller) {
+            g_dispName[i] = "";
+        }
     }
     BOTC_NamePoolInit();
     for (i = 0; i < 37; i += 1) {
@@ -4243,12 +4251,12 @@ string BOTC_NameTag (int p) {
 text BOTC_SeatNameText (int pos) {
     string nm;
     int pid;
-    // 【显示名】：非说书人优先随机 / 自选名；说书人恒用战网名。
+    // 【显示名】：非说书人优先随机 / 自选名；说书人恒用战网名（可带随机彩色标签）。
     // 【点开始说书之前只显示星际名称】（用户 2026-11-13）：选剧本页面不显示起名阶段的自选名 / 随机名。
     nm = "";
     pid = g_who[pos];
     // 【结算后显示真实战网名】（用户 2026-11-13）：胜负已分就不再补随机名，避免清算时被重新随机。
-    if (!g_boardOpen && !g_gameOver && !g_nameStarMode && pid != g_teller) {
+    if (!g_boardOpen && !g_gameOver && !g_nameStarMode) {
         nm = BOTC_RandomNameOf(pid);
         // 【换下来的旧说书人兜底随机名】（用户 2026-11-13）：原来他没随机名 → 这里补一个，
         //   不再回退到战网名（会暴露身份）或显示空名。
@@ -4305,7 +4313,13 @@ text BOTC_PlayerNameText (int p) {
 text BOTC_SeatLabelText (int ob, int pos) {
     text nt;
     if (ob == g_teller) {
-        nt = BOTC_BattleNameText(g_who[pos]);
+        // 【说书人彩名】（用户 2026-11-21）：说书人格仍显示自己的名字，可能已上随机彩色。
+        if (g_who[pos] == g_teller || pos == 1) {
+            nt = BOTC_SeatNameText(pos);
+        }
+        else {
+            nt = BOTC_BattleNameText(g_who[pos]);
+        }
         if (StringLength(TextToString(nt)) <= 0) {
             if (pos == 1) {
                 nt = StringToText("说书人");
@@ -5057,16 +5071,17 @@ void BOTC_IntroBegin () {
     DialogControlSetVisible(g_introEdit, PlayerGroupAll(), true);
     DialogControlSetVisible(g_introBtn, PlayerGroupAll(), true);
     // 【说书人不取名】（用户 2026-11-13）：收起输入框，只显示等待文字。
+    // 【说书人可用随机彩色】（用户 2026-11-21）：允许给战网名上随机彩色。
     if (g_teller >= 1 && g_teller <= 13) {
-        libNtve_gf_SetDialogItemText(g_introPromptLbl, StringToText("请等待其他玩家设置名称"), PlayerGroupSingle(g_teller));
+        libNtve_gf_SetDialogItemText(g_introPromptLbl, StringToText("请等待其他玩家设置名称；可用下方【随机彩色】给自己的名字上色。"), PlayerGroupSingle(g_teller));
         DialogControlSetVisible(g_introEdit, PlayerGroupSingle(g_teller), false);
         DialogControlSetVisible(g_introBtn, PlayerGroupSingle(g_teller), false);
     }
-    // 【彩色名字按钮】（用户 2026-11-15）：积分 ≥ 1000 且不是说书人才显示，默认都不勾选。
+    // 【彩色名字按钮】（用户 2026-11-15）：积分 ≥ 1000 才显示，默认都不勾选。
     DialogControlSetVisible(g_introColorBtn1, PlayerGroupAll(), false);
     DialogControlSetVisible(g_introColorBtn2, PlayerGroupAll(), false);
     for (p = 1; p <= 13; p += 1) {
-        if (p != g_teller && BOTC_IntroCanColor(p)) {
+        if (BOTC_IntroCanColor(p)) {
             // 【起名阶段隐藏渐变彩色】（用户 2026-11-17）：只显示随机彩色，渐变彩色不再展示。
             DialogControlSetVisible(g_introColorBtn2, PlayerGroupSingle(p), true);
         }
@@ -5343,7 +5358,7 @@ string BOTC_IntroStyledName (int p, string name) {
 // 【彩色名字按钮 · 点选】（用户 2026-11-15）：两个按钮互斥；已取好名字时立刻按新模式重算颜色。
 void BOTC_IntroColorClick (int p, int mode) {
     string nm;
-    if (!g_introOn || p < 1 || p > 13 || p == g_teller) {
+    if (!g_introOn || p < 1 || p > 13) {
         return;
     }
     if (!BOTC_IntroCanColor(p)) {
@@ -5357,6 +5372,24 @@ void BOTC_IntroColorClick (int p, int mode) {
         g_introColorMode[p] = mode;
     }
     BOTC_IntroColorRender(p);
+    // 【说书人随机彩色】（用户 2026-11-21）：说书人不取名、仍用战网名，
+    //   这里只把战网名逐字上色；取消勾选时恢复普通战网名。
+    if (p == g_teller) {
+        nm = TextToString(BOTC_BattleNameText(p));
+        if (StringLength(nm) > 0 && g_introColorMode[p] != 0) {
+            g_dispName[p] = BOTC_IntroStyledName(p, nm);
+        }
+        else {
+            g_dispName[p] = "";
+        }
+        if (g_introColorMode[p] != 0) {
+            libNtve_gf_SetDialogItemText(g_introPromptLbl, StringToText("已开启随机彩色名字，倒计时结束前可继续切换。"), PlayerGroupSingle(p));
+        }
+        else {
+            libNtve_gf_SetDialogItemText(g_introPromptLbl, StringToText("已恢复普通战网名，倒计时结束前可继续切换。"), PlayerGroupSingle(p));
+        }
+        return;
+    }
     if (g_introChosen[p] && StringLength(g_introName[p]) > 0) {
         nm = BOTC_IntroStyledName(p, g_introName[p]);
         g_introName[p] = nm;
@@ -14359,7 +14392,32 @@ void BOTC_TestBoardAt (int p, string arg) {
 //   首夜说书人把关键词发给灵言师、并且收回夜间唤醒之后，开始监听公聊和说书人所在的私聊：
 //   记下第一个说出该词的善良玩家（死亡也算）。不立刻转阵营，等下一个夜晚走到灵言师的夜序位次
 //   再结算（见 BOTC_MezeResolve）。
+//   【2026-11-21】关键词只跟随拿到它的那一格：灵言师死亡 / 中途退出 / 被理发师（或其它换身份）换走后，
+//   立刻停止监听并作废待结算，不再把说过关键词的玩家转为邪恶。
 //--------------------------------------------------------------------------------------------------
+bool BOTC_MezeOwnerGone () {
+    int q;
+    int w;
+    q = g_mezeSeat;
+    if (q < 2 || q > 13) {
+        return true;
+    }
+    if (!g_seatOn[q]) {
+        return true;
+    }
+    w = g_who[q];
+    if (w < 1 || w > 13) {
+        return true;
+    }
+    if (g_leftKeepP[w]) {
+        return true;                       // 中途退出：座位还保留着，但人已经离场
+    }
+    if (BOTC_SeatDead(q)) {
+        return true;
+    }
+    return !BOTC_HasAbility(q, 85);        // 真身被换走（理发师等）后这一格不再拥有灵言师能力
+}
+
 void BOTC_MezeListen (int p, string msg) {
     int q;
     int mz;
@@ -14370,6 +14428,12 @@ void BOTC_MezeListen (int p, string msg) {
         return;
     }
     if (StringLength(g_mezeWord) <= 0) {
+        return;
+    }
+    // 【灵言师离场 / 被换身份】（用户 2026-11-21）：关键词跟的那一格已经没有灵言师，监听永久作废。
+    if (BOTC_MezeOwnerGone()) {
+        g_mezeSay = 0;
+        g_mezeDone = true;
         return;
     }
     if (p < 1 || p > 13 || p == g_teller) {
@@ -14409,6 +14473,15 @@ void BOTC_MezeResolve () {
     int q;
     int mz;
     q = g_mezeSay;
+    // 【灵言师离场 / 被换身份】（用户 2026-11-21）：人已经不在拿到关键词的那一格，关键词作废，不再转阵营。
+    if (BOTC_MezeOwnerGone()) {
+        g_mezeSay = 0;
+        g_mezeDone = true;
+        if (q >= 2 && q <= 13) {
+            BOTC_PmStore(g_teller, "【灵言师】灵言师已离场或被换走身份，" + BOTC_NameStr(q) + " 不会因关键词转为邪恶。");
+        }
+        return;
+    }
     mz = BOTC_AbilitySeat(85);
     if (mz < 2 || mz > 13) {
         mz = g_mezeSeat;
@@ -37416,6 +37489,11 @@ void BOTC_PickChoose (int ob, int idx) {
         }
         // 【异教领袖（106）】（用户 2026-10-10）：公开声称 → 全员 20 秒投票
         if (idx == 106) {
+            // 【死亡玩家不得声称异教领袖】（用户 2026-11-21）：死后声称面板同样不再提供这个入口。
+            if (BOTC_PublicDead(BOTC_PosOf(ob))) {
+                BOTC_NoticeSub(ob, "【异教领袖】死亡后不能再声称。");
+                return;
+            }
             // 【提名环节一开始就不能声称】（用户 2026-10-12）：原来是「phase 2..6 才拦」，
             //   也就是**提名环节刚开、还没人发起提名（phase 1）**时还能声称 ---- 现在跟精神病患者同一口径：
             //   只要进了提名环节（g_phase != 0）就不给。
@@ -38085,7 +38163,13 @@ void BOTC_SetSeatRole (int ob, int seat, int roleIdx) {
         //   第一个夜晚得知信息」---- 所以把今晚记成他的首夜；即使首夜那个位次在全局游标里已经过去，
         //   也照旧补一次唤醒（他今晚还没以这个新身份行动过）。
         firstOnly = false;
-        if (roleIdx >= 0 && roleIdx <= 163 && BOTC_NoOtherOf(roleIdx) <= 0 && BOTC_NoFirstOf(roleIdx) > 0) {
+        // 【灵言师（85）· 理发师换身份】（用户 2026-11-21）：85 的「其他夜晚」位次 34 是关键词结算的
+        //   占位，不是真正的其他夜行动，不能按 NoOtherOf <= 0 把它排除在外；换来的灵言师当晚也算首夜，
+        //   补一次唤醒并发放新关键词（原灵言师的旧关键词已由 BOTC_MezeOwnerGone 作废）。
+        //   已经用掉能力（token 104）的座位换回灵言师时不再发词。
+        if (roleIdx >= 0 && roleIdx <= 163 && BOTC_NoFirstOf(roleIdx) > 0
+                && (BOTC_NoOtherOf(roleIdx) <= 0
+                    || (roleIdx == 85 && !g_tokOn[(((g_teller * 14) + seat) * 256) + 104]))) {
             g_seatFirstNight[seat] = g_nightNum;
             firstOnly = true;
         }
@@ -45992,15 +46076,8 @@ void BOTC_DClaimOpen (int p) {
         s = s + "猜落难";
         k = k + 1;
     }
-    // 【异教领袖（106）】（用户 2026-11-20）：死后声称面板也要有入口 —— 死亡玩家同样能公开声称
-    //   异教领袖（任何人都能声称，能力真假由说书人结算）。入口固定显示，时机（提名 / 已处决 /
-    //   私聊阶段）改由点击时统一提示，避免面板打开时机的不同造成「有人有、有人没有」。
-    if (amne || BOTC_BoardHasRole(106)) {
-        BOTC_DeclareSlot(p, 56, 106, k, g_roleName[106]);
-        if (StringLength(s) > 0) { s = s + " / "; }
-        s = s + g_roleName[106];
-        k = k + 1;
-    }
+    // 【异教领袖（106）】（用户 2026-11-21）：死亡玩家不得再公开声称异教领袖 —— 死后声称面板
+    //   不再提供这个入口，只有活着的玩家能从【声称】面板发起。
     if (StringLength(s) <= 0) {
         s = "本局没有可以公开声称的角色";
     }
@@ -71921,6 +71998,12 @@ void BOTC_AfterSeatChange (int who) {
     if (!g_boardOpen && !g_introOn) {
         for (p = 1; p <= 13; p += 1) {
             if (PlayerType(p) == 1 && PlayerStatus(p) != 2) {
+                // 【旧说书人的彩名清掉】（用户 2026-11-21）：说书人卸任后恢复普通玩家身份，
+                //   不能继续沿用彩色战网名（会暴露真身）；清掉后按普通玩家补随机名。
+                if (p != g_teller && StringLength(g_dispName[p]) > 0 &&
+                    BOTC_NameVisibleText(g_dispName[p]) == TextToString(BOTC_BattleNameText(p))) {
+                    g_dispName[p] = "";
+                }
                 BOTC_RandomNameEnsure(p);
             }
         }
@@ -94687,7 +94770,7 @@ void BOTC_LaughTick () {
 
 // 【玩家离开游戏】（用户 2026-10-02）：每半秒查一次 PlayerStatus，谁第一次变成「已离开」就在**公聊**播一句
 //   「玩家N 离开了小镇」（2 = c_playerStatusLeft，直接写数字免得依赖常量名）；
-//   「离开了小镇」四个字的红字由 BOTC_KeyColor 那张关键词表负责。
+//   「离开了小镇」的红字已改为播报时直接预着色，选板页关闭关键词上色时同样显示红字。
 void BOTC_LeftCheck () {
     int q;
     int p;
@@ -94715,7 +94798,9 @@ void BOTC_LeftCheck () {
         }
         g_leftShown[q] = true;
         if (!g_kickQuiet[q]) {
-            BOTC_PubAnnounce(BOTC_NameStr(q) + " 离开了小镇");
+            // 【选板页也要红字】（用户 2026-11-21）：剧本以外关闭了关键词上色，这里直接预着色，
+            //   保证选板页 / 取名页的「离开了小镇」同样是红字。
+            BOTC_PubAnnouncePlain(BOTC_NameStr(q) + " <c val=\"FF0000\">离开了小镇</c>");
         }
         g_kickQuiet[q] = false;             // 【开局前踢出】（用户 2026-11-08）：踢出播报已经播过，只删座不再补播
         if (!g_started) {
@@ -94787,7 +94872,7 @@ void BOTC_TellerLeftHandover () {
     g_tellKickQuiet = false;
     g_leftShown[1] = true;
     if (!kickQuiet) {
-        BOTC_PubAnnounce(BOTC_SayToken(g_teller) + " 离开了小镇");
+        BOTC_PubAnnouncePlain(BOTC_SayToken(g_teller) + " <c val=\"FF0000\">离开了小镇</c>");
     }
     if (g_gameOver) {
         BOTC_RateCloseAll();               // 【说书人退出】结算阶段立刻收起全场打分面板并作废评分
