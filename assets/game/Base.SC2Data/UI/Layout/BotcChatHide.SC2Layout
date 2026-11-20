@@ -91,10 +91,21 @@
     </Frame>
 
     <!-- 【2026-11-07】右下角那个随点击变化的 APM 数值来自 LeaderPanel 里的 APMFrame，
-         整块队长/观察者面板藏掉（本图不用它）。 -->
+         整块队长/观察者面板藏掉（本图不用它）。
+         【2026-11-18】游戏运行时会重新把这块面板设为可见并重算锚点，只靠 Visible 会被盖掉，
+         这里再给整块面板和 APM / CPM 两个子帧补上 Alpha=0，避免 APM 数值重新冒出来。 -->
     <Frame type="LeaderPanel" name="GameUI/UIContainer/FullscreenUpperContainer/LeaderPanel" file="GameUI">
         <Visible val="false"/>
+        <Alpha val="0"/>
         <Anchor side="Top" relative="$parent" pos="Min" offset="4000"/>
+    </Frame>
+    <Frame type="LeaderPanelAPMFrame" name="GameUI/UIContainer/FullscreenUpperContainer/LeaderPanel/APMFrame" file="GameUI">
+        <Visible val="false"/>
+        <Alpha val="0"/>
+    </Frame>
+    <Frame type="LeaderPanelAPMFrame" name="GameUI/UIContainer/FullscreenUpperContainer/LeaderPanel/CPMFrame" file="GameUI">
+        <Visible val="false"/>
+        <Alpha val="0"/>
     </Frame>
 
     <!-- 隐藏底部控制台：小地图 / 单位属性 / 命令卡 / 编队按钮 -->

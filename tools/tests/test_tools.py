@@ -416,7 +416,7 @@ class RoleSpecTests(unittest.TestCase):
             "g_tokName[201]",
             "g_tokName[202]",
             "g_tokName[204]",
-            "g_deathN = 25;",
+            "g_deathN = 26;",
             "g_deathTok[22] = 204;",
             "g_roleDeathTok[163] = 204;",
             "if (r == 163) {",
@@ -474,8 +474,15 @@ class RoleSpecTests(unittest.TestCase):
         source = (PROJECT_ROOT / "scripts" / "BOTC.galaxy").read_text(
             encoding="utf-8-sig"
         )
-        for marker in (
+        # 开局只做小怪宝检测；恶人频道改到小怪宝自己的夜序位再开，
+        # 避免抢在夜序之前拉群（2026-11-20）。
+        self.assertIn("BOTC_LmDetectNoDemon();", source)
+        self.assertIn("BOTC_LmGroupChat();", source)
+        self.assertNotIn(
             "BOTC_LmDetectNoDemon();\n    if (g_lmOn) {\n        BOTC_LmGroupChat();",
+            source,
+        )
+        for marker in (
             "if (g_lmOn && q == g_lmSeat) {\n        r = 112;",
             "showRole[112] = true;",
             "if (g_noAllFirst[112] <= 0) {\n            g_noAllFirst[112] = 26;",
@@ -699,7 +706,11 @@ class LogViewerTests(unittest.TestCase):
         picker_start = source[start:end]
 
         self.assertIn("BOTC_LogPickRender(p);", picker_start)
-        self.assertIn(
+        # 【防报错】（用户 2026-11-18）：打开当拍列表还没就绪，选中行改由下一拍
+        #   BOTC_LogMenuTick 执行，这里只记录目标行；行号从 1 起算，不能再减 1。
+        self.assertIn("g_logPickSel[p] = row;", picker_start)
+        self.assertNotIn("g_logPickSel[p] = row - 1;", picker_start)
+        self.assertNotIn(
             "DialogControlSelectItem(g_logPickList, PlayerGroupSingle(p), 0);",
             picker_start,
         )
@@ -808,26 +819,23 @@ class IntroNameFlowTests(unittest.TestCase):
         board_finish = board_finish[: board_finish.index("\n}\n") + 3]
         self.assertIn("BOTC_IntroBegin();", board_finish)
 
-        intro_finish = source[source.index("void BOTC_IntroFinish () {"):]
-        intro_finish = intro_finish[: intro_finish.index("\n}\n") + 3]
+        enter_script = source[source.index("void BOTC_EnterScript (bool assignNames) {"):]
+        enter_script = enter_script[: enter_script.index("\n}\n") + 3]
         self.assertLess(
-            intro_finish.index("BOTC_ShuffleSeats();"),
-            intro_finish.index("BOTC_AssignRandomNames();"),
+            enter_script.index("BOTC_ShuffleSeats();"),
+            enter_script.index("BOTC_AssignRandomNames();"),
         )
         self.assertLess(
-            intro_finish.index("BOTC_AssignRandomNames();"),
-            intro_finish.index("BOTC_ClearAllLogs();"),
+            enter_script.index("BOTC_AssignRandomNames();"),
+            enter_script.index("BOTC_ClearAllLogs();"),
         )
 
         self.assertEqual(source.count("BOTC_ShuffleSeats();"), 1)
         self.assertEqual(source.count("BOTC_AssignRandomNames();"), 1)
         board_open = source[source.index("void BOTC_BoardOpen () {"):]
         board_open = board_open[: board_open.index("\n}\n") + 3]
-        self.assertIn("if (BOTC_P1IsComputer()) {", board_open)
-        self.assertLess(
-            board_open.index("BOTC_BoardSelect(1);"),
-            board_open.index("BOTC_BoardStart();"),
-        )
+        # 【取消人机座位】（用户 2026-11-18）：选板页不再给玩家 1 的电脑座位自动选板 / 开局。
+        self.assertNotIn("BOTC_P1IsComputer", source)
         self.assertIn("BOTC_BoardSelect(b);", source)
         self.assertIn("g_boardStartBtn = BOTC_NewButton(g_boardDlg, 280, 50, 1600, 930", source)
         self.assertIn("DialogSetPosition(g_tmShowDlg, c_anchorTopLeft, 1600, 990);", source)
@@ -910,36 +918,76 @@ class AmnesiaViewTests(unittest.TestCase):
 
 
 class LogIdentityTests(unittest.TestCase):
-    def test_only_storyteller_logs_append_real_battle_ids(self) -> None:
+    def test_log_names_follow_naming_mode_and_replay_uses_battle_ids(self) -> None:
         source = (PROJECT_ROOT / "scripts" / "BOTC.galaxy").read_text(
             encoding="utf-8-sig"
         )
-        player_name = source[source.index("text BOTC_LogPlayerNameText (int p) {"):]
-        player_name = player_name[: player_name.index("\n}\n") + 3]
-        self.assertIn("g_who[p] == g_teller", player_name)
-        self.assertIn("shown == battle", player_name)
-        self.assertIn('StringToText("（")', player_name)
-        self.assertIn('StringToText("）")', player_name)
-
+        # 【日志名字跟随取名模式】（用户 2026-11-18）：正文默认按当前取名模式替换，
+        #   只有复盘（g_logRealName）才强制使用真实战网名。
         line_text = source[source.index("text BOTC_LogLineText (int viewer, string line, int who) {"):]
         line_text = line_text[: line_text.index("\n}\n") + 3]
-        self.assertIn("viewer == g_teller", line_text)
-        self.assertIn("BOTC_LogNameSubstText(t)", line_text)
+        self.assertIn("if (g_logRealName[viewer])", line_text)
+        self.assertIn("BOTC_RealNameSubstText(viewer, t)", line_text)
         self.assertIn("BOTC_NameSubstText(t)", line_text)
+
+        battle = source[source.index("text BOTC_BattleNameText (int pid) {"):]
+        battle = battle[: battle.index("\n}\n") + 3]
+        self.assertIn("PlayerName(pid)", battle)
+        self.assertIn("g_leftNameP[pid]", battle)
+
+        display = source[source.index("text BOTC_PlayerDisplayName (int pid) {"):]
+        display = display[: display.index("\n}\n") + 3]
+        self.assertIn("if (g_boardOpen)", display)
+        self.assertIn("if (g_gameOver)", display)
+        self.assertIn("if (pid == g_teller)", display)
+        self.assertIn("BOTC_BattleNameText(pid)", display)
 
         # 【日志统一拆行】（用户 2026-11-13）：日志列表统一走 BOTC_LogAddLine，
         #   由它内部调用 BOTC_LogLineText 做名字替换并处理超宽换行。
-        # Check the actual UI boundary, not the number of duplicated call sites.
+        # 【流式读取】（用户 2026-11-18）：普通日志只有 LogStreamStep 一个出口，
+        #   复盘另有 LogTaskStep，其余来源不再各自拼列表项。
+        # 【统一出口】（用户 2026-11-20）：所有 g_logList 写入必须位于 BOTC_LogAddLine
+        #   函数体内，不能有来源直接往列表里塞未经名字替换 / 超宽拆行的裸文本。
+        #   这里按字符位置校验，而不是数调用次数，避免新增第七、八个绕过点后测试仍然通过。
         clean = mask_galaxy_comments_and_strings(source)
-        start = source.index("void BOTC_LogAddLine (int p, string s, int who) {")
-        opening = source.index("{", start)
-        end = matching_brace(clean, opening) + 1
-        add_line = source[start:end]
-        writes = re.findall(r"DialogControlAddItem\(g_logList[^\n]*", source)
-        self.assertTrue(writes)
-        for write in writes:
-            self.assertIn(write, add_line)
-            self.assertIn("BOTC_LogLineText(p,", write)
+        log_add_start = source.index("void BOTC_LogAddLine (int p, string s, int who) {")
+        opening = source.index("{", log_add_start)
+        log_add_end = matching_brace(clean, opening) + 1
+        self.assertGreater(log_add_end, opening)
+        writes = [
+            match.start()
+            for match in re.finditer(r"DialogControlAddItem\s*\(\s*g_logList\b", clean)
+        ]
+        self.assertTrue(writes, "没有找到任何 g_logList 写入")
+        for offset in writes:
+            line_no = source.count("\n", 0, offset) + 1
+            self.assertGreaterEqual(
+                offset,
+                log_add_start,
+                f"第 {line_no} 行直接写 g_logList，绕过了 BOTC_LogAddLine",
+            )
+            self.assertLess(
+                offset,
+                log_add_end,
+                f"第 {line_no} 行直接写 g_logList，绕过了 BOTC_LogAddLine",
+            )
+            line_end = source.find("\n", offset)
+            if line_end < 0:
+                line_end = len(source)
+            write_line = source[offset:line_end]
+            self.assertIn(
+                "BOTC_LogLineText(p,",
+                write_line,
+                f"第 {line_no} 行写 g_logList 时没有经过 BOTC_LogLineText",
+            )
+        self.assertIn("BOTC_LogAddLine(p, s, who);", source)
+        for owner in ("BOTC_LogStreamStep (int p) {", "BOTC_LogTaskStep (int p) {"):
+            body = source[source.index("void " + owner):]
+            body = body[: body.index("\n}\n") + 3]
+            self.assertIn("BOTC_LogAddLine(p,", body)
+        self.assertIn("s = g_pubLog[i];", source)
+        self.assertIn("who = g_pubWho[i];", source)
+        self.assertIn("s = g_pmLog[idx];", source)
 
 
 class BluffPanelRegressionTests(unittest.TestCase):
@@ -1009,17 +1057,21 @@ class MergeRegressionTests(unittest.TestCase):
             source, "void BOTC_HandleListToPm (int viewer) {"
         )
 
+        # 仅说书人、且已进入剧本（选剧本页不响应，避免私聊关闭时误发公聊）。
         self.assertIn(
-            'if (msg == "-handles") {\n        BOTC_HandleListToPm(p);',
+            'if (msg == "-handles") {\n'
+            "        if (p == g_teller && !g_boardOpen) {\n"
+            "            BOTC_HandleListToPm(p);",
             source,
         )
         self.assertNotIn('BOTC_DevPlayer(p) && msg == "-handles"', source)
         self.assertIn("BOTC_PmStore(viewer,", handles)
         self.assertNotIn("BOTC_PmStore(g_teller,", handles)
-        self.assertIn('"【句柄】" + IntToString(p) + "：" + tok', handles)
-        self.assertIn("h = PlayerHandle(p);", handles)
-        self.assertIn("tok = BOTC_HandleToken(p);", handles)
-        self.assertIn('tok = "@@HL" + IntToString(p) + "@@";', handles)
+        # 编号按魔典座位口径输出（说书人 / [n]），所以用 lab 而不是物理座位号。
+        self.assertIn('"【句柄】" + lab + " " + nm + "：" + tok', handles)
+        self.assertIn("h = PlayerHandle(seat);", handles)
+        self.assertIn("tok = BOTC_HandleToken(seat);", handles)
+        self.assertIn('tok = "@@HL" + IntToString(seat) + "@@";', handles)
         self.assertNotIn("物理座位", handles)
         self.assertIn("PlayerGetColorIndex(p, false)", source)
         stats = self._function_text(source, "void BOTC_StatsRender (int p) {")
@@ -1229,7 +1281,7 @@ class MergeRegressionTests(unittest.TestCase):
             encoding="utf-8-sig"
         )
         start = source.index("void BOTC_PukkaResolve (int p, int t) {")
-        end = source.index("// ■ 沙巴洛斯（45）：反刍", start)
+        end = source.index("void BOTC_SabalosResolve (int p, int t1, int t2) {", start)
         pukka = source[start:end]
         guard = pukka.index("if (!BOTC_SkillWorks(p)) {")
         assign = pukka.index("g_pukkaSeat = t;")
@@ -1247,12 +1299,14 @@ class MergeRegressionTests(unittest.TestCase):
             encoding="utf-8-sig"
         )
         self.assertIn("BOTC_PukkaExorcistResolve (int p);", source)
+        # 借来的普卡能力（食人族 / 说书人赋予）也要走驱魔人 × 普卡结算，
+        # 所以按能力层判断，不再只认真身角色 44（2026-11-20）。
         self.assertIn(
-            "if (BOTC_SeatTrueRole(t) == 44) {\n                    BOTC_PukkaExorcistResolve(t);",
+            "if (BOTC_HasAbility(t, 44)) {\n                    BOTC_PukkaExorcistResolve(t);",
             source,
         )
         start = source.index("void BOTC_PukkaExorcistResolve (int p) {")
-        end = source.index("// ■ 沙巴洛斯（45）：反刍", start)
+        end = source.index("void BOTC_SabalosResolve (int p, int t1, int t2) {", start)
         helper = source[start:end]
         for marker in (
             "if (!BOTC_SkillWorks(p)) {",
@@ -1346,6 +1400,49 @@ class MergeRegressionTests(unittest.TestCase):
         self.assertIn(
             "DialogSetVisible(g_bluffDlg, PlayerGroupSingle(g_teller), true);",
             source,
+        )
+
+
+class CultVoteTests(unittest.TestCase):
+    """教派投票（异教领袖 106）读写同一张票表，并保留全员同意判胜。"""
+
+    def _source(self) -> str:
+        return (PROJECT_ROOT / "scripts" / "BOTC.galaxy").read_text(
+            encoding="utf-8-sig"
+        )
+
+    def test_vote_writes_and_reads_the_same_table(self) -> None:
+        source = self._source()
+        start = source.index("void BOTC_CultVoteAt (int p, int v) {")
+        end = source.index("bool BOTC_CultAllAgreed () {", start)
+        vote_at = source[start:end]
+        # 写入必须是原生那张 g_vote（座位投票标记与 BOTC_VoteSet 教派分支同一口径）
+        self.assertIn("g_vote[p] = v;", vote_at)
+        self.assertNotIn("g_cultVote", vote_at)
+        # 单独一张教派票表已经删除，避免再次写读分叉
+        self.assertNotIn("g_cultVote", source)
+
+        agreed_start = source.index("bool BOTC_CultAllAgreed () {")
+        agreed_end = source.index("void BOTC_CultRender () {", agreed_start)
+        self.assertIn("g_vote[i] != 1", source[agreed_start:agreed_end])
+
+        render_start = source.index("void BOTC_CultRender () {")
+        render_end = source.index("void BOTC_CultEnd (bool timeout) {", render_start)
+        render = source[render_start:render_end]
+        self.assertIn("g_vote[i] == 1", render)
+        self.assertNotIn("g_cultVote", render)
+
+    def test_all_agreed_triggers_win(self) -> None:
+        source = self._source()
+        start = source.index("void BOTC_CultEnd (bool timeout) {")
+        end = source.index("void BOTC_CultCancel (string why) {", start)
+        cult_end = source[start:end]
+        # 结算先读全员同意，再（能力可用时）按提议人阵营判胜
+        self.assertIn("ok = BOTC_CultAllAgreed();", cult_end)
+        self.assertIn("if (ok) {", cult_end)
+        self.assertIn(
+            'BOTC_ShowWin(side, "所有善良玩家都加入了异教领袖的教派，", "小镇从此只有一种声音。");',
+            cult_end,
         )
 
 
