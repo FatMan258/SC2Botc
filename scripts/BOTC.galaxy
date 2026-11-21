@@ -996,6 +996,7 @@ int         g_slayAskSec;     // 【15 秒兜底】（用户 2026-11-01）：猎
 int         g_slayX;          // 弹窗右上角的 X（点了等于【否】）
 bool[14]    g_deadVoteUsed;   // 「死人票」：死者这一局只能再投一次；**这一票真的记进票数**才算用掉（在那之前改弃权可以拿回来）
 int         g_zealotForceTick; // 【狂热者（110）】（用户 2026-11-17）：本场提名随机强制投票的剩余拍数（0.5 秒一拍）
+int         g_zealotWarnDay;   // 【狂热者（110）】（用户 2026-11-21）：已经提醒过「投过有罪票不能改弃权」的是第几天（g_dayNum；每个白天只提醒一次）
 bool[14]    g_voteWasDead;    // 刚才那一票是「死后投的」吗（用户 2026-10-02）：统计时只有这个为真才吃他的死人票 ---- 活着时投的票不算
 // 【夜半狂欢 · 第 7 批】84 精神病患者 / 82 落难少女（用户 2026-09-26）
 bool        g_slayAskPsy;      // 这次拍板是精神病患者的
@@ -1694,6 +1695,7 @@ int         g_dkA;             // 左边候选
 int         g_dkB;             // 右边候选
 int         g_dxeMode;         // 店小二：0 = 酒鬼 / 提线木偶假扮（只发两名玩家，不放 token）/ 1 = 标记缺失（发两名后再选谁醉酒）
 int         g_dxeSeat;         // 当前店小二所在逻辑格（0 = 无）；店小二中毒 / 醉酒时「醉酒」标记延迟生效
+int         g_dxeMuteSeat;     // 136「醉酒」标记当前被延迟生效时所在的格（0 = 正常生效 / 没有延迟）
 int         g_tcSeat;          // 【逆臣（119）】他自己坐在哪一格（0 = 本局没有；他首夜选的那个人看 token 139）
 int         g_tcPending;       // 【逆臣（119）】今晚要在他的夜间行动里被告知「转变为邪恶阵营」的那个人（0 = 今晚什么都不用说）
 int         g_wudSeat;         // 【悟道者（118）】他坐在哪一格（0 = 本局没有 / 已经换完人了）
@@ -3173,6 +3175,7 @@ bool   BOTC_SeatImpaired (int q);
 bool   BOTC_SeatIsDrunkRaw (int q);
 bool   BOTC_SeatImpairedRaw (int q);
 bool   BOTC_DxeDrunkOn (int q);       // 【店小二（115）】136 醉酒标记此刻是否真的生效（店小二自己中毒 / 醉酒时延迟）
+void   BOTC_DxeMuteSync ();           // 【店小二（115）】136 醉酒标记开始延迟 / 恢复生效时私聊提醒说书人
 int    BOTC_PhiloDrunkSeat ();
 bool   BOTC_PhiloDrunkSelf (int q);   // 【哲学家×酒鬼】（用户 2026-10-13）：这一格的「醉酒」是他自己的身份（token 70 + 选的是酒鬼 14）
 bool   BOTC_SkillWorks (int q);       // 【技能生不生效】（用户 2026-10-13）：中毒 / 酒鬼 / 醉酒 + 提线木偶(93)
@@ -18608,13 +18611,16 @@ bool BOTC_ChoirboyKingDead () {
     }
     return false;
 }
-// 【狂热者（110）】（用户 2026-10-10 / 2026-11-11）：存活 ≥ 5 人时必须投票（不能弃权）；
-//   中毒 / 醉酒也照样强制（官方口径），所以按「是否拥有能力」判定，不按能力是否生效
+// 【狂热者（110）】（用户 2026-10-10 / 2026-11-11 / 2026-11-21）：存活 ≥ 5 人时必须投有罪票；
+//   中毒 / 醉酒也照样强制（官方口径），所以按「是否拥有能力」判定，不按能力是否生效；
+//   悟道者 / 提线木偶这类认知覆盖角色只要魔典上显示成狂热者，也同样按狂热者处理。
 bool BOTC_ZealotMustVote (int p) {
     int i;
     int n;
     if (!BOTC_HasAbility(p, 110)) {
-        return false;
+        if (g_mark[(g_teller * 14) + p] - 1 != 110) {
+            return false;              // 真身和魔典上都不是狂热者
+        }
     }
     if (BOTC_SeatRegDead(p)) {
         return false;
@@ -18627,10 +18633,9 @@ bool BOTC_ZealotMustVote (int p) {
     }
     return (n >= 5);
 }
-// 【狂热者（110）· 必须投票 = 要他自己投】（用户 2026-11-17）：存活 ≥ 5 人时他必须投有罪票，
-//   但这一票只能由玩家本人点出来，不做任何自动补票：
-//   atStart 为真 = 进入 10 秒投票阶段时，私下提醒他本人必须投有罪票；
-//   atStart 为假 = 投票结束前兜底，还没投票就不计票（官方口径），只私聊提醒说书人。
+// 【狂热者（110）· 自动投有罪】（用户 2026-11-21）：存活 ≥ 5 人时他必须投有罪票，
+//   atStart 为真 = 进入 10 秒投票阶段时，私下提醒他本人必须投有罪票（弃权会被自动改掉）；
+//   atStart 为假 = 投票结束时兜底：一直没投 / 投了弃权的狂热者直接记成有罪票。
 //   教派投票（异教领袖）不适用。
 void BOTC_ZealotVotePrompt (bool atStart) {
     int i;
@@ -18642,18 +18647,19 @@ void BOTC_ZealotVotePrompt (bool atStart) {
         if (g_vote[i] == 1) { continue; }
         if (!BOTC_ZealotMustVote(i)) { continue; }
         if (atStart) {
-            BOTC_PmInfo(g_who[i], "【狂热者】场上存活 ≥ 5 人：本场提名你必须投有罪票，不能弃权。");
+            BOTC_PmInfo(g_who[i], "【狂热者】场上存活 ≥ 5 人：本场提名你必须投有罪票，弃权会被系统自动改成有罪票。");
         }
         else {
-            BOTC_PmStore(g_teller, "【狂热者】" + BOTC_NameStr(i) + " 本场提名没有投票：按官方口径不计票，请你私下提醒他。");
+            g_vote[i] = 1;
+            g_voteWasDead[i] = BOTC_SeatRegDead(i);
+            BOTC_PmStore(g_teller, "【狂热者】" + BOTC_NameStr(i) + " 本场提名没有投有罪票 → 已自动记为有罪票。");
         }
     }
 }
 
-// 【狂热者（110）· 倒计时前 5 秒随机强制】（用户 2026-11-17）：10 秒投票倒计时的前 5 秒里
-//   （剩余 10→5 秒这一段）随便挑一个时间点，还没投有罪票的狂热者由系统强制记成有罪票；
-//   具体落在哪一拍由进入投票阶段时随机决定（0..9 拍 = 0..4.5 秒后），并私聊提醒说书人。
-//   已经自己投过的不动；教派投票（异教领袖）不适用。
+// 【狂热者（110）· 倒计时内自动投有罪】（用户 2026-11-21）：10 秒投票倒计时里的随机时刻
+//   （0..9 秒，0.5 秒一拍）把还没投有罪票（含投了弃权）的狂热者直接记成有罪票，并私聊提醒说书人。
+//   已经自己投过有罪票的不动；记成有罪票之后不允许再改弃权。教派投票（异教领袖）不适用。
 void BOTC_ZealotForceLate () {
     int i;
     if (!g_started || g_gameOver || g_cultOn || g_phase != 5) {
@@ -18669,7 +18675,7 @@ void BOTC_ZealotForceLate () {
         if (!BOTC_ZealotMustVote(i)) { continue; }
         g_vote[i] = 1;
         g_voteWasDead[i] = BOTC_SeatRegDead(i);
-        BOTC_PmStore(g_teller, "【狂热者】" + BOTC_NameStr(i) + " 投票倒计时前 5 秒内仍未投票 → 已强制记为有罪票。");
+        BOTC_PmStore(g_teller, "【狂热者】" + BOTC_NameStr(i) + " 投票倒计时内没投有罪票 → 已自动记为有罪票。");
         BOTC_NomUI();
     }
 }
@@ -19471,6 +19477,7 @@ void BOTC_ResetGameVars () {
     g_peekFakeWidow = 0;
     // 【店小二】（用户 2026-11-21）：新一局清空延迟生效的店小二座位与手动面板模式
     g_dxeSeat = 0;
+    g_dxeMuteSeat = 0;
     g_dxeMode = 0;
     // 【教父 · 首夜外来者 / 送葬者】（用户 2026-11-14）：新一局清空已告知记录
     for (i = 1; i <= 13; i += 1) {
@@ -20117,6 +20124,7 @@ void BOTC_ResetGameVars () {
     g_phase = 0;
     g_dayNum = 0;
     g_nightNum = 0;
+    g_zealotWarnDay = 0;           // 【狂热者】每个白天一次的改票提醒不能跨局
     for (i = 0; i <= 13; i += 1) {
         g_seatFirstNight[i] = 1;
     }
@@ -41723,6 +41731,44 @@ bool BOTC_DxeDrunkOn (int q) {
     return true;                          // 找不到来源（离场 / 换身份）：按原样生效
 }
 
+// 【店小二（115）· 醉酒标记延迟的私聊提醒】（用户 2026-11-21）：
+//   136「醉酒」标记不会因为店小二中毒 / 醉酒而消失，只是暂时不生效（见 BOTC_DxeDrunkOn）。
+//   延迟开始 / 恢复生效这个状态变化只提醒说书人一次，由 0.5 秒 tick 调用。
+void BOTC_DxeMuteSync () {
+    int d;
+    int i;
+    int tok;
+    bool imp;
+    d = g_dxeSeat;
+    tok = 0;
+    if (g_started && d >= 2 && d <= 13) {
+        for (i = 2; i <= 13; i += 1) {
+            if (g_tokOn[(((g_teller * 14) + i) * 256) + 136]) {
+                tok = i;
+            }
+        }
+        if (tok == d) {
+            tok = 0;                      // 这枚标不会落在店小二自己身上
+        }
+    }
+    if (tok == 0) {
+        g_dxeMuteSeat = 0;
+        return;
+    }
+    imp = BOTC_SeatImpaired(d);
+    if (imp) {
+        if (g_dxeMuteSeat != tok) {
+            g_dxeMuteSeat = tok;
+            BOTC_PmStore(g_teller, "【店小二】" + BOTC_NameStr(tok) + " 身上的「醉酒」标记暂不生效：店小二目前中毒 / 醉酒，等他恢复健康清醒后才会开始醉酒。");
+        }
+        return;
+    }
+    if (g_dxeMuteSeat != 0) {
+        g_dxeMuteSeat = 0;
+        BOTC_PmStore(g_teller, "【店小二】已恢复健康清醒，" + BOTC_NameStr(tok) + " 身上的「醉酒」标记开始生效。");
+    }
+}
+
 // 掷一次「观察者 ob 眼里的座位 q」：登记（间谍/陌客可能被看成别的）+ 中毒/酒鬼视角下看到的身份。
 //   每个「观察者 × 对象」只掷一次，之后一直沿用；只有观察者的中毒/酒鬼状态变了才会重掷
 //   （状态解除就会重新判定，符合「治好以后看到的就是真的」）
@@ -62876,8 +62922,20 @@ bool BOTC_GfAliveInPlay () {
 //   · 每名异教领袖每夜只弹一次（g_cultChDone 记夜数），借来的能力同样生效。
 //   · 能力失效（中毒 / 醉酒 / 来源离场）时不弹窗。
 //--------------------------------------------------------------------------------------------------
+// 这个座位「拥有异教领袖能力」的第一个夜晚，统一给夜间改阵营弹窗排夜序用：
+//   · 真异教领袖、哲学家 / 麻脸巫婆把真身改成异教领袖：收尾时（BOTC_SetSeatRole 之前）
+//     已经把 g_seatFirstNight 记成转变当晚，所以转变当夜就是它的首个夜晚；
+//   · 食人族 / 失忆者 / 变脸师 / 说书人赋予借来的能力：首个夜晚记在 g_grantFirstNight。
+//   两种来源同一口径：首个夜晚走正常异教领袖的首夜位次（78），之后走其他夜晚位次（114）。
+int BOTC_CultFirstNight (int q) {
+    if (BOTC_SeatTrueRole(q) != 106 && g_grantRoleBy[q] == 107 && g_grantFirstNight[q] >= 1) {
+        return g_grantFirstNight[q];
+    }
+    return g_seatFirstNight[q];
+}
+
 int BOTC_CultChoiceOrd (int q) {
-    if (g_nightNum <= g_seatFirstNight[q] && BOTC_NoFirstOf(106) > 0) {
+    if (g_nightNum <= BOTC_CultFirstNight(q) && BOTC_NoFirstOf(106) > 0) {
         return BOTC_NoFirstOf(106);
     }
     return BOTC_NightOrder(106);
@@ -62949,10 +63007,10 @@ void BOTC_CultChoiceAsk (int q) {
     sl = "左邻：无";
     sr = "右邻：无";
     if (L > 0) {
-        sl = "左邻 [" + IntToString(g_lab[L]) + "] " + TextToString(BOTC_SeatNameText(L)) + "（" + BOTC_AlignName(BOTC_SeatRegAlign(L)) + "）";
+        sl = "左邻 [" + IntToString(g_lab[L]) + "]（" + BOTC_AlignName(BOTC_SeatRegAlign(L)) + "）";
     }
     if (R > 0) {
-        sr = "右邻 [" + IntToString(g_lab[R]) + "] " + TextToString(BOTC_SeatNameText(R)) + "（" + BOTC_AlignName(BOTC_SeatRegAlign(R)) + "）";
+        sr = "右邻 [" + IntToString(g_lab[R]) + "]（" + BOTC_AlignName(BOTC_SeatRegAlign(R)) + "）";
     }
     libNtve_gf_SetDialogItemText(g_cultChL, StringToText(sl), PlayerGroupSingle(g_teller));
     libNtve_gf_SetDialogItemText(g_cultChR, StringToText(sr), PlayerGroupSingle(g_teller));
@@ -67270,6 +67328,7 @@ void BOTC_DxeSetup (int midGame, int atSeat) {
         g_tokOn[(((g_teller * 14) + i) * 256) + 136] = false;
     }
     g_dxeSeat = 0;
+    g_dxeMuteSeat = 0;                  // 重放标记时按当前状态重新判断，不继承上一份的延迟记录
     p = 0;
     if (atSeat >= 2 && atSeat <= 13 && g_seatOn[atSeat]) {
         p = atSeat;                     // 中途被创造：直接用刚变成店小二的那一格，避免同一次换身份里认错座位
@@ -94396,10 +94455,10 @@ void BOTC_PhaseSet (int ph) {
     if (ph == 0 && g_pendClaimN > g_pendClaimIdx && g_pendClaimSec <= 0) {
         g_pendClaimSec = 2;            // 1 秒（0.5 秒一拍）
     }
-    // 【狂热者（110）· 只提醒不补票】（用户 2026-11-17）：进入 10 秒投票阶段先私下提醒狂热者
-    //   本人必须投有罪票，票由他自己点；强制补票的具体时间点在前 5 秒里随机挑。
+    // 【狂热者（110）· 自动投有罪】（用户 2026-11-21）：进入 10 秒投票阶段先私下提醒狂热者本人必须投有罪票；
+    //   还没投票 / 投了弃权的，在倒计时内随机一拍（0..9 秒）自动记成有罪票。
     if (ph == 5) {
-        g_zealotForceTick = RandomInt(0, 9);      // 0.5 秒一拍 → 0..4.5 秒后（倒计时 10→5.5 秒）
+        g_zealotForceTick = RandomInt(0, 18);     // 0.5 秒一拍 → 0..9 秒后
         BOTC_ZealotVotePrompt(true);
     }
     // 【进提名环节 → 把大家开着的声称收掉】（用户 2026-10-12）
@@ -94895,11 +94954,15 @@ void BOTC_VoteSet (int p, int v) {
             }
         }
     }
-    // 【狂热者（110）】（用户 2026-10-10 / 2026-11-17）：存活 ≥ 5 人时他必须在所有提名中投有罪票 →
-    //   点弃权不记录，只私下提示他本人必须投票（其他玩家看不到任何变化，不暴露能力）；
+    // 【狂热者（110）】（用户 2026-10-10 / 2026-11-21）：存活 ≥ 5 人时，只要已经投了有罪票，
+    //   就不能再改成弃权，并私下提醒他（每个白天只提醒一次）；
+    //   还没投票 / 投了弃权时照常记录，倒计时内系统会自动改记成有罪票。
     //   存活 < 5 或已登记死亡时 BOTC_ZealotMustVote 返回假，仍可正常弃权。
-    if (v == 2 && BOTC_ZealotMustVote(p)) {
-        BOTC_PmInfo(g_who[p], "【狂热者】场上存活 ≥ 5 人：本场提名你必须投有罪票，不能弃权。");
+    if (v == 2 && g_vote[p] == 1 && BOTC_ZealotMustVote(p)) {
+        if (g_zealotWarnDay != g_dayNum) {
+            g_zealotWarnDay = g_dayNum;
+            BOTC_PmInfo(g_who[p], "【狂热者】场上存活 ≥ 5 人：你已经投了有罪票，本场提名不能再改成弃权。");
+        }
         return;
     }
     g_vote[p] = v;
@@ -94936,6 +94999,7 @@ void BOTC_VoteDone () {
     int bestSeat;
     int oldSeat;
     bool tie;
+    bool askDisguise;
     yes = 0;
     good = 0;
     nom = g_nomTo;
@@ -94955,8 +95019,11 @@ void BOTC_VoteDone () {
         }
     }
     // 【间谍 / 陌客能力者投票】（用户 2026-11-12）：只在私聊里提醒说书人，最终由他判断。
+    // 【只在善良票口径会受影响时提醒】（用户 2026-11-21）：场上没有维齐尔 / 军团 / 狂热者的
+    //   能力者时，善良票数怎么算都不影响任何结算，这条提示不再发出。
+    askDisguise = (BOTC_AbilityInPlay(141) || BOTC_AbilityInPlay(94) || BOTC_AbilityInPlay(110));
     for (i = 2; i <= 13; i += 1) {
-        if (g_vote[i] == 1 && BOTC_IsDisguiseAbility(i)) {
+        if (askDisguise && g_vote[i] == 1 && BOTC_IsDisguiseAbility(i)) {
             BOTC_PmStore(g_teller, "【维齐尔 / 军团 / 狂热者】" + BOTC_NameStr(i) + " 是间谍 / 陌客能力者，这一票目前按登记阵营计入（登记善良 = 善良票）；最终是否按善良计算请你裁定。");
         }
     }
@@ -95840,6 +95907,7 @@ bool BOTC_Tick_Func (bool testConds, bool runActions) {
     BOTC_InnkeeperSync();          // 旅店老板能力失效后立即收回两名目标身上的「不会死亡」
     BOTC_OgreFriendSync();         // 【食人魔（148）· 挚友】阵营跟随被标记玩家（用户 2026-11-11）
     BOTC_HolySoulMarkSync();       // 【圣洁之魂（89）】「禁止邪恶」提示标记自动放置 / 移除（用户 2026-11-11）
+    BOTC_DxeMuteSync();            // 【店小二（115）】136 醉酒标记开始延迟 / 恢复生效时私聊提醒说书人（用户 2026-11-21）
     // 【界面自愈】（用户 2026-10-07 报「换位之后有时候渲染不对、第二遍才对」）：每 0.5 秒重画一次
     //   说书人那份魔典（只 1 个客户端）—— 哪怕哪一步漏刷，最多半个 tick 就自己补上。
     BOTC_GrimRender(g_teller);
