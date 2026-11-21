@@ -46530,6 +46530,8 @@ void BOTC_GuessPedant (int p, int q) {
     g_guessKind[ob] = 0;
     BOTC_DeclareRender();
     g_pedantGuessUsed[ob] = true;
+    // 【提交反馈】（用户 2026-11-21）：不论真假，只要提交了猜测就给本人反馈，避免界面节奏暴露真身。
+    BOTC_Notice(ob, "【猜书生】已将你猜测的座位号 " + BOTC_NameStr(q) + " 提交给说书人。");
     // 有效性：真恶魔 + 能力没有失效（中毒 / 醉酒 / 提线木偶时按失效处理）
     if (BOTC_RoleTeam(BOTC_SeatTrueRole(p)) != 3) {
         BOTC_GrimRender(g_teller);     // 假声称：不给说书人私聊提醒（用户 2026-11-04）
@@ -46573,10 +46575,35 @@ void BOTC_GuessPedant (int p, int q) {
     BOTC_GrimRender(g_teller);
 }
 
+// 【解谜大师 · 醉酒的那一格】（用户 2026-11-21）：返回因解谜大师能力醉酒（token 129）的格子，0 = 没有。
+//   公开猜测与夜间技能面板共用，只用于给说书人提示，不参与自动结算。
+int BOTC_PuzzleDrunkSeat () {
+    int i;
+    int n;
+    n = 0;
+    for (i = 2; i <= 13; i += 1) {
+        if (g_tokOn[(((g_teller * 14) + i) * 256) + 129]) {
+            n = i;
+        }
+    }
+    return n;
+}
+
+// 【解谜大师 · 醉酒提示】（用户 2026-11-21）：写在说书人作答面板标题里，方便他判断这次该给什么。
+string BOTC_PuzzleDrunkText () {
+    int d;
+    d = BOTC_PuzzleDrunkSeat();
+    if (d >= 2) {
+        return "醉酒标记在 " + BOTC_NameStr(d);
+    }
+    return "醉酒标记缺失";
+}
+
 // 【声称/猜测 · 解谜大师】（用户 2026-11-04）
 //   · 任何玩家都能点；只有真解谜大师（或借到该能力的人）的猜测才算有效。
-//   · 有效时：真解谜大师拿 token 130「已猜测（解谜大师）」；说书人弹框自己填要告诉他的座位号，
-//     猜对 / 猜错 / 中毒醉酒都由说书人自己判。
+//   · 有效时：真解谜大师拿 token 130「已猜测（解谜大师）」。
+//   · 【说书人手动作答】（用户 2026-11-21）：无论猜没猜中，都由说书人自己填要告诉他的座位号，
+//     系统不自动发恶魔编号。
 void BOTC_GuessPuzzle (int p, int q) {
     int ob;
     int real;
@@ -46585,6 +46612,8 @@ void BOTC_GuessPuzzle (int p, int q) {
     g_guessKind[ob] = 0;
     BOTC_DeclareRender();
     g_puzzleGuessUsed[ob] = true;
+    // 【提交反馈】（用户 2026-11-21）：不论真假，只要提交了猜测就给本人反馈，避免界面节奏暴露真身。
+    BOTC_Notice(ob, "【猜醉酒】已将你猜测的座位号 " + BOTC_NameStr(q) + " 提交给说书人。");
     if (!BOTC_HasAbility(p, 109)) {
         BOTC_GrimRender(g_teller);     // 假声称：不给说书人私聊提醒（用户 2026-11-04）
         return;
@@ -46597,7 +46626,7 @@ void BOTC_GuessPuzzle (int p, int q) {
         real = p;
     }
     g_tokOn[(((g_teller * 14) + real) * 256) + 130] = true;
-    BOTC_ManInfoOpen(p, 109, "他白天公开猜 " + BOTC_NameStr(q) + "。填一个座位号告他（猜对 / 猜错 / 中毒醉酒由你判断）");
+    BOTC_ManInfoOpen(p, 109, "他白天公开猜 " + BOTC_NameStr(q) + "，" + BOTC_PuzzleDrunkText() + "。填一个座位号告他（猜中填恶魔，猜错填非恶魔）");
     BOTC_GrimRender(g_teller);
 }
 
@@ -52212,7 +52241,21 @@ void BOTC_ManInfoOk () {
             s2 = "（说书人没填内容）";
         }
         BOTC_PmInfo(g_who[seat], "【信息】你得知" + s2);
-        BOTC_PmStore(g_teller, "【解谜大师】已告诉 " + BOTC_NameStr(seat) + "（错误信息）：" + s2 + "。");
+        // 【说书人手动作答】（用户 2026-11-21）：猜没猜中都由说书人自己填座位号；
+        //   日志按他填的编号是不是恶魔记成「猜中」或「错误信息」。
+        n = BOTC_TextNum(s2);
+        tru = 0;
+        for (i = 2; i <= 13; i += 1) {
+            if (g_lab[i] == n) {
+                tru = i;
+            }
+        }
+        if (tru >= 2 && BOTC_SeatTeam(tru) == 3) {
+            BOTC_PmStore(g_teller, "【解谜大师】已告诉 " + BOTC_NameStr(seat) + "（猜中 · 恶魔座位号）：" + s2 + "。");
+        }
+        else {
+            BOTC_PmStore(g_teller, "【解谜大师】已告诉 " + BOTC_NameStr(seat) + "（错误信息）：" + s2 + "。");
+        }
         DialogSetVisible(g_miDlg, PlayerGroupSingle(g_teller), false);
         g_miSeat = 0;
         g_miRole = -1;
@@ -64299,34 +64342,12 @@ void BOTC_SkillConfirmCore (int p) {
             return;
         }
         g_tokOn[(((g_teller * 14) + p) * 256) + 130] = true;      // 「已猜测」：放他自己身上
-        n = 0;                                                   // 那个醉酒的人在哪一格
-        for (i = 2; i <= 13; i += 1) {
-            if (g_tokOn[(((g_teller * 14) + i) * 256) + 129]) {
-                n = i;
-            }
-        }
         BOTC_GrimRender(g_teller);
-        if (n == t) {
-            n2 = 0;                                              // 找一个活着的恶魔
-            for (i = 2; i <= 13; i += 1) {
-                if (!g_seatOn[i] || BOTC_SeatDead(i)) { continue; }
-                if (BOTC_SeatTeam(i) == 3) { n2 = i; }
-            }
-            if (n2 >= 2) {
-                // 【猜中 · 只发编号】（用户 2026-11-07）：和错误信息统一成「你得知「N」」，
-                //   不再拼「[N]某某是恶魔」。
-                BOTC_PmInfo(g_who[p], "【信息】你得知" + IntToString(g_lab[n2]));
-                BOTC_PmStore(g_teller, "【解谜大师】" + BOTC_NameStr(p) + " 猜中：已告诉他恶魔的座位号 " + IntToString(g_lab[n2]) + "。");
-            }
-            else {
-                BOTC_PmStore(g_teller, "【解谜大师】" + BOTC_NameStr(p) + " 猜对，但没有活着的恶魔。");
-            }
-        }
-        else {
-            BOTC_ManInfoOpen(p, 109, "他猜的是 " + BOTC_NameStr(t) + "（猜错了）→ 填一条**错误**信息给他");
-            DialogSetVisible(g_grimDlg, PlayerGroupSingle(g_who[p]), false);   // 魔典会盖住说书人面板：先收掉
-            g_grimOn[g_who[p]] = false;
-        }
+        // 【说书人手动作答】（用户 2026-11-21）：猜没猜中都由说书人自己填要告诉他的座位号，
+        //   系统不再自动发恶魔编号。
+        BOTC_ManInfoOpen(p, 109, "他猜的是 " + BOTC_NameStr(t) + "（当前醉酒：" + BOTC_PuzzleDrunkText() + "）→ 填一个座位号告他（猜中填恶魔，猜错填非恶魔）");
+        DialogSetVisible(g_grimDlg, PlayerGroupSingle(g_who[p]), false);   // 魔典会盖住说书人面板：先收掉
+        g_grimOn[g_who[p]] = false;
         return;
     }
     // ■ 堤丰之首（111）/ 小怪宝（112）：恶魔刀（走通用的恶魔那一套：保护 / 士兵 / 免死都算）
