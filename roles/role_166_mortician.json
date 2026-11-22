@@ -1,0 +1,111 @@
+{
+  "schema_version": 2,
+  "index": 166,
+  "name": "入殓师",
+  "team": "outsider",
+  "alignment": "good",
+  "text": "如果你提名了恶魔且他死于这次处决，你会变成那个邪恶的恶魔。",
+  "lore": "你为死者整理遗容，也在恶魔倒下时接过他的面具。",
+  "timing": "passive",
+  "frequency": "conditional",
+  "action": "passive",
+  "target_count": 0,
+  "first_night_order": null,
+  "other_night_order": null,
+  "role_keywords": "处决|角色变化",
+  "target": {
+    "kind": "none",
+    "count": 0,
+    "living": false,
+    "allow_self": false,
+    "allow_repeat": false
+  },
+  "artwork": {
+    "source": "待提供或制作角色原画",
+    "source_url": "https://clocktower-wiki.gstonegames.com/index.php?title=%E5%85%A5%E6%AE%93%E5%B8%88",
+    "role_icon": "botc_role166.dds",
+    "night_icon": "botc_night166.dds",
+    "token_icons": []
+  },
+  "night_order": {
+    "section": "interference",
+    "anchor_role": null,
+    "relation": null,
+    "first": null,
+    "other": null
+  },
+  "tokens": [],
+  "jinxes": [
+    {
+      "role": "红唇女郎",
+      "text": "入殓师在恶魔死于自己提名的处决后立即变成该恶魔；本次转换不再触发红唇女郎接任。"
+    },
+    {
+      "role": "哈迪寂亚",
+      "text": "如果出现两名存活的哈迪寂亚，则入殓师变成的哈迪寂亚会变回入殓师，但阵营保持邪恶。"
+    },
+    {
+      "role": "小怪宝",
+      "text": "存活玩家不少于5人且入殓师提名并处决照看小怪宝的玩家时，入殓师变为邪恶的该角色，并一直照看小怪宝。"
+    },
+    {
+      "role": "痢蛭",
+      "text": "存活玩家不少于5人且入殓师提名并处决痢蛭宿主且其死亡时，原痢蛭当晚死亡，入殓师变为邪恶的痢蛭且当晚无法攻击。"
+    }
+  ],
+  "effects": [
+    {
+      "kind": "custom",
+      "id": "execution_demon_inheritance",
+      "notes": "只有入殓师本人发起提名、目标真实身份为恶魔、目标确实死于本次处决、入殓师能力正常且恶魔死亡后至少五名非旅行者存活时触发。"
+    },
+    {
+      "kind": "custom",
+      "id": "online_immediate_conversion",
+      "notes": "在处决死亡写入后立即把入殓师变为死亡恶魔，并通过现有身份转变私聊发送；不排入夜序、不等待夜间唤醒。"
+    },
+    {
+      "kind": "custom",
+      "id": "dead_demon_continues",
+      "notes": "死亡恶魔仍记录真实死亡；转换完成后跳过本次无恶魔胜负检查。"
+    },
+    {
+      "kind": "custom",
+      "id": "lil_monsta_jinx",
+      "notes": "小怪宝照看者满足人数门槛并死于入殓师提名的处决时，入殓师取得照看者角色的邪恶版本，并接手小怪宝照看标记。"
+    },
+    {
+      "kind": "custom",
+      "id": "leech_jinx",
+      "notes": "痢蛭宿主满足人数门槛并死于入殓师提名的处决时，原痢蛭延迟到当晚死亡，入殓师当场变为邪恶痢蛭并跳过该夜攻击。"
+    }
+  ],
+  "randomness": {
+    "declared": false,
+    "notes": ""
+  },
+  "tests": [
+    "随机配板/自定义剧本可选入殓师，设置阵营为善良外来者。",
+    "只有入殓师本人提名并处决一名真实恶魔时才触发。",
+    "恶魔死亡后剩余非旅行者少于五人时不触发，善良按无恶魔结束。",
+    "中毒、醉酒、死亡或能力来源失效时不触发。",
+    "保护、弄臣、茶艺师等阻止死亡时不触发。",
+    "处决结算当场转换并私聊告知，不等待夜晚。",
+    "转换后角色牌、阵营和夜序按该恶魔继续。",
+    "恶魔死亡记录仍保留，红唇女郎不重复接任。",
+    "处决后不重复触发一次转换。",
+    "小怪宝照看者死亡时，入殓师接手照看并变为该角色的邪恶版本。",
+    "哈迪寂亚只登记相克文本，不额外触发代码逻辑。",
+    "痢蛭宿主死亡时原痢蛭当晚死亡，入殓师成为邪恶痢蛭且本夜不攻击。"
+  ],
+  "implementation": {
+    "required_functions": [
+      "BOTC_MorticianExecTransform"
+    ],
+    "required_symbols": [
+      "g_roleName[166]",
+      "g_roleTeam[166]",
+      "g_tipAbility[166]"
+    ]
+  }
+}
