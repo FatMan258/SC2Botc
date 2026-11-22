@@ -814,7 +814,9 @@ class GameStartLogTests(unittest.TestCase):
         cancel_start = source.index("void BOTC_GameStartCancel () {")
         cancel_end = source.index("\n}\n", cancel_start)
         cancel = source[cancel_start:cancel_end]
-        self.assertEqual(cancel.count("BOTC_ClearAllLogs();"), 2)
+        # 【2026-11-23】正式开始那一清已改到进入首夜时才做；倒计时中途取消不再清日志，
+        #   所以取消路径里只剩「已经开始后再取消 / 重新开始」这一处清空。
+        self.assertEqual(cancel.count("BOTC_ClearAllLogs();"), 1)
 
 
 class IntroNameFlowTests(unittest.TestCase):

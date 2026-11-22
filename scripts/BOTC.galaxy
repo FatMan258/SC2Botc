@@ -421,7 +421,7 @@ bool[14]    g_alcPick;          // 正在等炼金术士点一个座位（活人
 int         g_alcSeat;          // 他点到的那名玩家
 int[14]     g_alcRolePick;      // 他选的「间谍 / 寡妇」
 int         g_alcBy;            // 猜的那个人（炼金术士座位，用于恶魔校验时看他清不清醒）
-int         g_alcBorrow;        // 【炼金术士(95)】他借到的那个爪牙角色（0 = 还没定）
+int[14]     g_alcBorrowBy;     // 【炼金术士(95)】每个座位借到的爪牙角色 + 1（0 = 还没定；支持多名持有者）
 bool[14]    g_alcChoice;        // 炼金声称的第一步：这个客户端正在选「间谍 / 寡妇」
 int         g_alcDlg;           // 炼金声称的「猜间谍 / 猜寡妇」选择框
 int         g_alcTitle;
@@ -435,7 +435,7 @@ int         g_lleechHost;       // 【痢蛭(100)】首夜他选的宿主座位�
 int         g_morticianLeechPending; // 【入殓师 × 痢蛭】原痢蛭待当晚死亡的座位
 int         g_morticianLeechNoAttack; // 【入殓师 × 痢蛭】新痢蛭本夜不能攻击
 int         g_lleechEval;       // 【防死循环】BOTC_LleechPoisonOn 正在求值时的重入深度（>0 表示已进入）
-int         g_philoDrunkEval;   // 【防死循环】BOTC_PhiloDrunkSeat 正在求值时的重入深度（>0 表示已进入）
+int         g_philoDrunkEval;   // 【防死循环】哲学家醉酒求值（BOTC_PhiloDrunkTargetOf / Sync）的重入深度（>0 表示已进入）
 int         g_boffinEval;       // 【防死循环】BOTC_BoffinSourceIs 正在求值时的重入深度（>0 表示已进入）
 int         g_liveCorpseEval;   // 【防死循环】BOTC_LivingCorpseCountsAlive 正在求值时的重入深度（>0 表示已进入）
 int         g_corpseEval;       // 【防死循环】赶尸人活尸求值（BOTC_CorpseWalkerWorks）重入深度（用户 2026-11-22）
@@ -1251,7 +1251,7 @@ bool[2296]  g_faceEver;
 int[14]     g_pickAttachSeat;  // 身份网格点完后，把所选能力挂到哪个座位（0 = 普通选身份）
 int         g_pickOnlyRole;    // 只显示这一个角色（小精灵确认用；-1 = 不限制）
 int         g_amneDoneNight;   // 失忆者首夜能力选择已经完成的夜号（0 = 还没做）
-int         g_cannDoneNight;   // 食人族今晚的能力选择已经完成
+int[14]     g_cannDoneBy;     // 【食人族】每个座位今晚的能力选择是否已完成（存夜号；支持多名食人族）
 int         g_cannPending;     // 今天有玩家死于处决：夜里先给食人族发能力
 bool        g_poppyEvilPend;   // 罂粟种植者（或获得其能力者）死亡后待进行的邪恶互认
 int         g_poppyEvilNight;  // 这次互认属于第几夜（夜号对不上自动作废）
@@ -1282,6 +1282,13 @@ int[14]     g_pixieSeatBy;     // 小精灵得知的镇民当时所在座位（�
 bool[14]    g_pixieDone;       // 小精灵是否已经用掉这次获得能力的机会
 bool[14]    g_pixieAsked;      // 借到小精灵能力的座位是否已经弹过「选一个在场的镇民玩家」
 bool[14]    g_philoUsed;       // 哲学家的一次性能力是否已经用掉（含被中毒 / 醉酒浪费）
+// 【中毒 / 醉酒浪费能力的哲学家】（用户 2026-11-23）：他其实没有获得能力，一次性机会也已用掉；
+//   但在中毒 / 醉酒解除之前，仍按他选的那个角色的夜序被唤醒（面板照开、效果一律不生效），
+//   一旦恢复清醒就不再唤醒。
+int[14]     g_philoLostRole;    // 那次浪费时选的角色（索引 + 1，0 = 没有这种情况）
+int[14]     g_philoLostNight;   // 那次选择发生在第几夜（决定首夜 / 其他夜顺序）
+bool[14]    g_philoFakeAct;     // 这个座位今晚正在按「没获得的能力」假行动（面板照开、效果不生效）
+bool[14]    g_philoLostSpent;   // 【中毒/醉酒解除过一次就永久失效】之后再次中毒/醉酒也不再唤醒
 // 【异教领袖（106）· 教派投票】（用户 2026-10-10）
 int         g_cultDlg;
 int         g_cultTitle;
@@ -1459,7 +1466,7 @@ int         g_miRoleA;        // 筑梦师：说书人选出来的「善良角�
 int         g_miRoleB;        // 筑梦师：说书人选出来的「邪恶角色」
 int         g_miFnRole;       // 首夜信息位（洗衣妇/图管/调查员/祖母）说书人选的那个身份索引（0 = 还没选）
 int         g_pixiePickRole;  // 小精灵选中的镇民角色（索引 + 1，0 = 还没选；用 +1 区分「洗衣妇 = 0」）
-int         g_philoRole;      // 哲学家选的那个角色（之后按这个角色给在场的那个人醉酒；认知覆盖类也记原角色）
+int[14]     g_philoRoleBy;    // 哲学家选的那个角色 + 1（按座位；之后给在场那个人醉酒。用 +1 区分「洗衣妇 = 0」）
 int         g_pickTeam;       // 身份网格的额外过滤：-1 = 不过滤 / 0 镇民 / 1 外来者 / 2 爪牙 / 3 恶魔（用户 2026-09-21）
 int         g_philoSeat;      // 哲学家选酒鬼/疯子时，说书人还要再选一次「他以为自己是哪个角色」
 int         g_philoKind;      // 14 = 酒鬼 / 38 = 疯子
@@ -1704,7 +1711,6 @@ bool        g_hagPick;         // 麻脸巫婆正在选角色（网格模式 15�
 bool        g_hagKill;         // 麻脸巫婆造出恶魔之后：说书人正在「生死无常」面板上选死者
 bool        g_hagNoDemonKill;  // 今晚恶魔自己的刀无效（麻脸巫婆造出了恶魔，当夜死亡由说书人定）
 int         g_cannSeat;         // 食人族坐在哪（0 = 没有）
-int         g_cannRole;         // 他吃到的那个身份
 int         g_cannKind;         // 0 = 没有 / 38 = 疯子
 int         g_cannSrc;          // 触发这次选择的死者
 // 【梦殒春宵 · 四个恶魔】（用户 2026-09-21）：68 方古 / 69 亡骨魔 / 70 诺-达鲺 / 71 涡流
@@ -3230,7 +3236,8 @@ bool   BOTC_SeatIsDrunkRaw (int q);
 bool   BOTC_SeatImpairedRaw (int q);
 bool   BOTC_DxeDrunkOn (int q);       // 【店小二（115）】136 醉酒标记此刻是否真的生效（店小二自己中毒 / 醉酒时延迟）
 void   BOTC_DxeMuteSync ();           // 【店小二（115）】136 醉酒标记开始延迟 / 恢复生效时私聊提醒说书人
-int    BOTC_PhiloDrunkSeat ();
+int    BOTC_PhiloDrunkTargetFor (int ph);   // 某个哲学家座位让谁醉酒（0 = 没有；支持多名哲学家）
+bool   BOTC_PhiloDrunkTargetOf (int q);     // 这一格是不是任意一名哲学家让人醉酒的座位
 bool   BOTC_PhiloDrunkSelf (int q);   // 【哲学家×酒鬼】（用户 2026-10-13）：这一格的「醉酒」是他自己的身份（token 70 + 选的是酒鬼 14）
 bool   BOTC_SkillWorks (int q);       // 【技能生不生效】（用户 2026-10-13）：中毒 / 酒鬼 / 醉酒 + 提线木偶(93)
 int    BOTC_RealLunaticSeat ();
@@ -5204,8 +5211,15 @@ void BOTC_IntroBegin () {
     DialogControlSetVisible(g_introBtn, PlayerGroupAll(), true);
     // 【说书人不取名】（用户 2026-11-13）：收起输入框，只显示等待文字。
     // 【说书人可用随机彩色】（用户 2026-11-21）：允许给战网名上随机彩色。
+    // 【积分不够不提示按钮】（用户 2026-11-23）：说书人积分不足 1000、看不到彩色按钮时，
+    //   等待文字里不再提【随机彩色】，避免提示一个点不到的按钮。
     if (g_teller >= 1 && g_teller <= 13) {
-        libNtve_gf_SetDialogItemText(g_introPromptLbl, StringToText("请等待其他玩家设置名称；可用下方【随机彩色】给自己的名字上色。"), PlayerGroupSingle(g_teller));
+        if (BOTC_IntroCanColor(g_teller)) {
+            libNtve_gf_SetDialogItemText(g_introPromptLbl, StringToText("请等待其他玩家设置名称；可用下方【随机彩色】给自己的名字上色。"), PlayerGroupSingle(g_teller));
+        }
+        else {
+            libNtve_gf_SetDialogItemText(g_introPromptLbl, StringToText("请等待其他玩家设置名称。"), PlayerGroupSingle(g_teller));
+        }
         DialogControlSetVisible(g_introEdit, PlayerGroupSingle(g_teller), false);
         DialogControlSetVisible(g_introBtn, PlayerGroupSingle(g_teller), false);
     }
@@ -5360,6 +5374,7 @@ bool BOTC_NameUsesOfficialName (string s) {
 }
 
 // 【能否使用颜色代码】（用户 2026-11-13）：账号积分 >= 1000 才允许；否则确认时自动过滤颜色标签。
+// 【说书人同样受限】（用户 2026-11-23）：说书人也必须积分 >= 1000 才能使用【随机彩色】。
 bool BOTC_IntroCanColor (int p) {
     if (p < 1 || p > 13 || PlayerType(p) != 1) {
         return false;
@@ -12626,6 +12641,7 @@ bool BOTC_ClickDo (bool testConds, bool runActions) {
         }
         if (c == g_gossipCancel) {
             DialogSetVisible(g_gossipDlg, PlayerGroupSingle(p), false);
+            BOTC_DeclareRender();          // 取消后按钮文字还原成【声称/猜测】
             return true;
         }
         // 【杂耍艺人】5 组「座位号 + 身份」面板：确定 / 取消 / 5 个小按钮（用户 2026-09-21）
@@ -13496,6 +13512,7 @@ bool BOTC_ClickDo (bool testConds, bool runActions) {
     }
     if (c == g_gossipCancel) {
         DialogSetVisible(g_gossipDlg, PlayerGroupSingle(p), false);
+        BOTC_DeclareRender();              // 取消后按钮文字还原成【声称/猜测】
         return true;
     }
     // 【杂耍艺人】5 组「座位号 + 身份」面板：确定 / 取消 / 5 个小按钮（用户 2026-09-21）
@@ -16030,6 +16047,9 @@ void BOTC_BuildLog () {
     libNtve_gf_SetDialogItemStyle(t, "ModLeftSize16", PlayerGroupAll());
     libNtve_gf_SetDialogItemAcceptMouse(t, false, PlayerGroupAll());
     g_logList = BOTC_NewList(g_logDlg, 980, 874, 10, 66);
+    // 【日志正文跟随聊天字体】（用户 2026-11-23）：日志列表项与公聊 / 私聊正文统一用
+    //   ModLeftSize20，不再吃 ListBox 默认 item 字体。
+    libNtve_gf_SetDialogItemStyle(g_logList, "ModLeftSize20", PlayerGroupAll());
     // 【查看入口全收进顶部下拉】（用户 2026-11-17）：公聊 / 系统消息 / 投票 / 私聊信息 / 说书人 /
     //   玩家全部改由顶端这一枚按钮切换，底部只留【关闭日志】。
     g_logViewBtn = BOTC_NewButton(g_logDlg, 300, 30, 10, 28, "查看：所有公聊记录 ▼");
@@ -18909,9 +18929,8 @@ void BOTC_GameStart () {
 
     // 校验通过 → 放 UI 音效 + 演 10 秒倒计时；**真正「进入第 1 夜」那一套等倒计时走完再做**
     //   （用户 2026-09-16 要求：倒计时 10 秒后再执行进入夜晚的指令）
-    // 【点正式开始就清日志】（用户 2026-11-17）：准备阶段的公聊 / 私聊 / 投票 / 全部私聊历史
-    //   在点下按钮（校验通过后）立刻清空；倒计时期间的提示从这里重新开始记。复盘日志保留。
-    BOTC_ClearAllLogs();
+    // 【点正式开始不清日志】（用户 2026-11-23）：点按钮只演倒计时，准备阶段的聊天记录继续保留；
+    //   清日志统一放到倒计时走完、进入第 1 夜的 BOTC_GameStartGo() 里做。
     BOTC_PlaySfx(g_sfxStartName);
     g_startPending = true;
     g_swapUnlocked = false;        // 【点正式开始 → 重新锁上【换座位】】（用户 2026-10-07）
@@ -19834,6 +19853,9 @@ void BOTC_ResetGameVars () {
         if (g_jrDlg[i] != 0) {
             DialogSetVisible(g_jrDlg[i], PlayerGroupAll(), false);
         }
+        // 【借来的能力记账】（用户 2026-11-23）：按座位存，新一局一起清掉
+        g_philoRoleBy[i] = 0;
+        g_alcBorrowBy[i] = 0;
         // 【-laugh 个人冷却】（用户 2026-11-13）：新一局清掉个人冷却与连续使用计数
         g_laughPCd[i] = 0;
         g_laughPStreak[i] = 0;
@@ -19939,7 +19961,9 @@ void BOTC_ResetGameVars () {
     g_yaggaDay = 0;
     // 【获得别人能力 · 新局清零】（用户 2026-11-03）
     g_amneDoneNight = 0;
-    g_cannDoneNight = 0;
+    for (i = 1; i <= 13; i += 1) {
+        g_cannDoneBy[i] = 0;
+    }
     g_cannPending = 0;
     g_poppyEvilPend = false;
     g_poppyEvilNight = 0;
@@ -19956,6 +19980,10 @@ void BOTC_ResetGameVars () {
         g_pixieDone[i] = false;
         g_pixieAsked[i] = false;
         g_philoUsed[i] = false;
+        g_philoLostRole[i] = 0;
+        g_philoLostNight[i] = 0;
+        g_philoFakeAct[i] = false;
+        g_philoLostSpent[i] = false;
         g_faceDone[i] = 0;
         g_faceFail[i] = false;
         g_faceShow[i] = 0;
@@ -20143,7 +20171,6 @@ void BOTC_ResetGameVars () {
     g_hagPick = false;
     g_hagKill = false;
     g_cannSeat = 0;
-    g_cannRole = 0;
     g_cannKind = 0;
     g_cannSrc = 0;
     g_hagNoDemonKill = false;
@@ -20521,7 +20548,8 @@ void BOTC_GameStartCancel () {
         BOTC_StartCdStop();
         g_startPending = false;
         BOTC_DissolveAllSess(false);     // 取消正式开始：连说书人的私聊一起强制结束
-        BOTC_ClearAllLogs();
+        // 【倒计时中取消不清日志】（用户 2026-11-23）：正式开始那一清已改到进入首夜时才做，
+        //   倒计时中途取消等于没开始，准备阶段的聊天记录原样保留。
         // 【先收夜间唤醒弹窗】（用户 2026-11-07）：玩家技能面板 / 说书人夜间弹窗全部关闭
         //   【保留阅读面板】（用户 2026-11-18）：取消正式开始不再强制关闭日志 / 魔典 / 剧本角色表 / 游戏帮助 / 笔记
         g_keepRead = true;
@@ -34232,22 +34260,37 @@ bool BOTC_PreGrantStep () {
     //    【自动获得】（用户 2026-11-10）：食人族没中毒 / 醉酒时不再由说书人选，
     //    直接自动获得「饱餐」持有者（最后一名死于处决的玩家）的能力；
     //    中毒 / 醉酒时才弹出身份网格，由说书人自己决定给什么能力（或取消不给）。
-    if (g_cannDoneNight != g_nightNum && (g_cannPending > 0 || (g_cannFedSeat >= 2 && g_cannFedSeat <= 13 && g_cannFedDay == g_dayNum))) {
-        g_cannPending = 0;
-        // 【检测食人族能力者】（用户 2026-11-10）：按能力判定，而不是只看真实角色 74——
-        //   失忆者 / 哲学家等借到食人族能力的座位同样要发这一次能力。
-        q = BOTC_CannSeat();
-        if (q < 2) {
-            q = BOTC_CannAbilitySeat();
+    //    【多名食人族】（用户 2026-11-23）：每人一夜各发一次；按座位记「今晚发过」，
+    //    不再只给第一个食人族发完就把今晚标记成完成。
+    if (g_cannPending > 0 || (g_cannFedSeat >= 2 && g_cannFedSeat <= 13 && g_cannFedDay == g_dayNum)) {
+        q = 0;
+        for (i = 2; i <= 13; i += 1) {
+            if (!g_seatOn[i] || BOTC_SeatDead(i)) {
+                continue;
+            }
+            if (!BOTC_HasAbility(i, 74)) {
+                continue;
+            }
+            if (g_cannDoneBy[i] == g_nightNum) {
+                continue;
+            }
+            // 复活补发的座位不受「必须是今天处决」限制
+            if (!g_cannRestore[i] && !(g_cannFedSeat >= 2 && g_cannFedSeat <= 13 && g_cannFedDay == g_dayNum)) {
+                continue;
+            }
+            q = i;
+            break;
         }
-        if (q >= 2 && q <= 13 && BOTC_SeatDead(q) == false) {
-            g_cannDoneNight = g_nightNum;
+        if (q >= 2 && q <= 13) {
+            g_cannDoneBy[q] = g_nightNum;
+            g_cannPending = 0;
             // 【一定手动发放】（用户 2026-11-12）：不再自动附加能力，统一打开角色网格由说书人选。
             g_cannRestore[q] = false;
             BOTC_PmStore(g_teller, "【食人族】" + BOTC_NameStr(q) + " 今晚获得一次能力：请手动选择要发放的角色（可取消不给）。");
             BOTC_CannPickOpen(q);
             return true;
         }
+        g_cannPending = 0;
     }
     // 3. 变脸师（含借用该能力的座位）：第二夜起每晚一次；取消过（疯狂失败）的座位不再询问
     if (g_nightNum >= 2) {
@@ -37572,7 +37615,7 @@ void BOTC_PickChoose (int ob, int idx) {
             // 【炼金术士 · 能力失效】（用户 2026-11-11）：中毒 / 醉酒 → 这一次借不到能力，
             //   不改说书人魔典标记、不打「是炼金术士」token、不发信息。
             if (!BOTC_SkillWorks(alcSeat)) {
-                BOTC_PmStore(g_teller, "【炼金术士】" + BOTC_NameStr(alcSeat) + " 中毒/醉酒：能力失效，未借到任何能力。");
+                BOTC_PmStore(g_teller, "【炼金术士】" + BOTC_NameStr(alcSeat) + " 中毒/醉酒：能力失效，未借到任何能力（他原本选择了「" + g_roleName[idx] + "」）。");
                 return;
             }
             // 【炼金术士 × 间谍/寡妇相克】（用户 2026-11-06）：不能借用，改为该角色一定在场，让他重选。
@@ -37581,7 +37624,7 @@ void BOTC_PickChoose (int ob, int idx) {
                 BOTC_AlcBorrowOpen(alcSeat);
                 return;
             }
-            g_alcBorrow = idx;
+            g_alcBorrowBy[alcSeat] = idx + 1;
             // 【炼金术士改说书人魔典标记】（用户 2026-11-10）：只有真身炼金术士才改说书人真值行 +
             //   放「是炼金术士」token；借来的炼金术士能力（变脸师 / 食人族等）只更新能力层，不二次改标记。
             if (g_faceShow[alcSeat] != 96 && g_grantRoleBy[alcSeat] != 96) {
@@ -37591,8 +37634,8 @@ void BOTC_PickChoose (int ob, int idx) {
             BOTC_SeatStateSync();
             BOTC_GrimRender(g_teller);
             BOTC_GrimRender(g_who[alcSeat]);
-            BOTC_PmInfo(g_who[alcSeat], "【信息】你得知" + g_roleName[g_alcBorrow]);
-            BOTC_PmStore(g_teller, "【炼金术士】" + BOTC_NameStr(alcSeat) + " 借到的是【" + g_roleName[g_alcBorrow] + "】（说书人魔典标记已换成该角色并放置「是炼金术士」标记；他本人魔典仍显示炼金术士）。");
+            BOTC_PmInfo(g_who[alcSeat], "【信息】你得知" + g_roleName[idx]);
+            BOTC_PmStore(g_teller, "【炼金术士】" + BOTC_NameStr(alcSeat) + " 借到的是【" + g_roleName[idx] + "】（说书人魔典标记已换成该角色并放置「是炼金术士」标记；他本人魔典仍显示炼金术士）。");
         }
         return;
     }
@@ -37684,7 +37727,7 @@ void BOTC_PickChoose (int ob, int idx) {
         if (idx >= 0) {
             if (BOTC_SeatImpaired(BOTC_PosOf(ob))) {
                 BOTC_NoticeSub(g_teller, "【麻脸巫婆】她中毒/酒鬼 → 这一次不生效，没有改造。");
-                BOTC_PmStore(g_teller, "【麻脸巫婆】" + BOTC_NameStr(BOTC_PosOf(ob)) + " 中毒/酒鬼 → 改造无效。");
+                BOTC_PmStore(g_teller, "【麻脸巫婆】" + BOTC_NameStr(BOTC_PosOf(ob)) + " 中毒/酒鬼 → 改造无效（原本要把 " + BOTC_NameStr(g_hagWho) + " 变成「" + g_roleName[idx] + "」）。");
             }
             else {
                 BOTC_HagApply(g_hagWho, idx);
@@ -37712,7 +37755,6 @@ void BOTC_PickChoose (int ob, int idx) {
         g_pickTeam = -1;
         g_pickAlign = -1;
         if (idx < 0) {
-            g_cannRole = 0;
             g_cannKind = 0;
             g_cannSeat = 0;
             g_cannSrc = 0;
@@ -38494,7 +38536,7 @@ void BOTC_SetSeatRole (int ob, int seat, int roleIdx) {
         g_lunFakeAct[seat] = false;
         // 【炼金术士】借到的爪牙记录跟着原身份收回（「是炼金术士」token 123 由下面统一清掉）。
         if (oldR == 95) {
-            g_alcBorrow = 0;
+            g_alcBorrowBy[seat] = 0;
         }
         if (roleIdx == 117 && oldR != 117) {
             g_faceFail[seat] = false;
@@ -38518,7 +38560,12 @@ void BOTC_SetSeatRole (int ob, int seat, int roleIdx) {
         // 【只清掉真正离场的那位哲学家】（用户 2026-10-26）：以前任何座位
         //   改身份都会清空这个全局记录，别人的身份变化会让哲学魔像等借用能力失联。
         if (oldR == 56 || g_tokOn[(((g_teller * 14) + seat) * 256) + 70]) {
-            g_philoRole = 0;
+            g_philoRoleBy[seat] = 0;
+            // 【中毒 / 醉酒浪费能力的记录】（用户 2026-11-23）：身份离场后不再按那个角色唤醒。
+            g_philoLostRole[seat] = 0;
+            g_philoLostNight[seat] = 0;
+            g_philoFakeAct[seat] = false;
+            g_philoLostSpent[seat] = false;
         }
         BOTC_BoffinClearSource(seat);
         g_levJinxWake[seat] = false;
@@ -38672,7 +38719,7 @@ void BOTC_SetSeatRole (int ob, int seat, int roleIdx) {
             firstOnly = true;
         }
         newOrd = BOTC_NightOrderOf(seat);
-        if (oldR == 95 && roleIdx == 132 && g_alcBorrow == 132) {
+        if (oldR == 95 && roleIdx == 132 && g_alcBorrowBy[seat] == 133) {
             refOrd = oldOrd;
             if (g_wakeCurrentOrd > refOrd) {
                 refOrd = g_wakeCurrentOrd;
@@ -40320,11 +40367,10 @@ void BOTC_SourceGoneCleanup (int q, bool dying) {
     // 【舞蛇人的毒】（用户 2026-09-21）：中毒这个人死了 / 离场 → 这一格收掉（官方提示标记的移除时机）
     // 【哲学家（56）】（用户 2026-11-11）：官方写的移除时机是「哲学家死亡或离场时」→
     //   用过能力的哲学家真身已经换成借来的角色，只能靠「是哲学家」70 认出来，
-    //   所以放弃按 r == 56 判断，改按 70 收：死亡和换身份（离场）都清 70、全场 90 和 g_philoRole。
-    //   ⚠ 哲学家自己发动能力时也会改一次身份，但那一刻 70 还没打上，不会误清。
-    //   ⚠ g_philoRole 不清的话，BOTC_PhiloDrunkSync 会按旧记录把 90 再加回来。
+    //   所以放弃按 r == 56 判断，改按 70 收：死亡和换身份（离场）都清 70、全场 90 和这一格的借用记录。
+    //   ⚠ 这一格的记录不清的话，BOTC_PhiloDrunkSync 会按旧记录把 90 再加回来。
     if (g_tokOn[(((g_teller * 14) + q) * 256) + 70]) {
-        g_philoRole = 0;
+        g_philoRoleBy[q] = 0;
         g_tokOn[(((g_teller * 14) + q) * 256) + 70] = false;
         // 【死亡 → 真值行还原成哲学家】（用户 2026-11-11）：用过能力后真值行写的是借来的角色，
         //   死亡时还原成 56，说书人魔典不再显示借来的角色，送葬者 / 守鸦人 / 食人族
@@ -40345,11 +40391,11 @@ void BOTC_SourceGoneCleanup (int q, bool dying) {
     }
     // 【炼金术士（95）死亡 → 收掉「是炼金术士」并把真值行还原成 96】（用户 2026-11-13）：
     //   借到爪牙能力后真值行写的是借来的爪牙，死亡时删除 123、还原成 96（炼金术士），
-    //   说书人魔典不再显示那只爪牙；g_alcBorrow 一并清空，避免借来的能力残留。
+    //   说书人魔典不再显示那只爪牙；这一格的借用记录一并清空，避免借来的能力残留。
     //   换身份由 BOTC_SetSeatRole 自己清 123 并写入新身份，不走这里。
     if (dying && g_tokOn[(((g_teller * 14) + q) * 256) + 123]) {
         g_tokOn[(((g_teller * 14) + q) * 256) + 123] = false;
-        g_alcBorrow = 0;
+        g_alcBorrowBy[q] = 0;
         g_mark[(g_teller * 14) + q] = 96;
         BOTC_GrimRender(g_teller);
     }
@@ -40388,6 +40434,16 @@ void BOTC_SourceGoneCleanup (int q, bool dying) {
                 continue;                       // 【具有能力（报丧女妖）】（用户 2026-11-11）：死亡时保留，只有非死亡离场才收。
             }
             if (!BOTC_TokGoneWithSource(t)) {
+                continue;
+            }
+            // 【借来的能力「已用掉」记录只跟本人走】（用户 2026-11-23）：12 猎手 / 17 贞洁者 / 44 教授 /
+            //   45 刺客 / 46 弄臣 / 47 侍臣 / 68 女裁缝 / 69 艺术家 / 98 巡山人 / 99 工程师 / 100 渔夫 /
+            //   101 魔像 / 104 灵言师 / 147 守夜人 都是「这一格用掉了自己那份能力」的记账。
+            //   真身角色离场时只清他本人那一格；哲学家 / 食人族 / 说书人赋予借到同能力后已经用掉的记录
+            //   不能被一起抹掉，否则借到能力的人会凭空多出一次机会。
+            if (i != q && (t == 12 || t == 17 || t == 44 || t == 45 || t == 46 || t == 47
+                    || t == 68 || t == 69 || t == 98 || t == 99 || t == 100
+                    || t == 101 || t == 104 || t == 147)) {
                 continue;
             }
             if (g_tokRole[t] != r) {
@@ -41604,7 +41660,7 @@ int BOTC_SeatTrueRole (int q) {
         return 74;                                // 是食人族（74）
     }
     // 【是炼金术士(123)】（用户 2026-10-03 / 2026-11-10）：真身判成炼金术士(95) → 算善良（除非身上有「邪恶」token）；
-    //   说书人真值行的角色标记显示借到的那只爪牙，借到的能力由 g_alcBorrow 记账。
+    //   说书人真值行的角色标记显示借到的那只爪牙，借到的能力由 g_alcBorrowBy[座位] 记账。
     if (g_tokOn[(((g_teller * 14) + q) * 256) + 123]) {
         return 95;
     }
@@ -41640,9 +41696,9 @@ int BOTC_SeatTeam (int q) {
 }
 // 【他到底有没有 X 这个能力】（用户 2026-10-03）：
 //   · 真身就是它；
-//   · 哲学家(70) 借的（g_philoRole）；
-//   · 食人族(97) 吃的（g_cannRole）；
-//   · 炼金术士(95，token 123) 借的（g_alcBorrow）。
+//   · 哲学家(70) 借的（g_philoRoleBy[座位]）；
+//   · 食人族(97) 吃的（g_grantRoleBy[座位]）；
+//   · 炼金术士(95，token 123) 借的（g_alcBorrowBy[座位]）。
 //   · 科学怪人 / 说书人【赋予能力】附加的；
 //   【2026-10-13 起这一条就是「能力」的统一口径】（用户报「炼金借红唇顶不上恶魔」之后全脚本清了一遍）：
 //     「他有没有 X 这个能力」的地方一律用这个函数（原来写 `BOTC_SeatTrueRole(q) == X` 的地方全换成它）----
@@ -41682,20 +41738,20 @@ bool BOTC_HasAbility (int q, int role) {
         return true;
     }
     if (g_tokOn[(((g_teller * 14) + q) * 256) + 70]) {
-        if (g_philoRole == role) {
+        if (g_philoRoleBy[q] == role + 1) {
             return true;
         }
         // 【借用记录自愈】（用户 2026-10-26）：哲学家的魔典身份就是他选中的
-        //   善良能力。若旧全局记录被其它身份变化清掉，只要真身仍读作哲学家，
+        //   善良能力。若这一格的借用记录被其它身份变化清掉，只要真身仍读作哲学家，
         //   就按魔典上显示的角色恢复该能力（酒鬼 / 疯子 / 悟道者除外）。
-        if (g_philoRole <= 0 && tr == 56 && role != 14 && role != 38 && role != 118 && g_mark[(g_teller * 14) + q] - 1 == role) {
+        if (g_philoRoleBy[q] <= 0 && tr == 56 && role != 14 && role != 38 && role != 118 && g_mark[(g_teller * 14) + q] - 1 == role) {
             return true;
         }
     }
-    if (g_tokOn[(((g_teller * 14) + q) * 256) + 97] && g_cannRole == role) {
+    if (g_tokOn[(((g_teller * 14) + q) * 256) + 97] && g_grantRoleBy[q] == role + 1) {
         return true;
     }
-    if (g_tokOn[(((g_teller * 14) + q) * 256) + 123] && g_alcBorrow == role) {
+    if (g_tokOn[(((g_teller * 14) + q) * 256) + 123] && g_alcBorrowBy[q] == role + 1) {
         // 【炼金术士 × 间谍/寡妇相克】（用户 2026-11-06）：炼金术士不会拥有这两个能力，
         //   本应获得时改为该角色一定在场。
         if (role == 18 || role == 75) {
@@ -41877,7 +41933,7 @@ bool BOTC_PhiloDrunkSelf (int q) {
     if (!g_tokOn[(((g_teller * 14) + q) * 256) + 70]) {
         return false;
     }
-    return (g_philoRole == 14);
+    return (g_philoRoleBy[q] == 15);
 }
 
 // 【这一次技能到底生不生效】（用户 2026-10-13）：中毒 / 酒鬼 / 醉酒都走 BOTC_SeatImpaired ----
@@ -41894,6 +41950,11 @@ bool BOTC_SkillWorks (int q) {
     // 【疯子·假能力】（用户 2026-11-10）：科学怪人发给疯子的那份假能力按中毒 / 醉酒处理 ----
     //   面板照常打开、说书人照常给信息、流程照走，但这一次的效果不生效。
     if (g_lunFakeAct[q]) {
+        return false;
+    }
+    // 【中毒 / 醉酒浪费能力的哲学家】（用户 2026-11-23）：这只是演给玩家看的假能力，
+    //   无论中途是否恢复清醒，这一次行动都不产生任何效果。
+    if (q >= 2 && q <= 13 && g_philoFakeAct[q]) {
         return false;
     }
     // 科学怪人给恶魔的能力：只看科学怪人是否存活且清醒健康，恶魔自身中毒不影响
@@ -41974,7 +42035,7 @@ bool BOTC_SeatIsDrunk (int q) {
     }
     // 哲学家活着、清醒、已经选过角色 → 他选的那个角色真正的持有者一定醉酒
     //   （token 还没同步过来也算，用户 2026-09-21）
-    if (q == BOTC_PhiloDrunkSeat()) {
+    if (BOTC_PhiloDrunkTargetOf(q)) {
         return true;
     }
     // 【心上人（61）】（用户 2026-09-23）：他死时指定的那个人「从今以后一直醉酒」----
@@ -42343,7 +42404,7 @@ bool BOTC_SeatImpaired (int q) {
     return BOTC_SeatIsPoisoned(q);
 }
 
-// 同上，但**不算**「哲学家让人醉」那一份：给 BOTC_PhiloDrunkSeat 自己用，避免自己套自己
+// 同上，但**不算**「哲学家让人醉」那一份：给 BOTC_PhiloDrunkTargetOf 自己用，避免自己套自己
 bool BOTC_SeatImpairedRaw (int q) {
     if (q < 1 || q > 13) {
         return false;                     // 允许 1：说书人自己那一格
@@ -45949,10 +46010,35 @@ int BOTC_NightOrder (int r) {
 //   复活之后这里会重新给出首夜顺序，于是又能被唤醒一次。
 int BOTC_NightOrderOf (int q) {
     int r;
+    int role;
     if (q < 2 || q > 13) {
         return 0;
     }
     r = g_mark[(g_teller * 14) + q] - 1;
+    // 【中毒 / 醉酒浪费能力的哲学家】（用户 2026-11-23）：他没有真的获得能力，一次性机会也已经用掉；
+    //   但中毒 / 醉酒解除之前，仍按他选的那个角色的夜序被唤醒（有该夜行动才醒），
+    //   一旦恢复清醒就返回 0 —— 他并没有这份能力，不该再被唤醒。
+    //   【解除过一次就永久失效】：之后再中毒 / 醉酒也不会重新唤醒（g_philoLostSpent）。
+    if (r == 56 && q >= 2 && q <= 13 && g_philoLostRole[q] > 0) {
+        if (BOTC_SeatDead(q)) {
+            return 0;
+        }
+        if (!BOTC_SeatImpaired(q)) {
+            g_philoLostSpent[q] = true;
+            return 0;
+        }
+        if (g_philoLostSpent[q]) {
+            return 0;
+        }
+        role = g_philoLostRole[q] - 1;
+        if (role < 0 || role > 166) {
+            return 0;
+        }
+        if (g_nightNum <= g_philoLostNight[q] && BOTC_NoFirstOf(role) > 0) {
+            return BOTC_NoFirstOf(role);
+        }
+        return BOTC_NoOtherOf(role);
+    }
     // 【疯子（含「哲学疯子」/ 食人族吃到的疯子）】（用户 2026-10-14 报「哲学疯子会在恶魔之后行动」）----
     //   真疯子 / 哲学家借到疯子能力（token 49）/ 食人族吃到疯子，都算：一律按**疯子(38)**那一格的夜序走
     //   （疯子在恶魔**之前**行动，这样恶魔当晚就能知道他选的是谁）。
@@ -45995,6 +46081,7 @@ void BOTC_WakeListHint () {
     int sent;
     string s;
     string item;
+    string base;
     BOTC_BuildSeatList();
     s = "【唤醒】" + BOTC_PeriodStr() + " 可以唤醒（按夜间顺序）：";
     n = 0;                         // 当前这一行已经放了几个
@@ -46013,7 +46100,12 @@ void BOTC_WakeListHint () {
             if (BOTC_WakeSkipNow(q)) {
                 continue;
             }
-            item = IntToString(q - 1) + " " + BOTC_SeatRoleStr(q);
+            // 【中毒 / 醉酒浪费能力的哲学家】（用户 2026-11-23）：提示里直接写清他按哪个角色唤醒。
+            base = IntToString(q - 1) + " " + BOTC_SeatRoleStr(q);
+            if (r == 56 && g_philoLostRole[q] > 0 && BOTC_SeatImpaired(q) && !g_philoLostSpent[q]) {
+                base = IntToString(q - 1) + " 哲学家·" + BOTC_RoleNameSafe(g_philoLostRole[q] - 1);
+            }
+            item = base;
             if (n > 0) {
                 item = "、" + item;
             }
@@ -46022,7 +46114,7 @@ void BOTC_WakeListHint () {
                 sent = sent + 1;
                 s = "  ";
                 n = 0;
-                item = IntToString(q - 1) + " " + BOTC_SeatRoleStr(q);
+                item = base;
             }
             s = s + item;
             n = n + 1;
@@ -48112,16 +48204,18 @@ void BOTC_GolemAsk (int p, int q) {
     if (p < 1 || p > 13 || q < 2 || q > 13) {
         return;
     }
-    // 【魔像 × 间谍 / 陌客能力者】（用户 2026-11-12）：不再按伪装自动判定，改弹说书人。
+    // 【魔像 × 陌客能力者】（用户 2026-11-12）：不再按伪装自动判定，改弹说书人。
+    //   【魔像 × 间谍能力者】（用户 2026-11-23）：间谍登记不成恶魔，提名他一定死亡 → 不弹窗，
+    //   直接落到下面的自动结算。
     //   【无神论者局 · 魔像】（用户 2026-11-15 修订）：无神论者在场时不走这条，统一留给下面的
-    //   说书人拍板面板（真能力者即便中毒 / 醉酒、目标登记成间谍 / 陌客也一样弹窗）。
-    if (!BOTC_RoleTrueInPlay(83) && BOTC_IsDisguiseAbility(q)) {
+    //   说书人拍板面板（真能力者即便中毒 / 醉酒、目标登记成陌客也一样弹窗）。
+    if (!BOTC_RoleTrueInPlay(83) && BOTC_IsRecluseAbility(q)) {
         if (!BOTC_AbilityWorks(p, 81)) {
-            BOTC_PmStore(g_teller, "【魔像】" + BOTC_NameStr(p) + " 中毒/酒鬼 → 这一刀自动按不生效处理。");
+            BOTC_PmStore(g_teller, "【魔像】" + BOTC_NameStr(p) + " 中毒/酒鬼 → 这一刀自动按不生效处理（他原本提名了 " + BOTC_NameStr(q) + "）。");
             return;
         }
-        BOTC_JudgeAsk(11, "【魔像】" + BOTC_NameStr(p) + " 提名了间谍 / 陌客能力者 " + BOTC_NameStr(q) + "：是否让他死亡？", p, q, 0);
-        BOTC_PmStore(g_teller, "【魔像】" + BOTC_NameStr(p) + " 提名了 " + BOTC_NameStr(q) + "：对方是间谍 / 陌客能力者，请选择他是否死亡。");
+        BOTC_JudgeAsk(11, "【魔像】" + BOTC_NameStr(p) + " 提名了陌客能力者 " + BOTC_NameStr(q) + "：是否让他死亡？", p, q, 0);
+        BOTC_PmStore(g_teller, "【魔像】" + BOTC_NameStr(p) + " 提名了 " + BOTC_NameStr(q) + "：对方是陌客能力者，请选择他是否死亡。");
         return;
     }
     // 【自动判定】（用户 2026-11-08 / 2026-11-14 修订）：无神论者在场 → 弹窗；
@@ -48140,7 +48234,7 @@ void BOTC_GolemAsk (int p, int q) {
         g_slayCanYes = BOTC_AbilityWorks(p, 81) && (BOTC_SeatRegTeam(q) != 3);
         DialogSetVisible(g_slayDlg, PlayerGroupAll(), false);
         if (!BOTC_AbilityWorks(p, 81)) {
-            BOTC_PmStore(g_teller, "【魔像】" + BOTC_NameStr(p) + " 中毒/酒鬼 → 这一刀自动按不生效处理。");
+            BOTC_PmStore(g_teller, "【魔像】" + BOTC_NameStr(p) + " 中毒/酒鬼 → 这一刀自动按不生效处理（他原本提名了 " + BOTC_NameStr(q) + "）。");
         }
         else {
             if (BOTC_SeatRegTeam(q) == 3) {
@@ -48972,8 +49066,10 @@ void BOTC_SlayAsk (int p, int q) {
     if (!BOTC_RoleTrueInPlay(83) && BOTC_HasAbility(p, 10)) {
         manual = false;
     }
-    // 【猎手 × 间谍 / 陌客能力者】（用户 2026-11-12）：目标不再自动判定，一律弹说书人。
-    if (BOTC_IsDisguiseAbility(q)) {
+    // 【猎手 × 陌客能力者】（用户 2026-11-12）：目标不再自动判定，一律弹说书人。
+    // 【猎手 × 间谍能力者】（用户 2026-11-23）：猎手只能猎杀恶魔，间谍登记不成恶魔 → 不弹窗，
+    //   直接走下面的自动判定（无事发生）。
+    if (BOTC_IsRecluseAbility(q)) {
         manual = true;
     }
     g_slayAskOn = true;
@@ -49176,7 +49272,13 @@ bool BOTC_SlayLeechHost (int q) {
 void BOTC_SlayKill (int p, int q) {
     bool jinx;
     string blk;
-    BOTC_LoseAbility(p, 12);
+    // 【只给真正的猎手 / 以为自己是猎手的人打失去能力】（用户 2026-11-23）：
+    //   声称猎手对所有玩家开放，说书人点【是】也可以帮一个假声称演一枪。
+    //   但「失去能力（猎手）12」是猎手自己的消耗记录，不能打在帽匠这类完全没有猎手能力、
+    //   魔典上也不是猎手的座位身上 —— 否则这一格以后真的借到猎手能力时会被这枚旧 token 卡死。
+    if (BOTC_HasAbility(p, 10) || g_mark[(g_teller * 14) + p] - 1 == 10) {
+        BOTC_LoseAbility(p, 12);
+    }
     // 【免死 / 保护挡枪】（用户 2026-11-11）：带着无敌 176、痢蛭宿主免死、水手 / 旅店老板 / 弄臣等
     //   免死的人，白天被猎手打中也不会死 → 公屏只播无事发生，不进入枪声过场。
     //   ⚠ 跟赌徒那条一致：弄臣这种一次性免死要真的用掉（打「失去能力（弄臣）」）。
@@ -49247,18 +49349,20 @@ bool BOTC_VirginCheck (int nomFrom, int nomTo) {
     // 中毒 / 酒鬼 / 科学怪人来源失效：能力失效（本人不当场知道），这一次也算用掉
     if (!BOTC_AbilityWorks(nomTo, 9)) {
         BOTC_LoseAbility(nomTo, 17);
-        BOTC_PmStore(g_teller, "【贞洁者】" + BOTC_NameStr(nomTo) + " 中毒/酒鬼，这次触发无效。");
+        BOTC_PmStore(g_teller, "【贞洁者】" + BOTC_NameStr(nomTo) + " 中毒/酒鬼，这次触发无效（提名他的是 " + BOTC_NameStr(nomFrom) + "）。");
         return false;
     }
-    // 【间谍 / 陌客能力者提名贞洁者】（用户 2026-11-12）：不再按伪装自动判定，改弹说书人。
-    if (BOTC_IsDisguiseAbility(nomFrom)) {
+    // 【间谍能力者提名贞洁者】（用户 2026-11-12）：不再按伪装自动判定，改弹说书人。
+    // 【陌客能力者提名贞洁者】（用户 2026-11-23）：陌客只会登记成外来者 / 爪牙 / 恶魔，永远不算镇民
+    //   → 不会触发处决，所以不弹窗，直接落到下面按登记阵营自动判定（无事发生）。
+    if (BOTC_IsSpyAbility(nomFrom)) {
         BOTC_LoseAbility(nomTo, 17);
         if (!g_started) {
             BOTC_PmStore(g_teller, "【贞洁者】" + BOTC_NameStr(nomTo) + " 被 " + BOTC_NameStr(nomFrom) + " 提名，但游戏还没正式开始 → 这次不处理。");
             return true;
         }
-        BOTC_JudgeAsk(10, "【贞洁者】提名者 " + BOTC_NameStr(nomFrom) + " 是间谍 / 陌客能力者：这次是否按镇民处决他？", nomFrom, nomTo, 0);
-        BOTC_PmStore(g_teller, "【贞洁者】" + BOTC_NameStr(nomTo) + " 被 " + BOTC_NameStr(nomFrom) + " 提名：对方是间谍 / 陌客能力者，请选择是否处决提名者。");
+        BOTC_JudgeAsk(10, "【贞洁者】提名者 " + BOTC_NameStr(nomFrom) + " 是间谍能力者：这次是否按镇民处决他？", nomFrom, nomTo, 0);
+        BOTC_PmStore(g_teller, "【贞洁者】" + BOTC_NameStr(nomTo) + " 被 " + BOTC_NameStr(nomFrom) + " 提名：对方是间谍能力者，请选择是否处决提名者。");
         return true;
     }
     if (BOTC_SeatRegTeam(nomFrom) == 0) {
@@ -49786,6 +49890,7 @@ void BOTC_JugglerCancel (int p) {
         g_juggRole[(p * 5) + i] = 0;
         libNtve_gf_SetDialogItemText(g_juggSeatEdit[i], StringToText(""), PlayerGroupSingle(p));
     }
+    BOTC_DeclareRender();              // 取消后按钮文字还原成【声称/猜测】
 }
 
 // 阶段切换时只收起面板，不丢玩家已经填好的公开猜测草稿。
@@ -50051,6 +50156,7 @@ void BOTC_AlsaahirCancel (int p) {
             libNtve_gf_SetDialogItemText(g_alsaSeatEdit[q], StringToText(""), PlayerGroupSingle(p));
         }
     }
+    BOTC_DeclareRender();              // 取消后按钮文字还原成【声称/猜测】
 }
 
 // 【饕餮（154）】专用多选面板：12 名参与者均可选，也允许一个都不选。
@@ -52118,11 +52224,19 @@ void BOTC_PhiloPick (int p, int role) {
         BOTC_PmStore(g_teller, "【哲学家】" + BOTC_NameStr(p) + " 真身是酒鬼/提线木偶：选择了「" + g_roleName[role] + "」，能力已挂上但按醉酒处理（不会正确生效），说书人魔典上的角色标记不改。");
         return;
     }
-    // 【哲学家在获得能力之前中毒 / 醉酒】（用户 2026-11-03）：这一次不获得能力，
+    // 【哲学家在获得能力之前中毒 / 醉酒】（用户 2026-11-03 / 2026-11-23）：这一次不获得能力，
     //   全局仅限一次的机会照样用掉，也不会让那名在场角色醉酒。
+    //   【但仍要演下去】（用户 2026-11-23）：在中毒 / 醉酒解除之前，他依旧按所选角色的夜序被唤醒
+    //   （面板照常打开、选择照常记录，但效果一律不生效）；一旦恢复清醒就不再唤醒，因为他没有能力。
     if (p >= 2 && BOTC_SeatImpaired(p)) {
         g_philoUsed[p] = true;
-        BOTC_PmStore(g_teller, "【哲学家】" + BOTC_NameStr(p) + " 在获得能力前中毒/醉酒 → 这次不获得能力，一次性机会已浪费。");
+        g_philoLostRole[p] = role + 1;
+        g_philoLostNight[p] = g_nightNum;
+        if (g_nightNum > 0) {
+            g_seatFirstNight[p] = g_nightNum;      // 这次选择所在的夜算这份「假能力」的首夜
+            g_autoWoke[p] = false;                 // 今晚还能按所选角色的夜序再醒一次
+        }
+        BOTC_PmStore(g_teller, "【哲学家】" + BOTC_NameStr(p) + " 在获得能力前中毒/醉酒 → 这次不获得能力，一次性机会已浪费。中毒/醉酒期间仍会按「" + g_roleName[role] + "」的夜序被唤醒（效果不生效），恢复清醒后不再唤醒。");
         BOTC_GrimRender(g_teller);
         return;
     }
@@ -52145,7 +52259,7 @@ void BOTC_PhiloPick (int p, int role) {
         return;
     }
     BOTC_TellRoleChoice(p, role);
-    g_philoRole = role;                           // 记住他选的是哪个角色（同步醉酒时要用，用户 2026-09-21）
+    g_philoRoleBy[p] = role + 1;                  // 记住这一格选的是哪个角色（同步醉酒时要用，用户 2026-09-21）
     pick = BOTC_SeatOfRoleNot(role, p);           // 那个角色在不在场：看真身，并排除他自己
     g_tokOn[(((g_teller * 14) + p) * 256) + 70] = true;        // 是哲学家
     if (pick >= 2 && pick != p) {
@@ -52195,7 +52309,7 @@ void BOTC_PhiloPick (int p, int role) {
     // 【哲学家不改本人魔典】（用户 2026-11-10）：说书人真值行照旧换成获得的能力，并在说书人魔典上放
     //   「是哲学家」标记；玩家自己那份魔典仍显示哲学家本人。
     BOTC_SetSeatRole(g_teller, p, role);
-    g_philoRole = role;                         // 换身份会把这份记录清掉，这里补回（用户 2026-09-21）
+    g_philoRoleBy[p] = role + 1;                // 换身份会把这份记录清掉，这里补回（用户 2026-09-21）
     g_tokOn[(((g_teller * 14) + p) * 256) + 70] = true;      // 换身份会清掉认知标记，这里补回「是哲学家」（用户 2026-09-21）
     BOTC_SeatStateSync();      // 【打完「是哲学家」之后再算一次】（用户 2026-10-14）
     if (g_who[p] == g_teller) { g_mark[(g_teller * 14) + 1] = role + 1; }
@@ -52222,49 +52336,56 @@ void BOTC_PhiloPick (int p, int role) {
 //   → 哲学家的醉酒判定又要回头看哲学家是否死亡……同一请求内无限自我递归，
 //   脚本线程卡死、全场表现为「时停」（聊天和所有按钮同时无响应）。
 //   求值过程中再次进入时直接按「没人该醉」返回，只打断递归，外层结论仍按完整流程算。
-int BOTC_PhiloDrunkSeatCore () {
-    int i;
-    int ph;
+int BOTC_PhiloDrunkTargetFor (int ph) {
     int t;
-    if (g_philoRole <= 0) {
+    if (ph < 1 || ph > 13) {
         return 0;
     }
-    ph = 0;
-    for (i = 1; i <= 13; i += 1) {
-        if (i >= 2 && !g_seatOn[i]) {
-            continue;
-        }
-        if (!g_tokOn[(((g_teller * 14) + i) * 256) + 70]) {
-            continue;
-        }
-        ph = i;
+    if (ph >= 2 && !g_seatOn[ph]) {
+        return 0;
     }
-    if (ph < 1) {
+    if (!g_tokOn[(((g_teller * 14) + ph) * 256) + 70]) {
+        return 0;
+    }
+    if (g_philoRoleBy[ph] <= 0) {
         return 0;
     }
     if (BOTC_SeatDead(ph) || BOTC_SeatImpairedRaw(ph)) {
         return 0;
     }
-    t = BOTC_SeatOfRoleNot(g_philoRole, ph);
+    t = BOTC_SeatOfRoleNot(g_philoRoleBy[ph] - 1, ph);
     if (t < 2) {
         return 0;
     }
     return t;
 }
 
-int BOTC_PhiloDrunkSeat () {
-    int r;
+// 【这一格是不是任意一名哲学家让人醉酒的座位】（用户 2026-11-23）：支持多名哲学家各自选不同角色。
+bool BOTC_PhiloDrunkTargetOf (int q) {
+    int i;
+    int t;
+    if (q < 1 || q > 13) {
+        return false;
+    }
     if (g_philoDrunkEval > 0) {
-        return 0;
+        return false;
     }
     g_philoDrunkEval = 1;
-    r = BOTC_PhiloDrunkSeatCore();
+    for (i = 1; i <= 13; i += 1) {
+        t = BOTC_PhiloDrunkTargetFor(i);
+        if (t == q) {
+            g_philoDrunkEval = 0;
+            return true;
+        }
+    }
     g_philoDrunkEval = 0;
-    return r;
+    return false;
 }
 
 // 【哲学家的醉酒同步】（用户 2026-09-21）：把「醉酒（哲学家）」token(90) 撒到该带的那个座位上。
 //   触发点：每次重画魔典、token 面板打 / 撤的那一刻、天亮。
+//   【多名哲学家】（用户 2026-11-23）：每个带「是哲学家」70 的座位分别结算自己选的角
+//   色，同一份醉酒可能落在不同人身上，不再只算最后一个。
 void BOTC_PhiloDrunkSync () {
     int i;
     int src;
@@ -52274,15 +52395,23 @@ void BOTC_PhiloDrunkSync () {
     if (g_philoDrunkManual) {
         return;
     }
-    tgt = BOTC_PhiloDrunkSeat();
+    // 【防死循环求值期间不动 token】：这次同步本身可能就是被醉酒判定牵进来的
+    if (g_philoDrunkEval > 0) {
+        return;
+    }
     for (i = 1; i <= 13; i += 1) {
         if (g_tokOn[(((g_teller * 14) + i) * 256) + 90]) {
             g_tokOn[(((g_teller * 14) + i) * 256) + 90] = false;
         }
     }
-    if (tgt >= 2) {
-        g_tokOn[(((g_teller * 14) + tgt) * 256) + 90] = true;
+    g_philoDrunkEval = 1;
+    for (i = 1; i <= 13; i += 1) {
+        tgt = BOTC_PhiloDrunkTargetFor(i);
+        if (tgt >= 2) {
+            g_tokOn[(((g_teller * 14) + tgt) * 256) + 90] = true;
+        }
     }
+    g_philoDrunkEval = 0;
     for (src = 2; src <= 13; src += 1) {
         tgt = BOTC_BoffinNestedPhiloDrunkTarget(src);
         if (tgt >= 2) {
@@ -52420,7 +52549,7 @@ void BOTC_PhiloBelieve (int p, int role) {
     // 【认知覆盖类同样不改本人魔典】（用户 2026-11-10）：说书人真值行照旧换成他以为的身份
     //   （酒鬼 / 疯子 / 悟道者那套判定都读这一行），但玩家自己那份魔典仍显示哲学家本人。
     BOTC_SetSeatRole(g_teller, p, role);
-    g_philoRole = g_philoKind;                  // 他选的是酒鬼 / 疯子：换身份会把这份记录清掉，这里补回
+    g_philoRoleBy[p] = g_philoKind + 1;         // 他选的是酒鬼 / 疯子：换身份会把这份记录清掉，这里补回
     g_tokOn[(((g_teller * 14) + p) * 256) + 70] = true;      // 换身份会清掉认知标记，这里补回「是哲学家」（用户 2026-09-21）
     BOTC_SeatStateSync();      // 【同上】（用户 2026-10-14）
     if (g_philoKind == 38) {
@@ -52664,7 +52793,7 @@ void BOTC_EngDemonNow () {
         DialogSetVisible(g_pickDlg, PlayerGroupSingle(pl), false);
     }
     if (!BOTC_SkillWorks(g_engSeat)) {
-        BOTC_PmStore(g_teller, "【工程师】" + BOTC_NameStr(g_engSeat) + " 中毒/酒鬼/提线木偶：能力失效，未改变任何身份。");
+        BOTC_PmStore(g_teller, "【工程师】" + BOTC_NameStr(g_engSeat) + " 中毒/酒鬼/提线木偶：能力失效，未改变任何身份（他原本选择了「" + g_roleName[g_engR1] + "」）。");
         BOTC_EngReset();
         return;
     }
@@ -52821,7 +52950,7 @@ void BOTC_EngSubmit () {
         DialogSetVisible(g_pickDlg, PlayerGroupSingle(pl), false);
     }
     if (!BOTC_SkillWorks(q)) {
-        BOTC_PmStore(g_teller, "【工程师】" + BOTC_NameStr(q) + " 中毒/酒鬼/提线木偶：能力失效，未改变任何身份。");
+        BOTC_PmStore(g_teller, "【工程师】" + BOTC_NameStr(q) + " 中毒/酒鬼/提线木偶：能力失效，未改变任何身份（他原本选择了「" + g_roleName[g_engR1] + "」/「" + g_roleName[g_engR2] + "」）。");
         BOTC_EngReset();
         return;
     }
@@ -54147,6 +54276,7 @@ void BOTC_CourtierPick (int p, int role) {
     g_courtRole = role;
     g_tokOn[(((g_teller * 14) + p) * 256) + 47] = true;      // 发动过了，立即失去本角色能力
     if (!BOTC_SkillWorks(p)) {
+        BOTC_PmStore(g_teller, "【侍臣】" + BOTC_NameStr(p) + " 中毒/酒鬼/提线木偶：这一次能力失效，没有让任何角色醉酒（他原本选择了「" + BOTC_RoleNameSafe(role) + "」）。");
         BOTC_GrimRender(g_teller);
         BOTC_SkillBtnRender();
         return;
@@ -54690,13 +54820,10 @@ bool BOTC_BoffinSourceIs (int b) {
     if (BOTC_SeatTrueRole(b) == 132) {
         return true;
     }
-    if (g_tokOn[(((g_teller * 14) + b) * 256) + 123] && g_alcBorrow == 132) {
+    if (g_tokOn[(((g_teller * 14) + b) * 256) + 123] && g_alcBorrowBy[b] == 133) {
         return true;
     }
-    if (g_tokOn[(((g_teller * 14) + b) * 256) + 97] && g_cannRole == 132) {
-        return true;
-    }
-    if (g_grantRoleBy[b] == 133) {       // 手工赋予科学怪人能力
+    if (g_grantRoleBy[b] == 133) {       // 手工赋予 / 食人族吃到的科学怪人能力
         return true;
     }
     // 【性能】只有这个座位自己确实从科怪那里获得了「科怪」能力，
@@ -55037,10 +55164,8 @@ bool BOTC_BoffinWorksAt (int b) {
     }
     if (g_grantRoleBy[b] == 133 && g_grantDrunkBy[b]) {
         if (BOTC_SeatTrueRole(b) != 132) {
-            if (!(g_tokOn[(((g_teller * 14) + b) * 256) + 123] && g_alcBorrow == 132)) {
-                if (!(g_tokOn[(((g_teller * 14) + b) * 256) + 97] && g_cannRole == 132)) {
-                    return false;
-                }
+            if (!(g_tokOn[(((g_teller * 14) + b) * 256) + 123] && g_alcBorrowBy[b] == 133)) {
+                return false;
             }
         }
     }
@@ -55339,6 +55464,10 @@ int BOTC_ActRoleOf (int p) {
     if (p < 1 || p > 13) {
         return -1;
     }
+    // 【中毒 / 醉酒浪费能力的哲学家】（用户 2026-11-23）：今晚正在按他选的那个角色「假行动」。
+    if (p >= 2 && p <= 13 && g_philoFakeAct[p] && g_philoLostRole[p] > 0 && g_philoLostRole[p] <= 167) {
+        return g_philoLostRole[p] - 1;
+    }
     // 【使用技能】（用户 2026-11-06）：说书人临时扮演的角色，只影响座 1 的夜间行动。
     if (p == 1 && g_tellCastRole > 0 && g_tellCastRole <= 166) {
         return g_tellCastRole - 1;
@@ -55621,7 +55750,7 @@ void BOTC_ProfessorResolve (int p, int seat) {
     g_tokOn[(((g_teller * 14) + p) * 256) + 44] = true;          // 失去能力（教授）：只要用了能力就打（百科明确写）
     BOTC_GrimRender(g_teller);
     if (!BOTC_SkillWorks(p)) {
-        BOTC_PmStore(g_teller, "【教授】" + BOTC_NameStr(p) + " 中毒/酒鬼 → 这一次复活无效。");
+        BOTC_PmStore(g_teller, "【教授】" + BOTC_NameStr(p) + " 中毒/酒鬼 → 这一次复活无效（他原本选择复活 " + BOTC_NameStr(seat) + "）。");
         BOTC_SkillBtnRender();
         return;
     }
@@ -56016,7 +56145,7 @@ void BOTC_MoonChildDeclare (int p, int q) {
     }
     if (!BOTC_AbilityWorks(p, 36)) {
         g_moonDone[p] = true;
-        BOTC_PmStore(g_teller, "【月之子】" + BOTC_NameStr(p) + " 中毒/酒鬼 → 这一次选择无效。");
+        BOTC_PmStore(g_teller, "【月之子】" + BOTC_NameStr(p) + " 中毒/酒鬼 → 这一次选择无效（他原本选择了 " + BOTC_NameStr(q) + "）。");
         return;
     }
     if (g_moonDone[p]) {
@@ -56283,7 +56412,7 @@ void BOTC_KlutzPick (int p, int q) {
     if (!BOTC_AbilityWorks(p, 63)) {
         g_klutzDone[p] = true;
         g_klutzClaimed[p] = true;
-        BOTC_PmStore(g_teller, "【呆瓜】" + BOTC_NameStr(p) + " 的能力失效 → 这次公开选择不结算。");
+        BOTC_PmStore(g_teller, "【呆瓜】" + BOTC_NameStr(p) + " 的能力失效 → 这次公开选择不结算（他原本选择了 " + BOTC_NameStr(q) + "）。");
         return;
     }
     if (q < 2 || q > 13 || !g_seatOn[q]) {
@@ -56640,7 +56769,7 @@ bool BOTC_GoonDrunkOnly (int p) {
     }
     // 【除了「醉酒（莽夫）61」以外的任何醉酒来源 → 都算「不止莽夫那一份」】（用户 2026-10-14 补全）----
     //   这份清单必须跟 BOTC_SeatIsDrunk() 对齐：之前漏了 82 心上人 / 90 哲学家 / 126 村夫 / 129 解谜大师，
-    //   以及「哲学家选中的那个人」（BOTC_PhiloDrunkSeat）；漏了就会把「61 + 别的一份」误判成「只有莽夫那一份」。
+    //   以及「哲学家选中的那个人」（BOTC_PhiloDrunkTargetOf）；漏了就会把「61 + 别的一份」误判成「只有莽夫那一份」。
     if (g_tokOn[(((g_teller * 14) + p) * 256) + 24]) {
         return false;                      // 通用「醉酒」那一格
     }
@@ -56665,7 +56794,7 @@ bool BOTC_GoonDrunkOnly (int p) {
     if (g_tokOn[(((g_teller * 14) + p) * 256) + 164] || g_tokOn[(((g_teller * 14) + p) * 256) + 196]) {
         return false;                      // 醉酒（街头风琴手 164 / 酒保 196）
     }
-    if (p == BOTC_PhiloDrunkSeat()) {
+    if (BOTC_PhiloDrunkTargetOf(p)) {
         return false;                      // 哲学家选中的那个角色的持有者（token 还没同步过来也算，跟 BOTC_SeatIsDrunk 一致）
     }
     return true;
@@ -57885,6 +58014,7 @@ void BOTC_AutoWakeReset () {
         g_pedantActing[i] = false;
         g_lunPedantActing[i] = false; // 换夜只清「正在假行动」，白天猜中的待办留到这一夜
         g_lunFakeAct[i] = false;      // 【疯子·假能力】只是「这一夜正在按假能力唤醒」，换夜要清
+        g_philoFakeAct[i] = false;    // 【哲学家·浪费的假能力】同上：只在本夜有效
         for (j = 0; j <= 13; j += 1) {
             g_boffinDoneBy[(i * 14) + j] = false;
             g_bnestDoneBy[(i * 14) + j] = false;
@@ -58298,10 +58428,11 @@ void BOTC_SummonerSummon (int p, int target, int role) {
     }
     if (!BOTC_AbilityWorks(p, 150)) {
         if (g_nightNum == 3) {
+            BOTC_PmStore(g_teller, "【召唤师】" + BOTC_NameStr(p) + " 中毒/醉酒：这次召唤失败（他原本要召唤 " + BOTC_NameStr(target) + " 为「" + g_roleName[role] + "」）。");
             BOTC_SummonerFail();
         }
         else {
-            BOTC_PmStore(g_teller, "【召唤师】第二夜召唤普卡失败：召唤师当时中毒 / 醉酒，仍保留第三夜召唤机会。");
+            BOTC_PmStore(g_teller, "【召唤师】第二夜召唤普卡失败：召唤师当时中毒 / 醉酒，仍保留第三夜召唤机会（他原本选择了 " + BOTC_NameStr(target) + "）。");
         }
         g_skillPicking[p] = false;
         g_skillT1[p] = 0;
@@ -58483,7 +58614,7 @@ void BOTC_ComboResolve (int p) {
     }
     else if (r == 67) {
         if (!BOTC_SkillWorks(p)) {
-            BOTC_PmStore(g_teller, "【麻脸巫婆】" + BOTC_NameStr(p) + " 中毒/酒鬼/提线木偶 → 这一次能力失效（没有改造任何人）。");
+            BOTC_PmStore(g_teller, "【麻脸巫婆】" + BOTC_NameStr(p) + " 中毒/酒鬼/提线木偶 → 这一次能力失效（没有改造任何人；原本要把 " + BOTC_NameStr(t) + " 变成「" + g_roleName[role] + "」）。");
         }
         else {
             for (k = 2; k <= 13; k += 1) {
@@ -58921,6 +59052,10 @@ bool BOTC_AutoWakeEvilStep () {
 
     // g_evilStep == 4：提线木偶自己的首夜第 19 位。
     g_evilStep = g_evilStep + 1;
+    // 【剧本里没有提线木偶】（用户 2026-11-23）：这一步不占首夜位次，也不给说书人发提醒。
+    if (!BOTC_RoleOnBoard(93)) {
+        continue;
+    }
     BOTC_PmStore(g_teller, "【提线木偶】到达其首夜行动轮次：先把提线身份单独告知所有恶魔。");
     BOTC_SendFirstNightMarionetteInfo();
     BOTC_WakeRender();
@@ -59129,7 +59264,15 @@ void BOTC_MdAskConfirm () {
         BOTC_GrimRender(g_teller);
         return;
     }
-    BOTC_MarkDeathQuietSrc(q, 1, 1, old);
+    // 【造谣者的死亡不是恶魔攻击】（用户 2026-11-23）：以前这里统一按「夜间 · 恶魔杀」记，
+    //   结果造谣者点死的人会被僧侣的保护挡下，还会误触发唱诗男孩 / 祖母这类「死于恶魔」的判定。
+    //   造谣者是镇民能力，按「夜间 · 其他」记；小怪宝仍是恶魔杀。
+    if (old == 28) {
+        BOTC_MarkDeathQuietSrc(q, 1, 0, old);
+    }
+    else {
+        BOTC_MarkDeathQuietSrc(q, 1, 1, old);
+    }
     if (BOTC_SeatDead(q)) {
         // 【白天才确认也要当场公布】（用户 2026-11-22）：夜间技能面板如果拖到进入白天之后才点确认，
         // 以前只写「待天亮公布」→ 天亮那趟已经走完，死亡就一直挂着不公布。白天确认 = 当场公开。
@@ -60851,6 +60994,7 @@ void BOTC_WakeApply (int q, bool manual) {
         g_bnestActing[q] = false;
         g_bnestSource[q] = 0;
         g_lunFakeAct[q] = false;
+        g_philoFakeAct[q] = false;
         g_lunPedantActing[q] = false;
         g_wakeCurrentOrd = 0;
         return;
@@ -60881,6 +61025,29 @@ void BOTC_WakeApply (int q, bool manual) {
         BOTC_PmInfo(g_who[q], "【夜晚】你被唤醒了。");
         BOTC_Notice(g_teller, "已唤醒 " + BOTC_NameStr(q) + "（假能力「" + g_roleName[g_lunFakeAbil - 1] + "」，按中毒 / 醉酒处理：效果不生效）。");
         BOTC_PmStore(g_teller, "【疯子·假能力】唤醒 " + BOTC_NameStr(q) + "：他以为自己在用「" + g_roleName[g_lunFakeAbil - 1] + "」，这次能力按中毒 / 醉酒处理，效果不生效。");
+        BOTC_TellerPmTo(q);
+        BOTC_SkillOpen(q);
+        return;
+    }
+    // 【中毒 / 醉酒浪费能力的哲学家】（用户 2026-11-23）：他其实没有获得能力、一次性机会也已用掉，
+    //   但在中毒 / 醉酒解除之前仍按他选的那个角色的夜序被唤醒 —— 面板照常打开、选择照常记录，
+    //   效果一律不生效（BOTC_SkillWorks / BOTC_SkillConfirmCore 统一拦截）。
+    if (q >= 2 && q <= 13 && g_philoLostRole[q] > 0 && !g_philoLostSpent[q] && BOTC_SeatImpaired(q) && !BOTC_SeatDead(q) && !g_grantActing[q] && !g_boffinActing[q] && !g_bnestActing[q] && g_mark[(g_teller * 14) + q] - 1 == 56) {
+        g_philoFakeAct[q] = true;
+        g_awake[q] = true;
+        g_wakeCurrentOrd = BOTC_NightOrderOf(q);
+        if (g_wakeCurrentOrd > g_nightCursorOrd) {
+            g_nightCursorOrd = g_wakeCurrentOrd;
+        }
+        g_wokeTonight[q] = true;
+        g_skillT1[q] = 0;
+        g_skillT2[q] = 0;
+        g_skillT3[q] = 0;
+        g_skillPicking[q] = false;
+        BOTC_SkillBtnRender();
+        BOTC_PmInfo(g_who[q], "【夜晚】你被唤醒了。");
+        BOTC_Notice(g_teller, "已唤醒 " + BOTC_NameStr(q) + "（哲学家·中毒/醉酒：按「" + BOTC_RoleNameSafe(g_philoLostRole[q] - 1) + "」的夜序，能力不生效）。");
+        BOTC_PmStore(g_teller, "【哲学家】" + BOTC_NameStr(q) + " 中毒/醉酒期间仍按「" + BOTC_RoleNameSafe(g_philoLostRole[q] - 1) + "」的夜序被唤醒：面板照常打开，但这次能力不生效。");
         BOTC_TellerPmTo(q);
         BOTC_SkillOpen(q);
         return;
@@ -61292,6 +61459,9 @@ void BOTC_WakeApply (int q, bool manual) {
     }
     if (r == 58) {
         // 【杂耍艺人改由说书人手动填写】（用户 2026-11-12）：不再自动预填猜对数量。
+        if (!BOTC_SkillWorks(q)) {
+            BOTC_PmStore(g_teller, "【杂耍艺人】" + BOTC_NameStr(q) + " 中毒/酒鬼/提线木偶：能力失效，猜对个数可以随便填（他白天的猜测见上面那几条）。");
+        }
         BOTC_ManInfoOpen(q, 58, "");
     }
     if (r == 76) {
@@ -61570,6 +61740,19 @@ void BOTC_SkillOpen (int p) {
     }
     g_choiceSaid[p] = false;
     r = BOTC_ActRoleOf(p);
+    // 【中毒 / 醉酒浪费能力的哲学家】（用户 2026-11-23）：照所选角色的通用目标面板打开，
+    //   让玩家以为自己的能力还在；确认后由 BOTC_SkillConfirmCore 统一按「不生效」收尾。
+    if (g_philoFakeAct[p]) {
+        g_skillT1[p] = 0;
+        g_skillT2[p] = 0;
+        g_skillT3[p] = 0;
+        g_skillRoleSel[p] = 0;
+        g_skillPicking[p] = true;
+        DialogSetVisible(g_skillDlg[p], PlayerGroupSingle(g_who[p]), true);
+        BOTC_SkillRender(p);
+        BOTC_Notice(g_who[p], BOTC_SkillPickTextFor(p));
+        return;
+    }
     // 【疯子·假能力】（用户 2026-11-10）：科学怪人给的那份假能力照常打开通用目标面板；
     //   确认后走正常结算，但 BOTC_SkillWorks 返回 false，效果按中毒 / 醉酒处理、不生效。
     if (g_lunFakeAct[p]) {
@@ -61581,6 +61764,20 @@ void BOTC_SkillOpen (int p) {
         DialogSetVisible(g_skillDlg[p], PlayerGroupSingle(g_who[p]), true);
         BOTC_SkillRender(p);
         BOTC_Notice(g_who[p], BOTC_SkillPickTextFor(p));
+        return;
+    }
+    // 【一次性能力已被中毒 / 醉酒浪费】（用户 2026-11-23）：恢复清醒后他其实没有能力，
+    //   手动唤醒也只会走到这里 —— 不再弹「是否发动能力」让他重选，直接提示说书人。
+    if (r == 56 && p >= 2 && p <= 13 && g_philoUsed[p]) {
+        BOTC_PmStore(g_teller, "【哲学家】" + BOTC_NameStr(p) + " 的一次性能力已经用掉了（含被中毒/醉酒浪费），这次不再打开技能面板。");
+        g_skillPicking[p] = false;
+        g_limitedAsk[p] = false;
+        g_skillRoleSel[p] = 0;
+        g_skillT1[p] = 0;
+        g_skillT2[p] = 0;
+        g_skillT3[p] = 0;
+        DialogSetVisible(g_skillDlg[p], PlayerGroupSingle(g_who[p]), false);
+        BOTC_SkillBtnRender();
         return;
     }
     if (r == 162) {
@@ -62285,7 +62482,7 @@ void BOTC_DrossPick (int role) {
     g_tokOn[(((g_teller * 14) + p) * 256) + 145] = true;
     BOTC_GrimRender(g_teller);
     if (!BOTC_SkillWorks(p)) {
-        BOTC_PmStore(g_teller, "【鸩】" + BOTC_NameStr(p) + " 中毒/酒鬼/提线木偶：这次能力失效，但一次性机会已消耗。");
+        BOTC_PmStore(g_teller, "【鸩】" + BOTC_NameStr(p) + " 中毒/酒鬼/提线木偶：这次能力失效，但一次性机会已消耗（他原本选择了「" + g_roleName[role] + "」）。");
         return;
     }
     t = BOTC_SeatOfRole(role);
@@ -64787,6 +64984,21 @@ void BOTC_SkillConfirmCore (int p) {
     int cogT;                     // 【认知覆盖】：目标那一格的认知 token
     int cardP;                    // 【认知覆盖】：选人这位「以为的身份」
     int cardT;                    // 【认知覆盖】：目标「以为的身份」
+    // 【中毒 / 醉酒浪费能力的哲学家】（用户 2026-11-23）：面板照常选人、照常确认，
+    //   但他其实没有这份能力 —— 只记录选择、关掉面板，不产生任何结算。
+    if (p >= 2 && p <= 13 && g_philoFakeAct[p]) {
+        BOTC_TellSkillChoice(p, -1);
+        g_philoFakeAct[p] = false;
+        g_skillPicking[p] = false;
+        g_skillRoleSel[p] = 0;
+        g_skillT1[p] = 0;
+        g_skillT2[p] = 0;
+        g_skillT3[p] = 0;
+        DialogSetVisible(g_skillDlg[p], PlayerGroupSingle(g_who[p]), false);
+        BOTC_PmStore(g_teller, "【哲学家】" + BOTC_NameStr(p) + " 使用的是中毒/醉酒时浪费掉的选择（" + BOTC_RoleNameSafe(g_philoLostRole[p] - 1) + "）：这次能力不生效，没有任何结算。");
+        BOTC_SkillBtnRender();
+        return;
+    }
     // 【小怪宝 / 造谣者 / 赏金猎人】说书人的单目标技能面板（用户 2026-11-10）
     if (g_mdAsk && g_who[p] == g_teller) {
         BOTC_MdAskConfirm();
@@ -65220,7 +65432,7 @@ void BOTC_SkillConfirmCore (int p) {
         g_tokOn[(((g_teller * 14) + p) * 256) + 147] = true;
         BOTC_GrimRender(g_teller);
         if (!BOTC_SkillWorks(p)) {
-            BOTC_PmStore(g_teller, "【守夜人】" + BOTC_NameStr(p) + " 中毒/酒鬼/提线木偶：这次能力失效，目标不会收到任何信息；一次性机会已消耗。");
+            BOTC_PmStore(g_teller, "【守夜人】" + BOTC_NameStr(p) + " 中毒/酒鬼/提线木偶：这次能力失效，目标不会收到任何信息；一次性机会已消耗（他原本选择了 " + BOTC_NameStr(t) + "）。");
             return;
         }
         BOTC_PmInfo(g_who[t], "【信息】你得知" + BOTC_NameStr(p) + "是守夜人。");
@@ -65771,7 +65983,7 @@ void BOTC_SkillConfirmCore (int p) {
             return;
         }
         if (!BOTC_SkillWorks(p)) {
-            BOTC_PmStore(g_teller, "【解谜大师】" + BOTC_NameStr(p) + " 中毒/酒鬼：这次不生效。");
+            BOTC_PmStore(g_teller, "【解谜大师】" + BOTC_NameStr(p) + " 中毒/酒鬼：这次不生效（他原本猜的是 " + BOTC_NameStr(t) + "）。");
             return;
         }
         if (g_tokOn[(((g_teller * 14) + p) * 256) + 130]) {
@@ -65898,6 +66110,9 @@ if (r == 55) {
     else {
         g_tokOn[(((g_teller * 14) + p) * 256) + 68] = true;      // 失去能力（女裁缝）：用过就记上
         BOTC_GrimRender(g_teller);
+        if (!BOTC_SkillWorks(p)) {
+            BOTC_PmStore(g_teller, "【女裁缝】" + BOTC_NameStr(p) + " 中毒/酒鬼/提线木偶：能力失效，答案可以随便给（他选的是 " + BOTC_NameStr(g_skillT1[p]) + " / " + BOTC_NameStr(g_skillT2[p]) + "）。");
+        }
         BOTC_ManInfoOpen(p, 55, BOTC_NameStr(g_skillT1[p]) + " / " + BOTC_NameStr(g_skillT2[p]));
     }
 }
@@ -66162,6 +66377,7 @@ if (r == 49) {
         //   莽夫先被改成刺客的阵营（邪恶），随后被刺杀；莽夫死后能力失效，阵营就固定在邪恶。
         goonHit = (BOTC_HasAbility(t, 37) && g_goonChosenBy[t] == p);
         if (!BOTC_SkillWorks(p) && !goonHit) {
+            BOTC_PmStore(g_teller, "【刺客】" + BOTC_NameStr(p) + " 中毒/酒鬼/提线木偶：这一次刺杀失效（他原本选择刺杀 " + BOTC_NameStr(t) + "）。");
         }
         else {
             s = "";
@@ -68020,19 +68236,19 @@ void BOTC_CannSync () {
         bad = false;
     }
     // 中毒：只在「饱餐」持有人当前为邪恶阵营时挂在食人族身上
+    // 【多名食人族】（用户 2026-11-23）：每个存活且持有食人族能力的座位都要中毒，
+    //   不再只给第一个食人族挂 178。
+    g_cannPoisonSeat = 0;
     for (i = 2; i <= 13; i += 1) {
-        if (bad && i == cs) {
+        if (bad && g_seatOn[i] && !BOTC_SeatDead(i) && i != bearer && BOTC_HasAbility(i, 74)) {
             g_tokOn[(((g_teller * 14) + i) * 256) + 178] = true;
+            if (g_cannPoisonSeat == 0) {
+                g_cannPoisonSeat = i;
+            }
         }
         else if (g_tokOn[(((g_teller * 14) + i) * 256) + 178]) {
             g_tokOn[(((g_teller * 14) + i) * 256) + 178] = false;
         }
-    }
-    if (bad) {
-        g_cannPoisonSeat = cs;
-    }
-    else {
-        g_cannPoisonSeat = 0;
     }
 }
 
@@ -68164,7 +68380,6 @@ void BOTC_CannRevert () {
         BOTC_GrimRender(g_teller);
         BOTC_GrimRender(g_who[cs]);
     }
-    g_cannRole = 0;
     g_cannKind = 0;
     g_cannSeat = 0;
     g_cannSrc = 0;
@@ -68199,7 +68414,6 @@ void BOTC_CannPick (int role) {
     g_cannLunDemon[cs] = role;
     BOTC_PmInfo(g_who[cs], "你得知你现在把自己当成邪恶阵营的恶魔「" + g_roleName[role] + "」。");
     BOTC_PmStore(g_teller, "【食人族】" + BOTC_NameStr(cs) + " 吃到了疯子 → 他以为自己现在是邪恶阵营的恶魔 " + g_roleName[role] + "；疯子夜序会唤醒他假刀（不产生死亡），之后告诉恶魔他是疯子以及目标。");
-    g_cannRole = 0;
     g_cannKind = 0;
     g_cannSeat = 0;
     g_cannSrc = 0;
@@ -70103,7 +70317,7 @@ bool BOTC_ScarletPromote (int sw) {
     }
     BOTC_PromoteTo(sw);
     g_tokOn[(((g_teller * 14) + sw) * 256) + 123] = false;
-    g_alcBorrow = 0;
+    g_alcBorrowBy[sw] = 0;
     g_tokOn[(((g_teller * 14) + sw) * 256) + 13] = true;
     BOTC_GrimRender(g_teller);
     alive = BOTC_AliveCountTrue();
@@ -70236,11 +70450,11 @@ bool BOTC_ScarletCheck () {
         return true;
     }
     BOTC_PromoteTo(sw);
-    // 【借能力上位的人要把「借用」痕迹清掉】（用户 2026-10-13）：炼金术士(95) 靠 token 123 + g_alcBorrow 记账，
+    // 【借能力上位的人要把「借用」痕迹清掉】（用户 2026-10-13）：炼金术士(95) 靠 token 123 + 借用记录记账，
     //   BOTC_SeatTrueRole 会按它读回 95（镇民）→ 胜负那边就看不到「活着的恶魔」了。
     //   （哲学家 70 / 食人族 97 的两枚由 BOTC_SetSeatRole 的离场清理收掉，这里只管炼金那两笔。）
     g_tokOn[(((g_teller * 14) + sw) * 256) + 123] = false;
-    g_alcBorrow = 0;
+    g_alcBorrowBy[sw] = 0;
     // 继位之后自动在她身上打上红唇女郎的提醒标记「是恶魔」（第 13 槽）
     g_tokOn[(((g_teller * 14) + sw) * 256) + 13] = true;
     BOTC_GrimRender(g_teller);
@@ -89517,6 +89731,10 @@ void BOTC_CustomShowEditor () {
     BOTC_CfgBtnRender();           // 【游戏配置】入口与面板：自定义剧本页一并收起
     DialogControlSetVisible(g_boardTabOfficial, PlayerGroupAll(), false);
     DialogControlSetVisible(g_boardTabMore, PlayerGroupAll(), false);
+    // 自定义剧本页不显示「更多剧本」的翻页按钮与页码
+    DialogControlSetVisible(g_boardPgPrev, PlayerGroupAll(), false);
+    DialogControlSetVisible(g_boardPgNext, PlayerGroupAll(), false);
+    DialogControlSetVisible(g_boardPgInfo, PlayerGroupAll(), false);
     DialogControlSetVisible(g_seatInfoLbl, PlayerGroupAll(), false);
     for (i = 0; i < 6; i += 1) {
         DialogControlSetVisible(g_customSlotBtn[i], PlayerGroupAll(), true);
@@ -92241,7 +92459,7 @@ void BOTC_OpeningMarkSync () {
 //   反复点【随机发牌】也不换人。改成按场次加权随机。
 // 【恶魔 / 爪牙分表】（用户 2026-11-15）：恶魔位与爪牙位不再共用同一张表；
 //   失忆者（73）也不再使用这张表，改走善良角色的场次概率发座（见 BOTC_GoodCatPct），
-//   并且仍然只发给总场数 >= 20 的玩家；博学者（54）同样走概率发座，只发给 >= 10 场的玩家。
+//   并且仍然只发给总场数 >= 20 的玩家。
 //   恶魔：0..4 场 = 1；5..9 场 = 5；10..14 场 = 10；15..19 场 = 15；>= 20 场 = 20。
 int BOTC_DealDemonWeightBase (int tot) {
     int w;
@@ -93705,17 +93923,11 @@ void BOTC_Deal () {
         }
     }
     // 【场次门槛角色 · 先钉到合格座位】（用户 2026-11-21）：
-    //   失忆者（73）只发总场数 >= 20 的善良座位，博学者（54）只发 >= 10 的善良座位；
-    //   先把它们挑好座位再移出角色池，避免合格座位被其他角色先占掉。
-    for (ei = 0; ei < 2; ei += 1) {
-        if (ei == 0) {
-            r = 73;
-            thr = 20;
-        }
-        else {
-            r = 54;
-            thr = 10;
-        }
+    //   失忆者（73）只发总场数 >= 20 的善良座位；博学者（54）的 10 场限制已取消，
+    //   改走普通善良角色的概率发座。先把它挑好座位再移出角色池，避免合格座位被其他角色先占掉。
+    for (ei = 0; ei < 1; ei += 1) {
+        r = 73;
+        thr = 20;
         slot = -1;
         for (i = 0; i < goodN; i += 1) {
             if (goodR[i] == r) {
@@ -96557,6 +96769,10 @@ void BOTC_NomPick (int p, int q) {
         // 【无神论者局 · 魔像】（用户 2026-11-15）：魔典上写着魔像就弹窗，不看真实能力
         //   （酒鬼等“以为自己是他”的座位同样算）；没人有魔像能力时不会被误判。
         if (BOTC_RoleTrueInPlay(83) && g_mark[(g_teller * 14) + p] - 1 == 81) {
+            // 【魔像只用一次提名】（用户 2026-11-23）：无神论者局按魔典上的魔像判定时，
+            //   同样要打「无法提名 101」，否则这一格可以无限次发起提名。
+            g_tokOn[(((g_teller * 14) + p) * 256) + 101] = true;
+            BOTC_GrimRender(g_teller);
             BOTC_GolemAsk(p, q);
         }
     }
@@ -97798,6 +98014,13 @@ bool BOTC_Tick_Func (bool testConds, bool runActions) {
     BOTC_OgreFriendSync();         // 【食人魔（148）· 挚友】阵营跟随被标记玩家（用户 2026-11-11）
     BOTC_HolySoulMarkSync();       // 【圣洁之魂（89）】「禁止邪恶」提示标记自动放置 / 移除（用户 2026-11-11）
     BOTC_DxeMuteSync();            // 【店小二（115）】136 醉酒标记开始延迟 / 恢复生效时私聊提醒说书人（用户 2026-11-21）
+    // 【哲学家 · 中毒/醉酒浪费掉的假能力】（用户 2026-11-23）：这段中毒 / 醉酒一旦解除就永久失效，
+    //   之后再次中毒 / 醉酒也不再按所选角色唤醒。0.5 秒兜一次，避免解除后立刻又中毒导致漏判。
+    for (p = 2; p <= 13; p += 1) {
+        if (g_philoLostRole[p] > 0 && !g_philoLostSpent[p] && !BOTC_SeatImpaired(p)) {
+            g_philoLostSpent[p] = true;
+        }
+    }
     // 【界面自愈】（用户 2026-10-07 报「换位之后有时候渲染不对、第二遍才对」）：每 0.5 秒重画一次
     //   说书人那份魔典（只 1 个客户端）—— 哪怕哪一步漏刷，最多半个 tick 就自己补上。
     BOTC_GrimRender(g_teller);
