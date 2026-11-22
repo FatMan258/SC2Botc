@@ -852,7 +852,8 @@ class IntroNameFlowTests(unittest.TestCase):
         count_render = count_render[: count_render.index("\n}\n") + 3]
         self.assertNotIn("DialogSetVisible", count_render)
         self.assertIn("输入名字后点击【确认】", source)
-        self.assertIn("取名阶段不能发言", source)
+        self.assertIn("取名阶段禁止聊天", source)
+        self.assertIn("不能发言，请在屏幕中央输入框填写名字后点击【确认】。", source)
         self.assertIn('g_namePool[4]  = "泰凯斯"', source)
         self.assertIn("BOTC_NameCharCount(name) > 7", source)
         self.assertIn("bool BOTC_ValidColorName (string s) {", source)
@@ -878,7 +879,7 @@ class IntroNameFlowTests(unittest.TestCase):
         self.assertIn("void BOTC_IntroConfirm (int p) {", source)
         self.assertIn("if (!g_introHinted[p])", source)
         self.assertIn(
-            'StringToText("请等待其他玩家设置名称")',
+            'StringToText("请等待其他玩家设置名称；可用下方【随机彩色】给自己的名字上色。")',
             source,
         )
         self.assertIn(
@@ -923,10 +924,10 @@ class LogIdentityTests(unittest.TestCase):
             encoding="utf-8-sig"
         )
         # 【日志名字跟随取名模式】（用户 2026-11-18）：正文默认按当前取名模式替换，
-        #   只有复盘（g_logRealName）才强制使用真实战网名。
+        #   复盘（g_logRealName）与说书人自己的日志才强制使用真实战网名。
         line_text = source[source.index("text BOTC_LogLineText (int viewer, string line, int who) {"):]
         line_text = line_text[: line_text.index("\n}\n") + 3]
-        self.assertIn("if (g_logRealName[viewer])", line_text)
+        self.assertIn("if (viewer == g_teller || g_logRealName[viewer])", line_text)
         self.assertIn("BOTC_RealNameSubstText(viewer, t)", line_text)
         self.assertIn("BOTC_NameSubstText(t)", line_text)
 
@@ -985,8 +986,9 @@ class LogIdentityTests(unittest.TestCase):
             body = source[source.index("void " + owner):]
             body = body[: body.index("\n}\n") + 3]
             self.assertIn("BOTC_LogAddLine(p,", body)
-        self.assertIn("s = g_pubLog[i];", source)
-        self.assertIn("who = g_pubWho[i];", source)
+        # 【环形缓冲】（用户 2026-11-21）：读取按基准 + 环槽计算，不再直接用 i 当数组下标。
+        self.assertIn("s = g_pubLog[slot];", source)
+        self.assertIn("who = g_pubWho[slot];", source)
         self.assertIn("s = g_pmLog[idx];", source)
 
 
@@ -1065,15 +1067,15 @@ class MergeRegressionTests(unittest.TestCase):
             source,
         )
         self.assertNotIn('BOTC_DevPlayer(p) && msg == "-handles"', source)
-        self.assertIn("BOTC_PmStore(viewer,", handles)
-        self.assertNotIn("BOTC_PmStore(g_teller,", handles)
+        self.assertIn("BOTC_PmStorePlain(viewer,", handles)
+        self.assertNotIn("BOTC_PmStorePlain(g_teller,", handles)
         # 编号按魔典座位口径输出（说书人 / [n]），所以用 lab 而不是物理座位号。
         self.assertIn('"【句柄】" + lab + " " + nm + "：" + tok', handles)
         self.assertIn("h = PlayerHandle(seat);", handles)
         self.assertIn("tok = BOTC_HandleToken(seat);", handles)
         self.assertIn('tok = "@@HL" + IntToString(seat) + "@@";', handles)
         self.assertNotIn("物理座位", handles)
-        self.assertIn("PlayerGetColorIndex(p, false)", source)
+        self.assertIn("PlayerGetColorIndex(pid, false)", source)
         stats = self._function_text(source, "void BOTC_StatsRender (int p) {")
         self.assertIn("PlayerName(pid)", stats)
         self.assertNotIn("BOTC_SeatNameText", stats)

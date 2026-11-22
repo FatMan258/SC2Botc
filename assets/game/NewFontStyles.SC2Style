@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<StyleFile>
+    <!-- 与 blackhand-rewrite 同一套名字斜体字体：纯拉丁走 Lora，含中文走思源黑体切变。 -->
+    <Constant name="SHWCJKItalicFont" val="Fonts\BH-CJK-Italic.ttf" />
+    <Style name="ModItalicAuto" font="#SHWCJKItalicFont" />
+    <Constant name="SHWItalicFont" val="Fonts\BH-Serif-Italic.ttf" />
+    <Style name="ModItalicLatin" font="#SHWItalicFont" />
+</StyleFile>
