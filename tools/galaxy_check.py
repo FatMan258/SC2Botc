@@ -282,8 +282,70 @@ def find_literal_array_index_errors(text: str) -> list[str]:
             errors.append(
                 f"{name}[{index}] 超出数组容量 {capacity}（第 {line} 行）"
             )
+        # 【板子下标】name[(N * 256) + M] / name[N * 256 + M]：2026-11-22 加第 16 张板子时漏扩数组
+        access_expr = re.compile(
+            rf"\b{re.escape(name)}\s*\[\s*\(?\s*(\d+)\s*\*\s*256\s*\)?\s*\+\s*(\d+)\s*\]"
+        )
+        for match in access_expr.finditer(clean):
+            index = int(match.group(1)) * 256 + int(match.group(2))
+            if 0 <= index < capacity:
+                continue
+            line = text.count("\n", 0, match.start()) + 1
+            errors.append(
+                f"{name}[({match.group(1)} * 256) + {match.group(2)}] = {index} 超出数组容量 {capacity}（第 {line} 行）"
+            )
     return errors
 
+
+
+def find_non_ascii_in_code_errors(text: str) -> list[str]:
+    """Galaxy 代码区（去掉字符串与 // 注释后）出现中文 = 漏写 // 的注释，编译器必报错。"""
+    errors: list[str] = []
+    for idx, line in enumerate(text.splitlines(), start=1):
+        s = re.sub(r'"(?:[^"\\]|\\.)*"', '""', line)
+        pos = s.find("//")
+        if pos >= 0:
+            s = s[:pos]
+        if re.search(r"[^\x00-\x7f]", s):
+            errors.append(f"第 {idx} 行：代码里出现中文（注释少了 //？）：{line.strip()[:80]}")
+    return errors
+
+
+def find_padding_corruption_errors(text: str) -> list[str]:
+    """连续 20 行以上的「只有空格且很长」的行 = 文件曾被截断后用空格补齐，必须还原。"""
+    errors: list[str] = []
+    lines = text.splitlines()
+    i = 0
+    while i < len(lines):
+        if lines[i].strip() == "" and len(lines[i]) >= 20:
+            start = i
+            while i < len(lines) and lines[i].strip() == "" and len(lines[i]) >= 20:
+                i += 1
+            if i - start >= 20:
+                errors.append(f"第 {start + 1}~{i} 行整段被空格填充（{i - start} 行），疑似文件被截断")
+        else:
+            i += 1
+    return errors
+
+
+def find_called_undefined_errors(text: str) -> list[str]:
+    """前置声明了、但整份脚本里找不到定义、而且还被调用 → 编译期「函数已声明但尚未定义」。"""
+    clean = mask_galaxy_comments_and_strings(text)
+    pattern = re.compile(
+        r"(?m)^[ \t]*(?:void|bool|int|fixed|string|text|color|unit|sound|point|region|"
+        r"timer|dialog|playergroup|bank|trigger)\s+([A-Za-z_]\w*)\s*\([^;{)]*\)"
+    )
+    decls = {m.group(1): m.start() for m in pattern.finditer(clean)}
+    defs = {m.group(1) for m in re.finditer(
+        r"(?m)^[ \t]*(?:void|bool|int|fixed|string|text|color|unit|sound|point|region|"
+        r"timer|dialog|playergroup|bank|trigger)\s+([A-Za-z_]\w*)\s*\([^;{)]*\)\s*\{", clean)}
+    errors: list[str] = []
+    for name in sorted(set(decls) - defs):
+        calls = len(re.findall(r"\b" + re.escape(name) + r"\s*\(", clean))
+        if calls > 1:
+            line = clean.count("\n", 0, decls[name]) + 1
+            errors.append(f"{name} 只声明（第 {line} 行）没有定义，但有调用；编译器会报「函数已声明但尚未定义」")
+    return errors
 
 def find_reversed_array_declaration_errors(text: str) -> list[str]:
     clean = mask_galaxy_comments_and_strings(text)
@@ -407,13 +469,19 @@ def check_script(path: Path) -> tuple[list[str], list[str]]:
     errors.extend(find_forward_call_errors(text))
     errors.extend(find_reversed_array_declaration_errors(text))
     errors.extend(find_literal_array_index_errors(text))
+    errors.extend(find_non_ascii_in_code_errors(text))
+    errors.extend(find_padding_corruption_errors(text))
+    errors.extend(find_called_undefined_errors(text))
     errors.extend(find_array_capacity_errors(text))
     errors.extend(find_trigger_callback_errors(text))
 
     if "void BOTC_Init (" not in text and "void BOTC_Init()" not in text:
         errors.append("找不到 BOTC_Init()")
-    if "for (i = 0; i <= 163; i += 1)" not in text:
-        warnings.append("没有发现当前角色上限 163 的扫描循环，确认是否已扩展")
+    if ("for (i = 0; i <= 163; i += 1)" not in text
+            and "for (i = 0; i <= 164; i += 1)" not in text
+            and "for (i = 0; i <= 165; i += 1)" not in text
+            and "for (i = 0; i <= 166; i += 1)" not in text):
+        warnings.append("没有发现角色上限 163～166 的扫描循环，确认是否已扩展")
 
     return errors, warnings
 

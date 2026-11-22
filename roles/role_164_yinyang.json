@@ -1,0 +1,88 @@
+{
+  "schema_version": 2,
+  "index": 164,
+  "name": "阴阳师",
+  "team": "townsfolk",
+  "alignment": "good",
+  "text": "在你的首个夜晚，你会得知两个善良角色和两个邪恶角色，其中有且只有两个角色在场。",
+  "lore": "“玄武大帝在眼前，神归庙，鬼归坟，妖魔鬼怪归山林，玄武真君急急如律令！”",
+  "timing": "first_night",
+  "frequency": "always",
+  "action": "first_night",
+  "target": {
+    "kind": "none",
+    "count": 0,
+    "living": false,
+    "allow_self": false,
+    "allow_repeat": false
+  },
+  "artwork": {
+    "source": "待提供或制作角色原画",
+    "role_icon": "botc_role164.dds",
+    "night_icon": "botc_night164.dds",
+    "token_icons": []
+  },
+  "night_order": {
+    "section": "information",
+    "anchor_role": "气球驾驶员",
+    "relation": "after",
+    "first": 69,
+    "other": null
+  },
+  "tokens": [],
+  "jinxes": [],
+  "effects": [
+    {
+      "kind": "custom",
+      "id": "storyteller_select_four_roles",
+      "notes": "说书人用四格技能面板依次选择两个善良角色和两个邪恶角色（四个不重复，只限当前剧本）；不自动校验在场数量，由说书人按官网自行决定。"
+    },
+    {
+      "kind": "send_information",
+      "text": "私聊告知阴阳师四个角色名（两个善良、两个邪恶），不告诉他哪两个在场。"
+    }
+  ],
+  "randomness": {
+    "declared": false,
+    "notes": "由说书人手动选择，不使用随机数。"
+  },
+  "tests": [
+    "首夜唤醒说书人弹出四格技能面板：前两格善良、后两格邪恶。",
+    "点某一格打开角色网格，只列当前剧本、对应阵营、且未被选过的角色。",
+    "四个角色必须互不重复；善恶按格子校验。",
+    "四个角色都选完后点【确认（发送）】，向阴阳师私聊发送四个角色名。",
+    "信息文本格式：【信息】你得知，侍女，送葬者，蛊雕，方古。",
+    "不自动校验在场数量（中毒 / 醉酒 / 假能力时直接发错误信息）。",
+    "说书人收回唤醒时关闭四格面板与未完成的角色网格并清除本次选择状态。",
+    "不改动当前剧本角色名单，不修改其他角色的能力逻辑。"
+  ],
+  "implementation": {
+    "required_functions": [
+      "BOTC_YydOpen",
+      "BOTC_YydPanel",
+      "BOTC_YydPanelRender",
+      "BOTC_YydEdit",
+      "BOTC_YydPickRole",
+      "BOTC_YydSend",
+      "BOTC_YydClearSeat",
+      "BOTC_YydAbort"
+    ],
+    "required_symbols": [
+      "g_yydRole",
+      "g_yydSeat",
+      "g_yydEdit",
+      "g_pickMode[g_teller] == 56",
+      "BOTC_RoleInPlay"
+    ],
+    "state_fields": [
+      "g_yydRole[seat * 4 + slot]",
+      "g_yydSeat",
+      "g_yydEdit"
+    ],
+    "reset_points": [
+      "选择成功发送后",
+      "说书人收回该座位唤醒时",
+      "新一次阴阳师首夜流程开始时"
+    ]
+  }
+}

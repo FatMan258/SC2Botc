@@ -1,0 +1,81 @@
+{
+  "schema_version": 2,
+  "index": 165,
+  "name": "钦天监",
+  "team": "townsfolk",
+  "alignment": "good",
+  "text": "在你的首个夜晚，你会得知离你最近的邪恶玩家位于你的哪一侧（顺时针/逆时针/相同）。如果与你邻近的玩家中有邪恶阵营，你会得知错误信息作为替代。",
+  "lore": "“天降异象，荧惑守心。”",
+  "timing": "first_night",
+  "frequency": "always",
+  "action": "first_night",
+  "target": {
+    "kind": "none",
+    "count": 0,
+    "living": false,
+    "allow_self": false,
+    "allow_repeat": false
+  },
+  "artwork": {
+    "source": "用户提供（星座图）",
+    "role_icon": "botc_role165.dds",
+    "night_icon": "botc_night165.dds",
+    "token_icons": []
+  },
+  "night_order": {
+    "section": "information",
+    "anchor_role": "店小二",
+    "relation": "after",
+    "first": 73,
+    "other": null
+  },
+  "tokens": [],
+  "jinxes": [],
+  "effects": [
+    {
+      "kind": "custom",
+      "id": "storyteller_pick_side",
+      "notes": "说书人在答题框三选一：顺时针 / 逆时针 / 相同。脚本在提示行给出按当前场上情况（包含已死亡玩家、跳过空位）算出的正确判断，并提示相邻有邪恶时必须给错误答案；顺时针 = 座位号递增方向。"
+    },
+    {
+      "kind": "send_information",
+      "text": "私聊告知钦天监：顺时针 / 逆时针 / 相同（只给一个词）。"
+    }
+  ],
+  "randomness": {
+    "declared": false,
+    "notes": "由说书人手动选择，不使用随机数。"
+  },
+  "tests": [
+    "首夜唤醒说书人弹出答题框：三个按钮为 顺时针 / 逆时针 / 相同。",
+    "提示行显示脚本判断（顺时针 / 逆时针 / 相同）与对应方向最近邪恶距离。",
+    "钦天监相邻座位有邪恶玩家时，提示行明确写「必须给错误答案」。",
+    "选中后向钦天监私聊发送「【信息】你得知顺时针。」/「…逆时针。」/「…相同。」，并给说书人留档。",
+    "中毒 / 醉酒 / 涡流等信息错误来源时，说书人可随意选择；收回唤醒时关闭答题框且不发送。",
+    "不改动当前剧本角色名单，不修改其他角色的能力逻辑。"
+  ],
+  "implementation": {
+    "required_functions": [
+      "BOTC_QinStep",
+      "BOTC_QinDist",
+      "BOTC_QinAdjEvil",
+      "BOTC_QinNote",
+      "BOTC_ManInfoOpen",
+      "BOTC_ManInfoYesNo"
+    ],
+    "required_symbols": [
+      "g_miRole == 165",
+      "左侧",
+      "右侧",
+      "相同"
+    ],
+    "state_fields": [
+      "g_miSeat",
+      "g_miRole"
+    ],
+    "reset_points": [
+      "发送信息后",
+      "说书人收回该座位唤醒时"
+    ]
+  }
+}

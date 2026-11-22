@@ -657,10 +657,18 @@ class BoardPaginationTests(unittest.TestCase):
         source = (PROJECT_ROOT / "scripts" / "BOTC.galaxy").read_text(
             encoding="utf-8-sig"
         )
-        self.assertIn("return 14;  // 【板子张数】", source)
+        self.assertIn("return 15;  // 【板子张数】", source)
         self.assertIn('return "移花接木";', source)
         self.assertIn('return "botc_board_yhjm.dds";', source)
-        self.assertIn("if (slot == 11) {\n            return 15;", source)
+        self.assertIn("if (k == 11) {\n            return 15;", source)
+        # 【更多剧本翻页】（2026-11-22）：第 2 页第 1 格 = 各怀鬼胎
+        self.assertIn("k = ((g_boardMorePage - 1) * 12) + slot;", source)
+        self.assertIn("if (k == 12) {\n            return 16;", source)
+        self.assertIn("g_boardSel > 16", source)
+        # 【2026-11-22】入殓师 × 痢蛭：改成天亮统一公布
+        self.assertIn("BOTC_MarkDeathRowTok(q, BOTC_DeathRowOf(1, 0), -1, false);", source)
+        # 【2026-11-22】悟道者「以为的外来者」只能来自本剧本
+        self.assertIn("悟道者 · 认知外来者只能来自本剧本", source)
         self.assertIn("g_boardRoleN[15] = 25;", source)
 
         roles = {
@@ -904,14 +912,14 @@ class IntroNameFlowTests(unittest.TestCase):
 
 
 class AmnesiaViewTests(unittest.TestCase):
-    def test_player_identity_stays_masked_until_correct_guess(self) -> None:
+    def test_player_identity_masks_before_start_until_guess(self) -> None:
         source = (PROJECT_ROOT / "scripts" / "BOTC.galaxy").read_text(
             encoding="utf-8-sig"
         )
         role_view = source[source.index("int BOTC_PlayerRoleView (int seat, int roleIdx) {"):]
         role_view = role_view[: role_view.index("\n}\n") + 3]
         self.assertIn("!g_guessRoleDone[g_who[seat]]", role_view)
-        self.assertNotIn("g_nightNum == 0", role_view)
+        self.assertIn("g_nightNum == 0", role_view)
 
         sync = source[source.index("void BOTC_AmnesiaSyncSeat (int seat, int roleIdx) {"):]
         sync = sync[: sync.index("\n}\n") + 3]
@@ -1324,8 +1332,8 @@ class MergeRegressionTests(unittest.TestCase):
         source = (PROJECT_ROOT / "scripts" / "BOTC.galaxy").read_text(
             encoding="utf-8-sig"
         )
-        self.assertIn("string[140] g_jinxText;", source)
-        self.assertIn("g_jinxCount = 139;", source)
+        self.assertIn("string[144] g_jinxText;", source)
+        self.assertIn("g_jinxCount = 143;", source)
         pairs = {
             (int(a), int(b))
             for a, b in re.findall(
