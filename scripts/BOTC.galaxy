@@ -89737,6 +89737,8 @@ void BOTC_BuildCustom () {
 
 void BOTC_CustomShowEditor () {
     int i;
+    // 自定义剧本页不显示当前说书人名称与称号；返回选板页时再恢复。
+    DialogSetVisible(g_preDlg, PlayerGroupAll(), false);
     DialogControlSetVisible(g_boardStartBtn, PlayerGroupAll(), false);
     DialogControlSetVisible(g_boardTitle, PlayerGroupAll(), false);
     DialogControlSetVisible(g_boardHint, PlayerGroupAll(), false);
@@ -89817,6 +89819,7 @@ void BOTC_CustomClose () {
     g_cStormPick = false;
     g_cOpen = false;
     DialogSetVisible(g_cDlg, PlayerGroupAll(), false);
+    DialogSetVisible(g_preDlg, PlayerGroupAll(), true);
     BOTC_BoardRender();             // 还原标题 / 板子 / 人数修正
 }
 
@@ -96130,7 +96133,7 @@ void BOTC_NomUI () {
     DialogControlSetVisible(g_rsOpenBtn, PlayerGroupAll(), false);
     // 开局前提示：只在「选择剧本」页面显示（用户 2026-11-01）
     DialogSetVisible(g_preDlg, PlayerGroupAll(), false);
-    if (g_boardOpen) {
+    if (g_boardOpen && !g_cOpen) {
         BOTC_PreNoticeRender();        // 换说书人后那行名字要跟着更新（用户 2026-11-01）
         DialogSetVisible(g_preDlg, PlayerGroupAll(), true);
     }
