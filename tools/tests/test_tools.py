@@ -814,7 +814,9 @@ class GameStartLogTests(unittest.TestCase):
         cancel_start = source.index("void BOTC_GameStartCancel () {")
         cancel_end = source.index("\n}\n", cancel_start)
         cancel = source[cancel_start:cancel_end]
-        self.assertEqual(cancel.count("BOTC_ClearAllLogs();"), 2)
+        # 【2026-11-23】正式开始那一清已改到进入首夜时才做；倒计时中途取消不再清日志，
+        #   所以取消路径里只剩「已经开始后再取消 / 重新开始」这一处清空。
+        self.assertEqual(cancel.count("BOTC_ClearAllLogs();"), 1)
 
 
 class IntroNameFlowTests(unittest.TestCase):
@@ -860,9 +862,10 @@ class IntroNameFlowTests(unittest.TestCase):
         count_render = count_render[: count_render.index("\n}\n") + 3]
         self.assertNotIn("DialogSetVisible", count_render)
         self.assertIn("输入名字后点击【确认】", source)
-        self.assertIn("取名阶段不能发言", source)
+        self.assertIn("取名阶段禁止聊天", source)
+        self.assertIn("不能发言，请在屏幕中央输入框填写名字后点击【确认】。", source)
         self.assertIn('g_namePool[4]  = "泰凯斯"', source)
-        self.assertIn("BOTC_NameCharCount(name) > 7", source)
+        self.assertIn("BOTC_NameCharCount(visible) > 7", source)
         self.assertIn("bool BOTC_ValidColorName (string s) {", source)
         self.assertIn("BOTC_ValidColorName(name)", source)
         self.assertIn("BOTC_IsHexChar(StringSub(code, j, j + 1))", source)
@@ -871,7 +874,7 @@ class IntroNameFlowTests(unittest.TestCase):
         self.assertIn("visible == g_namePool[i]", source)
         self.assertIn("return BOTC_ChatNoColor(s);", source)
         self.assertIn(
-            "BOTC_NameVisibleText(g_introName[q]) == BOTC_NameVisibleText(name)",
+            "BOTC_NameVisibleText(g_introName[q]) == visible",
             source,
         )
         self.assertIn("positions[m] = i;", source)
@@ -886,7 +889,7 @@ class IntroNameFlowTests(unittest.TestCase):
         self.assertIn("void BOTC_IntroConfirm (int p) {", source)
         self.assertIn("if (!g_introHinted[p])", source)
         self.assertIn(
-            'StringToText("请等待其他玩家设置名称")',
+            'StringToText("请等待其他玩家设置名称；可用下方【随机彩色】给自己的名字上色。")',
             source,
         )
         self.assertIn(
@@ -909,16 +912,71 @@ class IntroNameFlowTests(unittest.TestCase):
         self.assertIn("g_dispName[p] = name;", source)
         self.assertGreaterEqual(source.count("BOTC_ResetPlayerNames();"), 3)
 
+    def test_blacklist_and_special_character_checks_use_visible_name(self) -> None:
+        source = (PROJECT_ROOT / "scripts" / "BOTC.galaxy").read_text(
+            encoding="utf-8-sig"
+        )
+
+        def function_body(signature: str) -> str:
+            match = re.search(re.escape(signature) + r" \{(.*?)\n\}", source, re.S)
+            self.assertIsNotNone(match, signature)
+            return match.group(1)
+
+        entries = re.findall(r'g_nameBanned\[(\d+)\]\s*=\s*"([^"]+)";', source)
+        self.assertEqual(entries, [])
+        self.assertIn("string[86]   g_nameBanned;", source)
+        self.assertIn("g_nameBannedN = 0;", source)
+
+        pool_init = function_body("void BOTC_NamePoolInit ()")
+        self.assertLess(
+            pool_init.index("BOTC_NameBlacklistInit();"),
+            pool_init.index("g_namePool[0]"),
+        )
+        banned = function_body("bool BOTC_NameBanned (string s)")
+        self.assertIn("StringFind(s, g_nameBanned[i], false) >= 0", banned)
+        chars = function_body("bool BOTC_NameCharsValid (string s)")
+        self.assertIn(
+            "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789",
+            chars,
+        )
+        self.assertIn("if (i + 2 > n)", chars)
+        self.assertIn("StringLength(ch) != 3", chars)
+        self.assertIn('StringCompare(ch, "一", true) < 0', chars)
+        self.assertIn('StringCompare(ch, "鿿", true) > 0', chars)
+
+        try_name = function_body("void BOTC_IntroTryName (int p, string name)")
+        ordered_contract = [
+            "if (!BOTC_ValidColorName(name))",
+            "visible = BOTC_NameVisibleText(name);",
+            "BOTC_NameUsesOfficialName(visible)",
+            "BOTC_NameIsSeatNumber(visible)",
+            "BOTC_NameIsTellerName(visible)",
+            "BOTC_NameVisibleText(g_introName[q]) == visible",
+            "if (!BOTC_NameCharsValid(visible))",
+            "if (BOTC_NameBanned(visible))",
+            "g_introName[p] = name;",
+        ]
+        positions = [try_name.index(token) for token in ordered_contract]
+        self.assertEqual(positions, sorted(positions))
+        self.assertNotIn("BOTC_NameCharCount(name)", try_name)
+        self.assertNotIn("BOTC_NameUsesOfficialName(name)", try_name)
+        self.assertNotIn("BOTC_NameIsSeatNumber(name)", try_name)
+        self.assertNotIn("BOTC_NameIsTellerName(name)", try_name)
+        self.assertNotIn(
+            "BOTC_NameVisibleText(g_introName[q]) == BOTC_NameVisibleText(name)",
+            try_name,
+        )
+
 
 class AmnesiaViewTests(unittest.TestCase):
-    def test_player_identity_stays_masked_until_correct_guess(self) -> None:
+    def test_player_identity_masks_before_start_until_guess(self) -> None:
         source = (PROJECT_ROOT / "scripts" / "BOTC.galaxy").read_text(
             encoding="utf-8-sig"
         )
         role_view = source[source.index("int BOTC_PlayerRoleView (int seat, int roleIdx) {"):]
         role_view = role_view[: role_view.index("\n}\n") + 3]
         self.assertIn("!g_guessRoleDone[g_who[seat]]", role_view)
-        self.assertNotIn("g_nightNum == 0", role_view)
+        self.assertIn("g_nightNum == 0", role_view)
 
         sync = source[source.index("void BOTC_AmnesiaSyncSeat (int seat, int roleIdx) {"):]
         sync = sync[: sync.index("\n}\n") + 3]
@@ -931,10 +989,10 @@ class LogIdentityTests(unittest.TestCase):
             encoding="utf-8-sig"
         )
         # 【日志名字跟随取名模式】（用户 2026-11-18）：正文默认按当前取名模式替换，
-        #   只有复盘（g_logRealName）才强制使用真实战网名。
+        #   复盘（g_logRealName）与说书人自己的日志才强制使用真实战网名。
         line_text = source[source.index("text BOTC_LogLineText (int viewer, string line, int who) {"):]
         line_text = line_text[: line_text.index("\n}\n") + 3]
-        self.assertIn("if (g_logRealName[viewer])", line_text)
+        self.assertIn("if (viewer == g_teller || g_logRealName[viewer])", line_text)
         self.assertIn("BOTC_RealNameSubstText(viewer, t)", line_text)
         self.assertIn("BOTC_NameSubstText(t)", line_text)
 
@@ -993,8 +1051,9 @@ class LogIdentityTests(unittest.TestCase):
             body = source[source.index("void " + owner):]
             body = body[: body.index("\n}\n") + 3]
             self.assertIn("BOTC_LogAddLine(p,", body)
-        self.assertIn("s = g_pubLog[i];", source)
-        self.assertIn("who = g_pubWho[i];", source)
+        # 【环形缓冲】（用户 2026-11-21）：读取按基准 + 环槽计算，不再直接用 i 当数组下标。
+        self.assertIn("s = g_pubLog[slot];", source)
+        self.assertIn("who = g_pubWho[slot];", source)
         self.assertIn("s = g_pmLog[idx];", source)
 
 
@@ -1073,15 +1132,15 @@ class MergeRegressionTests(unittest.TestCase):
             source,
         )
         self.assertNotIn('BOTC_DevPlayer(p) && msg == "-handles"', source)
-        self.assertIn("BOTC_PmStore(viewer,", handles)
-        self.assertNotIn("BOTC_PmStore(g_teller,", handles)
+        self.assertIn("BOTC_PmStorePlain(viewer,", handles)
+        self.assertNotIn("BOTC_PmStorePlain(g_teller,", handles)
         # 编号按魔典座位口径输出（说书人 / [n]），所以用 lab 而不是物理座位号。
         self.assertIn('"【句柄】" + lab + " " + nm + "：" + tok', handles)
         self.assertIn("h = PlayerHandle(seat);", handles)
         self.assertIn("tok = BOTC_HandleToken(seat);", handles)
         self.assertIn('tok = "@@HL" + IntToString(seat) + "@@";', handles)
         self.assertNotIn("物理座位", handles)
-        self.assertIn("PlayerGetColorIndex(p, false)", source)
+        self.assertIn("PlayerGetColorIndex(pid, false)", source)
         stats = self._function_text(source, "void BOTC_StatsRender (int p) {")
         self.assertIn("PlayerName(pid)", stats)
         self.assertNotIn("BOTC_SeatNameText", stats)
