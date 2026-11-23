@@ -589,6 +589,7 @@ int         g_logFindEdit;     // 搜索关键词输入框
 int         g_logFindX;        // 搜索框最右侧的清空按钮（输入框有字时才显示）
 string[14]  g_logFind;         // 每名玩家当前生效的关键词（"" = 不过滤）
 int[14]     g_logFindWait;     // 空串确认计数，避免点其他控件时输入框短暂返回空串把搜索清掉
+bool[14]    g_logFindXOn;      // X 按钮当前是否已显示（只在变化时切可见性，避免每拍重设吞掉点击）
 // 【复盘日志】（用户 2026-11-20）：不再单独记录复盘，直接读说书人自己的 g_pmLog。
 //   入口只有两处：结算面板上的【复盘日志】按钮，以及日志顶部【查看 ▼】下拉最后一行的「复盘日志」。
 bool[14]    g_logPickOn;       // 【看某玩家】下拉当前是不是开着（再点一次按钮 = 关掉）
@@ -7588,11 +7589,19 @@ void BOTC_LogPmTick (int p) {
 }
 
 // 【日志关键词搜索 · 清空按钮显隐】（用户 2026-11-22）：输入框里有字才在右侧显示 X。
+// 【X 点击无反应】（用户 2026-11-23）：每拍都重设同一可见性会打断按钮的按下状态，
+//   改成只在显示状态真正变化时才去切，和类别翻页按钮的处理保持一致。
 void BOTC_LogFindXRender (int p, string s) {
+    bool on;
     if (p < 1 || p > 13 || g_logFindX < 1) {
         return;
     }
-    DialogControlSetVisible(g_logFindX, PlayerGroupSingle(p), StringLength(s) > 0);
+    on = StringLength(s) > 0;
+    if (g_logFindXOn[p] == on) {
+        return;
+    }
+    g_logFindXOn[p] = on;
+    DialogControlSetVisible(g_logFindX, PlayerGroupSingle(p), on);
 }
 
 // 【日志关键词搜索 · 清空】（用户 2026-11-22）：点 X 清空输入框并立即恢复完整日志。
@@ -16036,6 +16045,7 @@ void BOTC_BuildLog () {
     for (i = 1; i <= 13; i += 1) {
         g_logFind[i] = "";
         g_logFindWait[i] = 0;
+        g_logFindXOn[i] = false;
     }
     // 【居中 + 顶部拖动条】（用户 2026-11-22）：面板改为屏幕正中心，最上面留 24 高空白条
     //   专门用来按住拖动；原来那一排查看 / 私聊日志 / 搜索控件整体下移 24，列表高度不变。
@@ -16063,7 +16073,10 @@ void BOTC_BuildLog () {
     g_logFindLbl = BOTC_NewLabel(g_logDlg, 66, 30, 556, 29, StringToText("搜索："));
     libNtve_gf_SetDialogItemStyle(g_logFindLbl, "ModLeftSize16", PlayerGroupAll());
     libNtve_gf_SetDialogItemAcceptMouse(g_logFindLbl, false, PlayerGroupAll());
-    g_logFindEdit = BOTC_NewEdit(g_logDlg, 358, 40, 622, 24);
+    // 【X 不能压在输入框上】（用户 2026-11-23）：EditBox 会吃掉自己矩形内的鼠标点击，
+    //   原来 X（952）压在输入框（622..980）里，点了没反应；现在输入框收到 948 为止，
+    //   X 单独占 952..980。
+    g_logFindEdit = BOTC_NewEdit(g_logDlg, 326, 40, 622, 24);
     BOTC_NewButton(g_logDlg, 28, 30, 952, 29, "X");
     g_logFindX = DialogControlLastCreated();
     libNtve_gf_SetDialogItemStyle(g_logFindX, "ModLeftSize16", PlayerGroupAll());
