@@ -586,10 +586,8 @@ int[14]     g_logPmView;       // 当前查看的玩家格子（0 = 未选择，
 // 【日志关键词搜索】（用户 2026-11-22）：顶部最右侧的搜索框，只保留含关键词的日志行。
 int         g_logFindLbl;      // 搜索框前面的「搜索：」标签
 int         g_logFindEdit;     // 搜索关键词输入框
-int         g_logFindX;        // 搜索框最右侧的清空按钮（输入框有字时才显示）
 string[14]  g_logFind;         // 每名玩家当前生效的关键词（"" = 不过滤）
 int[14]     g_logFindWait;     // 空串确认计数，避免点其他控件时输入框短暂返回空串把搜索清掉
-bool[14]    g_logFindXOn;      // X 按钮当前是否已显示（只在变化时切可见性，避免每拍重设吞掉点击）
 // 【复盘日志】（用户 2026-11-20）：不再单独记录复盘，直接读说书人自己的 g_pmLog。
 //   入口只有两处：结算面板上的【复盘日志】按钮，以及日志顶部【查看 ▼】下拉最后一行的「复盘日志」。
 bool[14]    g_logPickOn;       // 【看某玩家】下拉当前是不是开着（再点一次按钮 = 关掉）
@@ -7644,41 +7642,6 @@ void BOTC_LogPmTick (int p) {
     BOTC_LogPmPickTake(p);
 }
 
-// 【日志关键词搜索 · 清空按钮显隐】（用户 2026-11-22）：输入框里有字才在右侧显示 X。
-// 【X 点击无反应】（用户 2026-11-23）：每拍都重设同一可见性会打断按钮的按下状态，
-//   改成只在显示状态真正变化时才去切，和类别翻页按钮的处理保持一致。
-void BOTC_LogFindXRender (int p, string s) {
-    bool on;
-    if (p < 1 || p > 13 || g_logFindX < 1) {
-        return;
-    }
-    on = StringLength(s) > 0;
-    if (g_logFindXOn[p] == on) {
-        return;
-    }
-    g_logFindXOn[p] = on;
-    DialogControlSetVisible(g_logFindX, PlayerGroupSingle(p), on);
-}
-
-// 【日志关键词搜索 · 清空】（用户 2026-11-22）：点 X 清空输入框并立即恢复完整日志。
-void BOTC_LogFindClear (int p) {
-    if (p < 1 || p > 13) {
-        return;
-    }
-    if (g_logFindEdit >= 1) {
-        libNtve_gf_SetDialogItemText(g_logFindEdit, StringToText(""), PlayerGroupSingle(p));
-    }
-    g_logFindWait[p] = 0;
-    BOTC_LogFindXRender(p, "");
-    if (g_logFind[p] == "") {
-        return;
-    }
-    g_logFind[p] = "";
-    if (g_logOpen[p]) {
-        BOTC_LogRender(p);
-    }
-}
-
 // 【日志关键词搜索 · 轮询】（用户 2026-11-22）：日志开着时对一次输入框内容，变化后重画当前页。
 //   点其他控件时 EditBox 可能短暂返回空串，所以清空要连续两拍确认，避免搜索被误清。
 void BOTC_LogFindTick (int p) {
@@ -7690,7 +7653,6 @@ void BOTC_LogFindTick (int p) {
         return;
     }
     s = libNtve_gf_DialogItemEditValue(g_logFindEdit, p);
-    BOTC_LogFindXRender(p, s);
     if (s == g_logFind[p]) {
         g_logFindWait[p] = 0;
         return;
@@ -7716,7 +7678,6 @@ void BOTC_LogOpen (int p) {
         libNtve_gf_SetDialogItemText(g_logFindEdit, StringToText(g_logFind[p]), PlayerGroupSingle(p));
     }
     g_logFindWait[p] = 0;
-    BOTC_LogFindXRender(p, g_logFind[p]);
     // 【先显示面板再填内容】（用户 2026-11-17）：日志长的时候，先建表再显示会把整次点击
     //   卡在渲染上；渲染一中断/超时，魔典已经收起，日志面板却不出现（玩家反馈：点日志
     //   只看到魔典关掉）。改成先显示面板，内容交给首帧 + 分帧定时器补齐。
@@ -12062,10 +12023,6 @@ bool BOTC_ClickDo (bool testConds, bool runActions) {
             BOTC_LogPmPickStart(p);
             return true;
         }
-        if (c == g_logFindX) {
-            BOTC_LogFindClear(p);
-            return true;
-        }
         if (c == g_logClose) {
             BOTC_LogClose(p);
             return true;
@@ -14388,10 +14345,6 @@ bool BOTC_ClickDo (bool testConds, bool runActions) {
         BOTC_LogPmPickStart(p);
         return true;
     }
-    if (c == g_logFindX) {
-        BOTC_LogFindClear(p);
-        return true;
-    }
     if (c == g_logClose) {
         BOTC_LogClose(p);
         return true;
@@ -16101,7 +16054,6 @@ void BOTC_BuildLog () {
     for (i = 1; i <= 13; i += 1) {
         g_logFind[i] = "";
         g_logFindWait[i] = 0;
-        g_logFindXOn[i] = false;
     }
     // 【居中 + 顶部拖动条】（用户 2026-11-22）：面板改为屏幕正中心，最上面留 24 高空白条
     //   专门用来按住拖动；原来那一排查看 / 私聊日志 / 搜索控件整体下移 24，列表高度不变。
@@ -16122,21 +16074,13 @@ void BOTC_BuildLog () {
     // 【私聊日志】（用户 2026-11-20）：说书人专用，直接看某名玩家已保存的私聊记录。
     g_logPmBtn = BOTC_NewButton(g_logDlg, 220, 30, 330, 28, "私聊日志：未选择 ▼");
     DialogControlSetVisible(g_logPmBtn, PlayerGroupAll(), false);
-    // 【关键词搜索】（用户 2026-11-22）：顶部最右侧的搜索框，输入后只显示含关键词的日志行；
-    //   框内有字时最右边显示 X，点 X 清空并恢复完整日志。
+    // 【关键词搜索】（用户 2026-11-22）：顶部最右侧的搜索框，输入后只显示含关键词的日志行。
     // 【搜索框加高】（用户 2026-11-22）：EditBox 默认字体比按钮高，30 高会把文字上下截掉，
-    //   改成 40 高（y=24..64），标签和 X 垂直居中对齐。
+    //   改成 40 高（y=24..64），标签和输入框垂直居中对齐。
     g_logFindLbl = BOTC_NewLabel(g_logDlg, 66, 30, 556, 29, StringToText("搜索："));
     libNtve_gf_SetDialogItemStyle(g_logFindLbl, "ModLeftSize16", PlayerGroupAll());
     libNtve_gf_SetDialogItemAcceptMouse(g_logFindLbl, false, PlayerGroupAll());
-    // 【X 不能压在输入框上】（用户 2026-11-23）：EditBox 会吃掉自己矩形内的鼠标点击，
-    //   原来 X（952）压在输入框（622..980）里，点了没反应；现在输入框收到 948 为止，
-    //   X 单独占 952..980。
-    g_logFindEdit = BOTC_NewEdit(g_logDlg, 326, 40, 622, 24);
-    BOTC_NewButton(g_logDlg, 28, 30, 952, 29, "X");
-    g_logFindX = DialogControlLastCreated();
-    libNtve_gf_SetDialogItemStyle(g_logFindX, "ModLeftSize16", PlayerGroupAll());
-    DialogControlSetVisible(g_logFindX, PlayerGroupAll(), false);
+    g_logFindEdit = BOTC_NewEdit(g_logDlg, 358, 40, 622, 24);
     g_logClose = BOTC_NewButton(g_logDlg, 110, 30, 10, 948, "关闭日志");
     libNtve_gf_SetDialogItemStyle(g_logViewBtn, "ModLeftSize16", PlayerGroupAll());
     libNtve_gf_SetDialogItemStyle(g_logPmBtn, "ModLeftSize16", PlayerGroupAll());
