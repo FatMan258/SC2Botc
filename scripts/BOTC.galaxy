@@ -2234,6 +2234,11 @@ bool[14]    g_seatOn;
 //   g_dispName 的下标是**物理座位**（名字跟着人走，换座位不变）；空串 = 还没分配，显示战网名。
 string[14]   g_dispName;
 string[37]   g_namePool;
+// 【起名黑名单】（用户 2026-11-23）：精选自 houbb/sensitive-word-data（Apache-2.0），
+// 固定提交 fe6fc2921836217b8c90619db81b24af8b22d80f；许可与来源见 licenses/sensitive-word-data.LICENSE.txt。
+// 只收适合昵称长度、明确不适合作为昵称的词条，避免把上游整库及普通词误伤带进来。
+string[86]   g_nameBanned;
+int          g_nameBannedN;
 string[14]   g_introName;        // 【入场取名】：物理座位 → 玩家自选名
 bool[14]     g_introChosen;      // 该物理座位是否已经成功取名
 bool[14]     g_introAnnounced;   // 该物理座位是否已播报过「进入了小镇」；改名只播报改名，不再重复进入
@@ -4064,9 +4069,136 @@ void BOTC_BlockClearAll () {
 }
 //   ❌ `Color` 不能当函数返回类型（编辑器报语法错误）→ 改成"返回颜色索引"的写法放在下一轮做。
 
+void BOTC_NameBlacklistInit () {
+    g_nameBanned[0] = "2b";
+    g_nameBanned[1] = "2逼";
+    g_nameBanned[2] = "3p";
+    g_nameBanned[3] = "18禁";
+    g_nameBanned[4] = "1夜情";
+    g_nameBanned[5] = "一夜情";
+    g_nameBanned[6] = "傻逼";
+    g_nameBanned[7] = "煞笔";
+    g_nameBanned[8] = "沙比";
+    g_nameBanned[9] = "傻比";
+    g_nameBanned[10] = "傻屄";
+    g_nameBanned[11] = "草泥马";
+    g_nameBanned[12] = "操你妈";
+    g_nameBanned[13] = "草你妈";
+    g_nameBanned[14] = "日你妈";
+    g_nameBanned[15] = "cnm";
+    g_nameBanned[16] = "nmsl";
+    g_nameBanned[17] = "nmd";
+    g_nameBanned[18] = "tmd";
+    g_nameBanned[19] = "妈的";
+    g_nameBanned[20] = "他妈";
+    g_nameBanned[21] = "你妈";
+    g_nameBanned[22] = "废物";
+    g_nameBanned[23] = "弱智";
+    g_nameBanned[24] = "脑瘫";
+    g_nameBanned[25] = "脑残";
+    g_nameBanned[26] = "白痴";
+    g_nameBanned[27] = "杂种";
+    g_nameBanned[28] = "畜生";
+    g_nameBanned[29] = "畜牲";
+    g_nameBanned[30] = "贱人";
+    g_nameBanned[31] = "贱货";
+    g_nameBanned[32] = "婊子";
+    g_nameBanned[33] = "鸡巴";
+    g_nameBanned[34] = "阴茎";
+    g_nameBanned[35] = "阴道";
+    g_nameBanned[36] = "骚货";
+    g_nameBanned[37] = "骚逼";
+    g_nameBanned[38] = "淫荡";
+    g_nameBanned[39] = "淫乱";
+    g_nameBanned[40] = "淫水";
+    g_nameBanned[41] = "奸淫";
+    g_nameBanned[42] = "强奸";
+    g_nameBanned[43] = "轮奸";
+    g_nameBanned[44] = "性爱";
+    g_nameBanned[45] = "性交";
+    g_nameBanned[46] = "做爱";
+    g_nameBanned[47] = "色情";
+    g_nameBanned[48] = "黄色电影";
+    g_nameBanned[49] = "a片";
+    g_nameBanned[50] = "裸聊";
+    g_nameBanned[51] = "裸照";
+    g_nameBanned[52] = "援交";
+    g_nameBanned[53] = "卖淫";
+    g_nameBanned[54] = "嫖娼";
+    g_nameBanned[55] = "嫖妓";
+    g_nameBanned[56] = "约炮";
+    g_nameBanned[57] = "毒品";
+    g_nameBanned[58] = "冰毒";
+    g_nameBanned[59] = "鸦片";
+    g_nameBanned[60] = "海洛因";
+    g_nameBanned[61] = "可卡因";
+    g_nameBanned[62] = "大麻";
+    g_nameBanned[63] = "赌博";
+    g_nameBanned[64] = "赌场";
+    g_nameBanned[65] = "博彩";
+    g_nameBanned[66] = "赌球";
+    g_nameBanned[67] = "百家乐";
+    g_nameBanned[68] = "老虎机";
+    g_nameBanned[69] = "假证";
+    g_nameBanned[70] = "代开发票";
+    g_nameBanned[71] = "fuck";
+    g_nameBanned[72] = "shit";
+    g_nameBanned[73] = "sex";
+    g_nameBanned[74] = "sexy";
+    g_nameBanned[75] = "whore";
+    g_nameBanned[76] = "harlot";
+    g_nameBanned[77] = "hooker";
+    g_nameBanned[78] = "bitch";
+    g_nameBanned[79] = "bastard";
+    g_nameBanned[80] = "asshole";
+    g_nameBanned[81] = "cunt";
+    g_nameBanned[82] = "nigger";
+    g_nameBanned[83] = "nigga";
+    g_nameBanned[84] = "porn";
+    g_nameBanned[85] = "porno";
+    g_nameBannedN = 86;
+}
+
+bool BOTC_NameBanned (string s) {
+    int i;
+    for (i = 0; i < g_nameBannedN; i += 1) {
+        if (StringFind(s, g_nameBanned[i], false) >= 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
+// 可见名只允许 ASCII 字母 / 数字和 CJK 统一表意文字 U+4E00..U+9FFF。
+// 非 ASCII 必须完整占 3 字节；残缺 UTF-8、2 / 4 字节字符及其它符号一律拒绝。
+bool BOTC_NameCharsValid (string s) {
+    int i;
+    int n;
+    string ch;
+    i = 1;
+    n = StringLength(s);
+    while (i <= n) {
+        ch = StringSub(s, i, i);
+        if (StringLength(ch) == 1 && StringFind("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789", ch, true) >= 0) {
+            i += 1;
+        } else {
+            if (i + 2 > n) {
+                return false;
+            }
+            ch = StringSub(s, i, i + 2);
+            if (StringLength(ch) != 3 || StringCompare(ch, "一", true) < 0 || StringCompare(ch, "鿿", true) > 0) {
+                return false;
+            }
+            i += 3;
+        }
+    }
+    return true;
+}
+
 // 【随机名字库】（用户 2026-11-12）：37 个星际争霸角色名。
 //   只在游戏正式开始后启用；不放进板子数据，也不写 bank。
 void BOTC_NamePoolInit () {
+    BOTC_NameBlacklistInit();
     g_namePool[0]  = "雷诺";       g_namePool[1]  = "凯瑞甘";   g_namePool[2]  = "阿塔尼斯"; g_namePool[3]  = "泽拉图";   g_namePool[4]  = "泰凯斯";
     g_namePool[5]  = "诺娃";       g_namePool[6]  = "阿克图尔斯"; g_namePool[7] = "瓦伦里安"; g_namePool[8]  = "马特";     g_namePool[9]  = "米拉";
     g_namePool[10] = "斯旺";       g_namePool[11] = "斯台特曼"; g_namePool[12] = "托什";     g_namePool[13] = "汉森";     g_namePool[14] = "斯托科夫";
@@ -5611,6 +5743,7 @@ string BOTC_NameCloseColor (string s) {
 void BOTC_IntroTryName (int p, string name) {
     int q;
     string oldName;
+    string visible;
     bool hadName;
     if (!g_introOn || p < 1 || p > 13) {
         return;
@@ -5623,35 +5756,45 @@ void BOTC_IntroTryName (int p, string name) {
     if (!BOTC_IntroCanColor(p)) {
         name = BOTC_ChatNoColor(name);
     }
-    if (StringLength(name) <= 0 || BOTC_NameCharCount(name) <= 0 || BOTC_NameCharCount(name) > 7) {
-        BOTC_Notice(p, "名字不能为空，且最多 7 个字。");
-        return;
-    }
     if (!BOTC_ValidColorName(name)) {
         BOTC_Notice(p, "名字只支持 <c val=\"RRGGBB\">文字</c> 颜色标签，且不能包含 @。");
         return;
     }
-    if (BOTC_NameUsesOfficialName(name)) {
+    // 彩名只在显示时保留标签；所有命名规则都校验去掉标签后的可见文字。
+    visible = BOTC_NameVisibleText(name);
+    if (StringLength(visible) <= 0 || BOTC_NameCharCount(visible) <= 0 || BOTC_NameCharCount(visible) > 7) {
+        BOTC_Notice(p, "名字不能为空，且最多 7 个字。");
+        return;
+    }
+    if (BOTC_NameUsesOfficialName(visible)) {
         BOTC_Notice(p, "这个名字属于官方预设随机名，不能使用，请换一个。");
         return;
     }
     // 【禁止 1~12 纯数字】（用户 2026-11-14）：和座位编号重名，容易混淆。
-    if (BOTC_NameIsSeatNumber(name)) {
+    if (BOTC_NameIsSeatNumber(visible)) {
         BOTC_Notice(p, "名字不能使用 1~12 的纯数字，请换一个。");
         return;
     }
     // 【禁止与说书人重名】（用户 2026-11-14）：说书人用战网名，玩家不能起完全一样的名字。
-    if (BOTC_NameIsTellerName(name)) {
+    if (BOTC_NameIsTellerName(visible)) {
         BOTC_Notice(p, "这个名字与说书人重名，请更换。");
         return;
     }
     // 【重名 · 先到先得】（用户 2026-11-13）：按去掉颜色标签后的可见文字比较，先确认者占用。
     for (q = 1; q <= 13; q += 1) {
         if (q != p && g_introChosen[q] && StringLength(g_introName[q]) > 0 &&
-            BOTC_NameVisibleText(g_introName[q]) == BOTC_NameVisibleText(name)) {
+            BOTC_NameVisibleText(g_introName[q]) == visible) {
             BOTC_Notice(p, "这个名字已被其他玩家使用，请更换。");
             return;
         }
+    }
+    if (!BOTC_NameCharsValid(visible)) {
+        BOTC_Notice(p, "名字只能包含中文、英文字母和数字，不能使用特殊字符。");
+        return;
+    }
+    if (BOTC_NameBanned(visible)) {
+        BOTC_Notice(p, "名字包含不适合使用的内容，请换一个。");
+        return;
     }
     // 【彩色标签闭合】（用户 2026-11-18）：手写颜色码漏写 `</c>` 时补足，避免聊天气泡继承名字颜色。
     name = BOTC_NameCloseColor(name);

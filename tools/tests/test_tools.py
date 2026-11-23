@@ -865,7 +865,7 @@ class IntroNameFlowTests(unittest.TestCase):
         self.assertIn("取名阶段禁止聊天", source)
         self.assertIn("不能发言，请在屏幕中央输入框填写名字后点击【确认】。", source)
         self.assertIn('g_namePool[4]  = "泰凯斯"', source)
-        self.assertIn("BOTC_NameCharCount(name) > 7", source)
+        self.assertIn("BOTC_NameCharCount(visible) > 7", source)
         self.assertIn("bool BOTC_ValidColorName (string s) {", source)
         self.assertIn("BOTC_ValidColorName(name)", source)
         self.assertIn("BOTC_IsHexChar(StringSub(code, j, j + 1))", source)
@@ -874,7 +874,7 @@ class IntroNameFlowTests(unittest.TestCase):
         self.assertIn("visible == g_namePool[i]", source)
         self.assertIn("return BOTC_ChatNoColor(s);", source)
         self.assertIn(
-            "BOTC_NameVisibleText(g_introName[q]) == BOTC_NameVisibleText(name)",
+            "BOTC_NameVisibleText(g_introName[q]) == visible",
             source,
         )
         self.assertIn("positions[m] = i;", source)
@@ -911,6 +911,72 @@ class IntroNameFlowTests(unittest.TestCase):
         )
         self.assertIn("g_dispName[p] = name;", source)
         self.assertGreaterEqual(source.count("BOTC_ResetPlayerNames();"), 3)
+
+    def test_blacklist_and_special_character_checks_use_visible_name(self) -> None:
+        source = (PROJECT_ROOT / "scripts" / "BOTC.galaxy").read_text(
+            encoding="utf-8-sig"
+        )
+
+        def function_body(signature: str) -> str:
+            match = re.search(re.escape(signature) + r" \{(.*?)\n\}", source, re.S)
+            self.assertIsNotNone(match, signature)
+            return match.group(1)
+
+        entries = re.findall(r'g_nameBanned\[(\d+)\]\s*=\s*"([^"]+)";', source)
+        self.assertEqual([int(index) for index, _ in entries], list(range(86)))
+        words = [word for _, word in entries]
+        self.assertEqual(len(set(words)), 86)
+        self.assertIn("string[86]   g_nameBanned;", source)
+        self.assertIn("g_nameBannedN = 86;", source)
+        for word in words:
+            self.assertRegex(word, r"^[A-Za-z0-9\u4e00-\u9fff]+$")
+            self.assertLessEqual(len(word), 7)
+
+        pool_init = function_body("void BOTC_NamePoolInit ()")
+        self.assertLess(
+            pool_init.index("BOTC_NameBlacklistInit();"),
+            pool_init.index("g_namePool[0]"),
+        )
+        banned = function_body("bool BOTC_NameBanned (string s)")
+        self.assertIn("StringFind(s, g_nameBanned[i], false) >= 0", banned)
+        chars = function_body("bool BOTC_NameCharsValid (string s)")
+        self.assertIn(
+            "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789",
+            chars,
+        )
+        self.assertIn("if (i + 2 > n)", chars)
+        self.assertIn("StringLength(ch) != 3", chars)
+        self.assertIn('StringCompare(ch, "一", true) < 0', chars)
+        self.assertIn('StringCompare(ch, "鿿", true) > 0', chars)
+
+        try_name = function_body("void BOTC_IntroTryName (int p, string name)")
+        ordered_contract = [
+            "if (!BOTC_ValidColorName(name))",
+            "visible = BOTC_NameVisibleText(name);",
+            "BOTC_NameUsesOfficialName(visible)",
+            "BOTC_NameIsSeatNumber(visible)",
+            "BOTC_NameIsTellerName(visible)",
+            "BOTC_NameVisibleText(g_introName[q]) == visible",
+            "if (!BOTC_NameCharsValid(visible))",
+            "if (BOTC_NameBanned(visible))",
+            "g_introName[p] = name;",
+        ]
+        positions = [try_name.index(token) for token in ordered_contract]
+        self.assertEqual(positions, sorted(positions))
+        self.assertNotIn("BOTC_NameCharCount(name)", try_name)
+        self.assertNotIn("BOTC_NameUsesOfficialName(name)", try_name)
+        self.assertNotIn("BOTC_NameIsSeatNumber(name)", try_name)
+        self.assertNotIn("BOTC_NameIsTellerName(name)", try_name)
+        self.assertNotIn(
+            "BOTC_NameVisibleText(g_introName[q]) == BOTC_NameVisibleText(name)",
+            try_name,
+        )
+
+        license_text = (PROJECT_ROOT / "licenses" / "sensitive-word-data.LICENSE.txt").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("fe6fc2921836217b8c90619db81b24af8b22d80f", license_text)
+        self.assertIn("Apache License", license_text)
 
 
 class AmnesiaViewTests(unittest.TestCase):
