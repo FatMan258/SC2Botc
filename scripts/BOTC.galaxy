@@ -1615,7 +1615,7 @@ int[6]      g_wakeChoiceName;
 bool[14]    g_foolUsed;       // 弄臣：第一次免死已经用掉（用掉就打「失去能力（弄臣）」）
 int[14]     g_moonPick;       // 月之子：他公开选的玩家（0 = 还没选）
 bool[14]    g_moonPickGood;   // 月之子：选人那一刻目标是否善良（莽夫按这一刻判定，用户 2026-11-13）
-bool[14]    g_moonDone;       // 月之子：这次选择已经结算过了
+bool[14]    g_moonDone;       // 月之子：本局能力已经结算过（不妨碍之后每天继续公开声称）
 bool[14]    g_moonDeclare;    // 月之子：他正在「公开选人」的点头像阶段
 bool[14]    g_moonClaimed;    // 月之子：今天已经公开声称过（每人每天仅限一次，天亮重置）
 bool[14]    g_moonOpen;       // 月之子死亡被宣布的当天（提醒用）
@@ -1624,7 +1624,7 @@ int         g_moonBy;         // 是哪个座位的月之子在等结算（0 = �
 bool        g_sweetPick;       // 说书人正在给「心上人」点头像选那个要开始醉酒的人
 int         g_sweetSeat;       // 死了的心上人坐在哪（0 = 没有）
 int         g_sweetDrunk;      // 心上人让谁醉酒（0 = 没有）
-bool[14]    g_klutzDone;       // 呆瓜：这次公开选择已经结算过了
+bool[14]    g_klutzDone;       // 呆瓜：本局能力已经结算过（不妨碍之后每天继续公开声称）
 bool[14]    g_klutzClaimed;   // 呆瓜：今天已经公开声称过（每人每天仅限一次，天亮重置）
 int[14]     g_klutzPick;       // 呆瓜公开选的玩家
 int         g_klutzBy;         // 是哪个座位的呆瓜在等结算（0 = 没有）
@@ -4930,6 +4930,13 @@ text BOTC_RealSeatNameText (int viewer, int seat) {
         g = g_rpLSeatGrid[seat];
         nm = g_rpLSeatNameBySeat[seat];
     }
+    // 【说书人实时日志】@@1NN@@ 存的是物理座位；未结算时快照尚未生成，不能把 seat 直接当格子，
+    //   否则换座后日志编号与魔典错位。实时视图始终按当前 g_who 反查格子，并读取该物理座位的真名。
+    if (viewer == g_teller && !g_logRealName[viewer]) {
+        ok = false;
+        g = BOTC_PosOf(seat);
+        nm = "";
+    }
     if (g < 1 || g > 13) {
         g = seat;
     }
@@ -5249,7 +5256,7 @@ void BOTC_IntroBegin () {
     // 【进入 20 秒时先清一次】选板页及 10 秒准备阶段的聊天记录不再带进取名阶段。
     BOTC_ClearAllLogs();
     libNtve_gf_SetDialogItemText(g_introTitleLbl, TextWithColor(StringToText("请为你的角色取名"), Color(255, 215, 0)), PlayerGroupAll());
-    libNtve_gf_SetDialogItemText(g_introPromptLbl, StringToText("输入名字后点击【确认】（最多 7 个字）；留空确认则使用随机名字。取名阶段禁止聊天。"), PlayerGroupAll());
+    libNtve_gf_SetDialogItemText(g_introPromptLbl, StringToText("输入名字后点击【确认】（最多 7 个字，不能包含空格）；留空确认则使用随机名字。取名阶段禁止聊天。"), PlayerGroupAll());
     libNtve_gf_SetDialogItemText(g_introEdit, StringToText(""), PlayerGroupAll());
     DialogControlSetVisible(g_introEdit, PlayerGroupAll(), true);
     DialogControlSetVisible(g_introBtn, PlayerGroupAll(), true);
@@ -5673,6 +5680,11 @@ void BOTC_IntroTryName (int p, string name) {
     }
     // 彩名只在显示时保留标签；所有命名规则都校验去掉标签后的可见文字。
     visible = BOTC_NameVisibleText(name);
+    // 【自由取名禁止空格】（用户 2026-11-23）：半角 / 全角空格在开头、中间或结尾都不能使用。
+    if (StringFind(visible, " ", false) >= 0 || StringFind(visible, "　", false) >= 0) {
+        BOTC_Notice(p, "名字不能包含空格，请换一个。");
+        return;
+    }
     if (StringLength(visible) <= 0 || BOTC_NameCharCount(visible) <= 0 || BOTC_NameCharCount(visible) > 7) {
         BOTC_Notice(p, "名字不能为空，且最多 7 个字。");
         return;
@@ -6165,6 +6177,7 @@ bool BOTC_IntroNoticeDup (int p, string s) {
 void BOTC_PmStoreRaw (int p, string s) {
     int slot;
     int w;
+    int v;
     // 【坐标统一】（用户 2026-10-07）：g_pmWith 要跟 g_pmWho / g_logViewWho 一样存**格子**，
     //   而 BOTC_PmWithMe 返回的是【对面那位】的**物理座位**（g_member / g_mySess 都按座位存）→ 这里先转成格子。
     w = BOTC_PosOf(BOTC_PmWithMe(p));
@@ -6185,6 +6198,15 @@ void BOTC_PmStoreRaw (int p, string s) {
     // 【流式读取】只标"还有新行要读"，由定时器按游标继续读，不再在这里逐行追加。
     if (g_logLiveUpdate && g_logOpen[p] && (g_logMode[p] == 1 || g_logMode[p] == 3)) {
         g_logTaskN[p] = 1;
+    }
+    // 【说书人查看玩家私聊日志】目标玩家收到新发言时，唤醒正在看该玩家的日志视图；
+    //   沿用流式游标只追加新行，不整段重画，避免滚动位置跳回顶部。
+    if (g_logLiveUpdate) {
+        for (v = 1; v <= 13; v += 1) {
+            if (v == g_teller && g_logOpen[v] && g_logMode[v] == 6 && g_logPmView[v] == p) {
+                g_logTaskN[v] = 1;
+            }
+        }
     }
     if (!g_pmBatch) {
         BOTC_PmBoxRender(p);
@@ -38128,16 +38150,8 @@ void BOTC_PickChoose (int ob, int idx) {
                 return;
             }
             if (idx == 36) {
-                if (!BOTC_DeadClaimDayOK(BOTC_PosOf(ob))) {
-                    BOTC_NoticeSub(ob, "【月之子】只能在你死亡公开的那个白天声称：白天死亡请在入夜前声称，夜间死亡请在天亮后的当天白天声称；之后的白天不再允许。");
-                    return;
-                }
                 if (g_moonClaimed[BOTC_PosOf(ob)]) {
                     BOTC_NoticeSub(ob, "你今天已经声称过【月之子】了：每人每天只能声称一次，等明天吧。");
-                    return;
-                }
-                if (g_moonDone[BOTC_PosOf(ob)]) {
-                    BOTC_NoticeSub(ob, "你已经声明过月之子了。");
                     return;
                 }
                 g_declarePick[ob] = true;
@@ -38146,16 +38160,8 @@ void BOTC_PickChoose (int ob, int idx) {
                 BOTC_NoticeSub(ob, "点一个存活玩家的头像：你公开选择他 ---- 如果他是善良的，他会在今晚死亡。再点一次【声称】可以取消。");
             }
             else {
-                if (!BOTC_DeadClaimDayOK(BOTC_PosOf(ob))) {
-                    BOTC_NoticeSub(ob, "【呆瓜】只能在你死亡公开的那个白天声称：白天死亡请在入夜前声称，夜间死亡请在天亮后的当天白天声称；之后的白天不再允许。");
-                    return;
-                }
                 if (g_klutzClaimed[BOTC_PosOf(ob)]) {
                     BOTC_NoticeSub(ob, "你今天已经声称过【呆瓜】了：每人每天只能声称一次，等明天吧。");
-                    return;
-                }
-                if (g_klutzDone[BOTC_PosOf(ob)]) {
-                    BOTC_NoticeSub(ob, "你已经声明过呆瓜了。");
                     return;
                 }
                 g_declarePick[ob] = true;
@@ -38326,15 +38332,23 @@ void BOTC_VillageSync () {
     }
 }
 
-// 【半兽人（107）】正式开局已经随机打过「失足」127；中途被麻脸巫婆 / 理发师 / 舞蛇人 / 说书人改动上场时，
-//   只要场上还没有这枚标记，就按开局的规则补打一枚（标记本身本局永久保留，不随来源离场清除）。
+// 【半兽人（107）】场上仍有存活真身且没有「失足」127 时，按开局规则补打一枚。
+// 来源死亡/离场由 BOTC_SourceGoneCleanup 统一移除；持续同步必须排除死亡座位，
+// 否则会把死者误判为中途入场，把刚清掉的标记反复补回。认知偏差与借来的身份不算真身。
 void BOTC_HalfOrcSync () {
     int i;
     int k;
     int n;
     int pick;
-    // 【酒鬼 / 提线木偶】（用户 2026-11-11）：只认真身是半兽人，假半兽人不补打「失足」127。
-    if (!g_started || BOTC_SeatOfRole(107) < 2) {
+    bool hasLiving;
+    hasLiving = false;
+    for (i = 2; i <= 13; i += 1) {
+        if (g_seatOn[i] && !BOTC_SeatDead(i) && BOTC_SeatRealRole(i) == 107) {
+            hasLiving = true;
+            break;
+        }
+    }
+    if (!g_started || !hasLiving) {
         return;
     }
     for (i = 2; i <= 13; i += 1) {
@@ -40544,8 +40558,11 @@ void BOTC_SourceGoneCleanup (int q, bool dying) {
     if (r == 113) { g_stormOn = false; g_stormSeat = 0; }    // 暴风捕手离场：保护作废
     // 【逆臣（119）】（用户 2026-10-16）：他死亡 / 离场且没触发阵营转变 → 「不共戴天」收掉（百科的移除时机）
     if (r == 119) {
-        g_tcSeat = 0;
-        g_tcPending = 0;
+        // 本人这次死于处决时，处决钩子已经记下目标；留到他的夜序判定并消费，不能在这里提前取消。
+        if (!(dying && q == g_tcSeat && g_exec[q] && g_tcPending >= 2 && g_tcPending <= 13)) {
+            g_tcSeat = 0;
+            g_tcPending = 0;
+        }
         for (i = 2; i <= 13; i += 1) {
             g_tokOn[(((g_teller * 14) + i) * 256) + 139] = false;
         }
@@ -45815,6 +45832,10 @@ bool BOTC_CanWakeAt (int q) {
         return false;
     }
     act = g_roleAct[r];
+    // 【逆臣】本人被处决后的当夜仍要在他的夜序结算一次；能力无效也由该步骤消费记录。
+    if (q == g_tcSeat && g_tcPending >= 2 && g_tcPending <= 13) {
+        return true;
+    }
     // 死了的人不再唤醒（例外：守鸦人这类触发式被动 act == 4 ---- 他就是「今晚死了」才被唤醒的，
     //   下面那一段会单独放行）
     if (act != 4) {
@@ -46026,6 +46047,10 @@ int BOTC_NightOrderOf (int q) {
     int role;
     if (q < 2 || q > 13) {
         return 0;
+    }
+    // 【逆臣】处决后的待结算固定走逆臣的其他夜夜序，包括本人已死亡或借用能力来源已失效的情况。
+    if (q == g_tcSeat && g_tcPending >= 2 && g_tcPending <= 13) {
+        return BOTC_NoOtherOf(119);
     }
     r = g_mark[(g_teller * 14) + q] - 1;
     // 【中毒 / 醉酒浪费能力的哲学家】（用户 2026-11-23）：他没有真的获得能力，一次性机会也已经用掉；
@@ -47256,15 +47281,15 @@ void BOTC_DClaimOpen (int p) {
     }
     k = 0;
     s = "";
-    // 【月之子 / 呆瓜 · 仅限得知死亡的当天白天】（用户 2026-11-20）：保持原来「任何死人都能声称 +
-    //   每人每天一次」，额外要求只在自己死亡公开的那个白天出现入口；过了这一天不再显示。
-    if ((amne || BOTC_BoardHasRole(36)) && BOTC_CanDeathClaimRole(36, BOTC_PosOf(p)) && BOTC_DeadClaimDayOK(BOTC_PosOf(p))) {
+    // 【月之子 / 呆瓜 · 所有死亡玩家均可声称】（用户 2026-11-23）：
+    //   不再限制只能在死亡公开的当天使用；每种声称每人每天一次，入口仍按剧本角色 / 失忆者列出。
+    if ((amne || BOTC_BoardHasRole(36)) && BOTC_CanDeathClaimRole(36, BOTC_PosOf(p))) {
         BOTC_DeclareSlot(p, 57, 36, k, g_roleName[36]);
         if (StringLength(s) > 0) { s = s + " / "; }
         s = s + g_roleName[36];
         k = k + 1;
     }
-    if ((amne || BOTC_BoardHasRole(63)) && BOTC_CanDeathClaimRole(63, BOTC_PosOf(p)) && BOTC_DeadClaimDayOK(BOTC_PosOf(p))) {
+    if ((amne || BOTC_BoardHasRole(63)) && BOTC_CanDeathClaimRole(63, BOTC_PosOf(p))) {
         BOTC_DeclareSlot(p, 58, 63, k, g_roleName[63]);
         if (StringLength(s) > 0) { s = s + " / "; }
         s = s + g_roleName[63];
@@ -48085,7 +48110,8 @@ void BOTC_BuildGfRecluse () {
 //--------------------------------------------------------------------------------------------------
 void BOTC_BuildGfAsk () {
     // 【居中到魔典】（用户 2026-11-18）：魔典 1053 宽、贴右、纵向 -70，弹窗 684 宽，按魔典中心对齐。
-    DialogCreate(684, 183, c_anchorRight, 185, -70, false);
+    //   右锚点需用负偏移向内缩 184，保持左右边距 185/184。
+    DialogCreate(684, 183, c_anchorRight, -184, -70, false);
     g_gfAskDlg = DialogLastCreated();
     DialogSetVisible(g_gfAskDlg, PlayerGroupAll(), false);
     g_gfAskTitle = BOTC_NewLabel(g_gfAskDlg, 666, 80, 18, 10, StringToText("【教父】首夜外来者"));
@@ -56116,12 +56142,7 @@ void BOTC_MoonChildDeclare (int p, int q) {
     if (p < 1 || p > 13 || q < 2 || q > 13) {
         return;
     }
-    // 【仅限得知死亡的当天白天】（用户 2026-11-20）：保持原来「任何死人都能声称 + 每人每天一次」，
-    //   额外要求只在自己死亡公开的那个白天完成声称；过了这一天不再允许。说书人格 1 是测试位，跳过。
-    if (p != 1 && !BOTC_DeadClaimDayOK(p)) {
-        BOTC_Notice(g_who[p], "【月之子】只能在你死亡公开的那个白天声称：白天死亡请在入夜前声称，夜间死亡请在天亮后的当天白天声称；之后的白天不再允许。");
-        return;
-    }
+    // 【所有死亡玩家均可声称】（用户 2026-11-23）：不再限制死亡公开日；每人每天一次由入口的每日标记把关。
     // 【禁止选择自己】（用户 2026-11-14）
     if (q == p) {
         BOTC_Notice(g_who[p], "不能选择自己：请点另一名玩家的头像。");
@@ -56386,12 +56407,7 @@ void BOTC_KlutzPick (int p, int q) {
     if (p < 1 || p > 13) {
         return;
     }
-    // 【仅限得知死亡的当天白天】（用户 2026-11-20）：保持原来「任何死人都能声称 + 每人每天一次」，
-    //   额外要求只在自己死亡公开的那个白天完成声称；过了这一天不再允许。说书人格 1 是测试位，跳过。
-    if (p != 1 && !BOTC_DeadClaimDayOK(p)) {
-        BOTC_Notice(g_who[p], "【呆瓜】只能在你死亡公开的那个白天声称：白天死亡请在入夜前声称，夜间死亡请在天亮后的当天白天声称；之后的白天不再允许。");
-        return;
-    }
+    // 【所有死亡玩家均可声称】（用户 2026-11-23）：不再限制死亡公开日；每人每天一次由入口的每日标记把关。
     // 【禁止选择自己】（用户 2026-11-14）
     if (q == p) {
         BOTC_Notice(g_who[p], "不能选择自己：请点另一名玩家的头像。");
@@ -56402,10 +56418,10 @@ void BOTC_KlutzPick (int p, int q) {
         BOTC_Notice(g_who[p], "只能选择存活的玩家：这个座位已经死亡，请重新选择。");
         return;
     }
-    if (!BOTC_HasAbility(p, 63)) {
-        if (q >= 2 && q <= 13 && g_seatOn[q] && !BOTC_SeatDead(q) && !g_klutzDone[p]) {
-            g_klutzDone[p] = true;
-            g_klutzClaimed[p] = true;        // 假声称同样占掉今天这一次（天亮重置）
+    // 无能力或本局能力已经结算：仍可每天公开声称，但不重复触发败北结算。
+    if (!BOTC_HasAbility(p, 63) || g_klutzDone[p]) {
+        if (q >= 2 && q <= 13 && g_seatOn[q] && !BOTC_SeatDead(q)) {
+            g_klutzClaimed[p] = true;        // 假声称 / 重复声称同样占掉今天这一次（天亮重置）
             g_klutzDeclare[g_who[p]] = false;
             g_declarePick[g_who[p]] = false;
             BOTC_DeclareRender();
@@ -56434,9 +56450,6 @@ void BOTC_KlutzPick (int p, int q) {
     }
     if (!BOTC_TargetIsLiving(q)) {
         BOTC_Notice(g_who[p], "目标已死亡，请重新选择。");
-        return;
-    }
-    if (g_klutzDone[p]) {
         return;
     }
     g_klutzDone[p] = true;
@@ -61082,15 +61095,16 @@ void BOTC_WakeApply (int q, bool manual) {
     //   但他们没有实际能力，内层 HasAbility 为假，什么都不做（用户 2026-10-16）；
     //   哲学家 / 食人族 / 赋予能力借来的逆臣同样走这一步（用户 2026-11-20）。
     //   借到能力的那一夜算他的「首个夜晚」，仍要正常唤醒选「不共戴天」目标（用户 2026-11-20）。
-    if (!manual && !g_boffinActing[q] && !BOTC_ActingIsFirstNight(q) && (g_mark[(g_teller * 14) + q] - 1 == 119 || BOTC_HasAbility(q, 119))) {
-        if (BOTC_HasAbility(q, 119)) {
-            if (g_tcPending >= 2 && g_tcPending <= 13) {
+    if (!manual && !g_boffinActing[q] && !BOTC_ActingIsFirstNight(q) && (g_mark[(g_teller * 14) + q] - 1 == 119 || BOTC_HasAbility(q, 119) || (q == g_tcSeat && g_tcPending >= 2 && g_tcPending <= 13))) {
+        if (q == g_tcSeat && g_tcPending >= 2 && g_tcPending <= 13) {
+            // 只有到处决后的这个夜序仍能力健康，才执行转变；失效也在这里消费，不留到以后的夜晚。
+            if (BOTC_AbilityWorks(q, 119)) {
                 BOTC_TurncoatApply(g_tcPending);
-                g_tcPending = 0;
             }
-            else {
-                BOTC_PmStore(g_teller, "【逆臣】轮到他这一步：阵营没有转变，什么都不发。");
-            }
+            g_tcPending = 0;
+        }
+        else if (BOTC_HasAbility(q, 119)) {
+            BOTC_PmStore(g_teller, "【逆臣】轮到他这一步：阵营没有转变，什么都不发。");
         }
         return;
     }
@@ -66097,13 +66111,9 @@ void BOTC_SkillConfirmCore (int p) {
     // ■ 侍女（24）：报「这两个人里有几个当晚因为自己的技能被唤醒」。
     //   说书人那份永远收到正确答案；智能说书直接把答案发给本人（中毒 / 酒鬼就报个错的）。
     if (r == 24) {
-        n = 0;
-        if (g_wokeTonight[g_skillT1[p]]) {
-            n = n + 1;
-        }
-        if (g_wokeTonight[g_skillT2[p]]) {
-            n = n + 1;
-        }
+        // 正确答案与作答校验共用同一计算，保留数学家及引路人的相克补偿。
+        // 存活引路人被选中时必定算作已因自身能力唤醒，即使侍女的夜序在他之前。
+        n = BOTC_TrueNumAns(24, p);
         BOTC_PmStore(g_teller, "【侍女】" + BOTC_NameStr(p) + " 选了 " + BOTC_NameStr(g_skillT1[p]) + " 和 " + BOTC_NameStr(g_skillT2[p]) + " → 正确答案：" + IntToString(n) + " 人。");
         BOTC_ManInfoOpen(p, 24, BOTC_NameStr(g_skillT1[p]) + " / " + BOTC_NameStr(g_skillT2[p]));
     }
@@ -66317,16 +66327,11 @@ if (r == 49) {
     // ■ 逆臣（119）（用户 2026-10-16）：首夜选一名其他玩家 → 打「不共戴天」；谁先死于处决，另一方当晚转邪恶。
     if (r == 119) {
         t = g_skillT1[p];
-        // 【逆臣 · 能力失效】（用户 2026-11-11）：中毒 / 酒鬼 / 提线木偶 → 不放置「不共戴天」标记。
-        if (!BOTC_SkillWorks(p)) {
-            BOTC_PmStore(g_teller, "【逆臣】" + BOTC_NameStr(p) + " 中毒/酒鬼/提线木偶：能力失效，未放置「不共戴天」。");
-        }
-        else {
-            if (t >= 2 && t <= 13) {
-                g_tcSeat = p;
-                g_tokOn[(((g_teller * 14) + t) * 256) + 139] = true;
-                BOTC_GrimRender(g_teller);
-            }
+        // 真正持有能力时，中毒 / 醉酒不影响放置；假逆臣仍不放。是否转变由夜间结算重新判定。
+        if (BOTC_HasAbility(p, 119) && t >= 2 && t <= 13) {
+            g_tcSeat = p;
+            g_tokOn[(((g_teller * 14) + t) * 256) + 139] = true;
+            BOTC_GrimRender(g_teller);
         }
     }
     // 玩家 + 角色组合技能：角色已经在同一面板中预选，确认后才结算。
@@ -66341,6 +66346,8 @@ if (r == 49) {
     // ■ 教父（39）：今天有外来者死亡时，当晚可以杀一个人（死因打「死亡（教父）」，不算恶魔杀）
     if (r == 39) {
         t = g_skillT1[p];
+        // 目标提示必须先于死亡结算发送：教父选择自己时，自杀结算可能影响后续提示。
+        BOTC_PmStore(g_teller, "【教父】" + BOTC_NameStr(p) + " 选择了：" + BOTC_NameStr(t) + "。");
         // 【教父也吃这一条】（用户 2026-10-13）：中毒 / 酒鬼 / 提线木偶 → 这一刀不生效
         if (!BOTC_SkillWorks(p)) {
             BOTC_PmStore(g_teller, "【教父】" + BOTC_NameStr(p) + " 中毒/酒鬼/提线木偶 → 这一次能力失效，没有记死亡。");
