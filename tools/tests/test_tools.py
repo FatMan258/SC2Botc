@@ -923,14 +923,9 @@ class IntroNameFlowTests(unittest.TestCase):
             return match.group(1)
 
         entries = re.findall(r'g_nameBanned\[(\d+)\]\s*=\s*"([^"]+)";', source)
-        self.assertEqual([int(index) for index, _ in entries], list(range(86)))
-        words = [word for _, word in entries]
-        self.assertEqual(len(set(words)), 86)
+        self.assertEqual(entries, [])
         self.assertIn("string[86]   g_nameBanned;", source)
-        self.assertIn("g_nameBannedN = 86;", source)
-        for word in words:
-            self.assertRegex(word, r"^[A-Za-z0-9\u4e00-\u9fff]+$")
-            self.assertLessEqual(len(word), 7)
+        self.assertIn("g_nameBannedN = 0;", source)
 
         pool_init = function_body("void BOTC_NamePoolInit ()")
         self.assertLess(
@@ -971,12 +966,6 @@ class IntroNameFlowTests(unittest.TestCase):
             "BOTC_NameVisibleText(g_introName[q]) == BOTC_NameVisibleText(name)",
             try_name,
         )
-
-        license_text = (PROJECT_ROOT / "licenses" / "sensitive-word-data.LICENSE.txt").read_text(
-            encoding="utf-8"
-        )
-        self.assertIn("fe6fc2921836217b8c90619db81b24af8b22d80f", license_text)
-        self.assertIn("Apache License", license_text)
 
 
 class AmnesiaViewTests(unittest.TestCase):

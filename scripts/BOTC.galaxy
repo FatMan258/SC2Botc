@@ -2234,9 +2234,7 @@ bool[14]    g_seatOn;
 //   g_dispName 的下标是**物理座位**（名字跟着人走，换座位不变）；空串 = 还没分配，显示战网名。
 string[14]   g_dispName;
 string[37]   g_namePool;
-// 【起名黑名单】（用户 2026-11-23）：精选自 houbb/sensitive-word-data（Apache-2.0），
-// 固定提交 fe6fc2921836217b8c90619db81b24af8b22d80f；许可与来源见 licenses/sensitive-word-data.LICENSE.txt。
-// 只收适合昵称长度、明确不适合作为昵称的词条，避免把上游整库及普通词误伤带进来。
+// 【起名黑名单】保留本地可见名子串校验；当前不内置词条。
 string[86]   g_nameBanned;
 int          g_nameBannedN;
 string[14]   g_introName;        // 【入场取名】：物理座位 → 玩家自选名
@@ -4070,93 +4068,8 @@ void BOTC_BlockClearAll () {
 //   ❌ `Color` 不能当函数返回类型（编辑器报语法错误）→ 改成"返回颜色索引"的写法放在下一轮做。
 
 void BOTC_NameBlacklistInit () {
-    g_nameBanned[0] = "2b";
-    g_nameBanned[1] = "2逼";
-    g_nameBanned[2] = "3p";
-    g_nameBanned[3] = "18禁";
-    g_nameBanned[4] = "1夜情";
-    g_nameBanned[5] = "一夜情";
-    g_nameBanned[6] = "傻逼";
-    g_nameBanned[7] = "煞笔";
-    g_nameBanned[8] = "沙比";
-    g_nameBanned[9] = "傻比";
-    g_nameBanned[10] = "傻屄";
-    g_nameBanned[11] = "草泥马";
-    g_nameBanned[12] = "操你妈";
-    g_nameBanned[13] = "草你妈";
-    g_nameBanned[14] = "日你妈";
-    g_nameBanned[15] = "cnm";
-    g_nameBanned[16] = "nmsl";
-    g_nameBanned[17] = "nmd";
-    g_nameBanned[18] = "tmd";
-    g_nameBanned[19] = "妈的";
-    g_nameBanned[20] = "他妈";
-    g_nameBanned[21] = "你妈";
-    g_nameBanned[22] = "废物";
-    g_nameBanned[23] = "弱智";
-    g_nameBanned[24] = "脑瘫";
-    g_nameBanned[25] = "脑残";
-    g_nameBanned[26] = "白痴";
-    g_nameBanned[27] = "杂种";
-    g_nameBanned[28] = "畜生";
-    g_nameBanned[29] = "畜牲";
-    g_nameBanned[30] = "贱人";
-    g_nameBanned[31] = "贱货";
-    g_nameBanned[32] = "婊子";
-    g_nameBanned[33] = "鸡巴";
-    g_nameBanned[34] = "阴茎";
-    g_nameBanned[35] = "阴道";
-    g_nameBanned[36] = "骚货";
-    g_nameBanned[37] = "骚逼";
-    g_nameBanned[38] = "淫荡";
-    g_nameBanned[39] = "淫乱";
-    g_nameBanned[40] = "淫水";
-    g_nameBanned[41] = "奸淫";
-    g_nameBanned[42] = "强奸";
-    g_nameBanned[43] = "轮奸";
-    g_nameBanned[44] = "性爱";
-    g_nameBanned[45] = "性交";
-    g_nameBanned[46] = "做爱";
-    g_nameBanned[47] = "色情";
-    g_nameBanned[48] = "黄色电影";
-    g_nameBanned[49] = "a片";
-    g_nameBanned[50] = "裸聊";
-    g_nameBanned[51] = "裸照";
-    g_nameBanned[52] = "援交";
-    g_nameBanned[53] = "卖淫";
-    g_nameBanned[54] = "嫖娼";
-    g_nameBanned[55] = "嫖妓";
-    g_nameBanned[56] = "约炮";
-    g_nameBanned[57] = "毒品";
-    g_nameBanned[58] = "冰毒";
-    g_nameBanned[59] = "鸦片";
-    g_nameBanned[60] = "海洛因";
-    g_nameBanned[61] = "可卡因";
-    g_nameBanned[62] = "大麻";
-    g_nameBanned[63] = "赌博";
-    g_nameBanned[64] = "赌场";
-    g_nameBanned[65] = "博彩";
-    g_nameBanned[66] = "赌球";
-    g_nameBanned[67] = "百家乐";
-    g_nameBanned[68] = "老虎机";
-    g_nameBanned[69] = "假证";
-    g_nameBanned[70] = "代开发票";
-    g_nameBanned[71] = "fuck";
-    g_nameBanned[72] = "shit";
-    g_nameBanned[73] = "sex";
-    g_nameBanned[74] = "sexy";
-    g_nameBanned[75] = "whore";
-    g_nameBanned[76] = "harlot";
-    g_nameBanned[77] = "hooker";
-    g_nameBanned[78] = "bitch";
-    g_nameBanned[79] = "bastard";
-    g_nameBanned[80] = "asshole";
-    g_nameBanned[81] = "cunt";
-    g_nameBanned[82] = "nigger";
-    g_nameBanned[83] = "nigga";
-    g_nameBanned[84] = "porn";
-    g_nameBanned[85] = "porno";
-    g_nameBannedN = 86;
+    // 保留黑名单校验入口，当前不内置词条。
+    g_nameBannedN = 0;
 }
 
 bool BOTC_NameBanned (string s) {
