@@ -945,9 +945,16 @@ class IntroNameFlowTests(unittest.TestCase):
         self.assertIn('StringCompare(ch, "鿿", true) > 0', chars)
 
         try_name = function_body("void BOTC_IntroTryName (int p, string name)")
+        self.assertIn(
+            'if (StringFind(visible, " ", false) >= 0 || StringFind(visible, "　", false) >= 0)',
+            try_name,
+        )
+        self.assertIn('BOTC_Notice(p, "名字不能包含空格，请换一个。");', try_name)
+        self.assertIn("最多 7 个字，不能包含空格", source)
         ordered_contract = [
             "if (!BOTC_ValidColorName(name))",
             "visible = BOTC_NameVisibleText(name);",
+            'if (StringFind(visible, " ", false) >= 0 || StringFind(visible, "　", false) >= 0)',
             "BOTC_NameUsesOfficialName(visible)",
             "BOTC_NameIsSeatNumber(visible)",
             "BOTC_NameIsTellerName(visible)",
@@ -1100,6 +1107,19 @@ class MergeRegressionTests(unittest.TestCase):
         start = source.index(signature)
         end = source.find("\nvoid ", start + len(signature))
         return source[start:] if end < 0 else source[start:end]
+
+    def test_half_orc_sync_requires_a_living_real_source(self) -> None:
+        source = (PROJECT_ROOT / "scripts" / "BOTC.galaxy").read_text(
+            encoding="utf-8-sig"
+        )
+        sync = self._function_text(source, "void BOTC_HalfOrcSync () {")
+
+        self.assertIn(
+            "g_seatOn[i] && !BOTC_SeatDead(i) && BOTC_SeatRealRole(i) == 107",
+            sync,
+        )
+        self.assertIn("if (!g_started || !hasLiving) {", sync)
+        self.assertNotIn("BOTC_SeatOfRole(107)", sync)
 
     def test_living_corpse_skill_keeps_impaired_target_flow(self) -> None:
         source = (PROJECT_ROOT / "scripts" / "BOTC.galaxy").read_text(
