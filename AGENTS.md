@@ -69,27 +69,54 @@ tools\botc.cmd build --private-mode release
 tools\botc.cmd build --private-mode test
 ```
 
-## 4. 标准开发循环
+## 4. 标准开发与自检循环
 
-1. 先精确搜索函数名和关键字符串，只读取命中位置附近的必要代码。
-2. 确认本次只处理一个功能或一个 Bug，不顺便恢复已停用功能。
-3. 对正式脚本做最小定向修改，不整份重排或格式化。
-4. 运行 `tools\botc.cmd check`。
-5. 涉及角色时，先维护角色规格，再运行 `role audit`。
-6. 运行 `tools\botc.cmd build`。
-7. 再运行 `botc.cmd inspect`，核对：
+### 4.1 自动使用智能体与技能
+
+- 每次开发、调试或自检开始时，必须先根据任务内容匹配 `.github/agents/*.agent.md`
+  和 `.agents/skills/*/SKILL.md` 的 `name` / `description`，自动使用相关智能体和技能，
+  无需用户点名；只选择本次任务相关项，不无差别全部调用。
+- 在提出实现方案、修改代码或审查改动前加载匹配技能。Galaxy 任务默认加载
+  `galaxy-language-fundamentals`，再按实际领域叠加触发器、UI、字符串、玩家、Bank、
+  单位、Actor、数据 XML 或本地化等专项技能。
+- Galaxy 通用开发、Bug 修复和自检默认调用 `galaxy-expert`；UI 任务叠加
+  `galaxy-ui-designer`，脚本拆分叠加 `galaxy-code-splitter`，命名审查使用
+  `galaxy-naming-convention`。SC2 数据、数据链、向导和本地化任务分别自动匹配
+  `sc2data-expert`、`sc2data-designer`、`sc2data-wizard-expert`、
+  `sc2-localization-expert`；原理说明或复杂诊断可使用 `sc2-teacher`。
+  其余智能体按各自 `description` 自动匹配。
+- `galaxy-ai-scripting`、`galaxy-ai-and-techtree` 和 `galaxy-spawner-wave` 只用于用户
+  明确要求的对应 RTS 功能，不得用于恢复已废弃的智能说书。
+- 当前环境不能直接调用某个匹配智能体时，必须读取对应 `.agent.md` 并由主执行者
+  按该智能体的流程完成同一项工作；不能直接调用技能时，同样读取对应 `SKILL.md`。
+  不得因用户未点名或调用入口缺失而跳过。
+- 本文件及项目现有规则优先于通用智能体和技能建议。智能体结论不能替代工具检查，
+  不得借复核之名扩大改动范围、整份重排脚本或恢复已停用功能。
+
+### 4.2 执行步骤
+
+1. 按 4.1 自动匹配并加载技能、调用智能体，明确本次任务和验收范围。
+2. 精确搜索函数名和关键字符串，只读取命中位置附近的必要代码。
+3. 确认本次只处理一个功能或一个 Bug，不顺便恢复已停用功能。
+4. 对正式脚本做最小定向修改，不整份重排或格式化。
+5. 运行 `tools\botc.cmd check`。
+6. 涉及角色时，先维护角色规格，再运行 `role audit`。
+7. 运行 `tools\botc.cmd build`。
+8. 再对本次构建地图运行 `botc.cmd inspect "构建出的地图.SC2Map"`，核对：
    - `MapScript.galaxy` 存在且大小合理。
    - 自定义脚本首尾标记和初始化函数存在。
    - 只保留预期的依赖。
    - 内嵌 UI 文件和资源存在。
-8. 不自动启动游戏：改完代码后只做到 `check` / `build` / `inspect`，
-   不得自行运行 `botc.cmd test` 或拉起星际 II 客户端；只有在用户明确要求时才启动。
-9. 用户要求验证时运行 `botc.cmd test`，并人工确认实际画面。
-10. 检查最新 `ScriptError.txt`、`Alerts.txt`、`UI.txt` 和 `Text.txt`。
-11. 确认没有自动创建备份，也没有更新项目记忆。
-12. 确认构建输出 `DocumentInfo` 挂载的是预期私有依赖：
+9. 让匹配的智能体结合相关技能复核本次差异及 `check` / `build` / `inspect` 结果；
+   主执行者核实发现的问题后，只处理本次任务范围内的缺陷。
+10. 不自动启动游戏：改完代码后只做到 `check` / `build` / `inspect`，
+    不得自行运行 `botc.cmd test` 或拉起星际 II 客户端；只有在用户明确要求时才启动。
+11. 用户要求验证时运行 `botc.cmd test`，并人工确认实际画面。
+12. 检查最新 `ScriptError.txt`、`Alerts.txt`、`UI.txt` 和 `Text.txt`。
+13. 确认没有自动创建备份，也没有更新项目记忆。
+14. 确认构建输出 `DocumentInfo` 挂载的是预期私有依赖：
     - `BOTC.galaxy` 挂载 `bnet:BOTC1/1.0/188805`
-13. **自动同步 Changelog 与腾讯文档**（代码修改类任务的收尾步骤，跳过只读分析 / 纯聊天）：
+15. **自动同步 Changelog 与腾讯文档**（代码修改类任务的收尾步骤，跳过只读分析 / 纯聊天）：
     - 在本地 `CHANGELOG.md` 的当日日期分类（界面与操作 / 角色与机制 / Bug 修复 / 其他）
       下追加变更条目，不等待用户另行要求。
     - 用 doc-mcp 的 `find_and_replace` / `insert_paragraph_with_text` 将同日新增的
