@@ -93514,9 +93514,6 @@ void BOTC_Deal () {
                     }
                 }
             }
-            if (poppy == 1) {
-                BOTC_PmStore(g_teller, "【配比】军团 " + IntToString(lg) + " 名 → 罂粟种植者本局在场。");
-            }
         }
         // 【军团局 · 赏金猎人】（用户 2026-11-10）：
         //   军团 7 名 → 小概率直接加入赏金猎人（镇民位）；
@@ -93545,7 +93542,6 @@ void BOTC_Deal () {
             g_mark[(g_teller * 14) + g_scrSeat[pos]] = 95;
             pos = pos + 1;
         }
-        BOTC_PmStore(g_teller, "【配比】军团在场 → 军团 " + IntToString(lg) + " 名、善良 " + IntToString(gd) + " 名（镇民 " + IntToString(tc) + " / 外来者 " + IntToString(oc) + "）。");
     }
     // 爪牙：同样按板子抽（男爵 = 20，只有暗流涌动有他）
     baron = 0;
@@ -93606,7 +93602,6 @@ void BOTC_Deal () {
                     godfather = 1;
                 }
                 g_mark[(g_teller * 14) + q] = pick + 1;
-                BOTC_PmStore(g_teller, "【配比】爪牙里没有总场数 ≥ 20 场的玩家 → 本局不出现麻脸巫婆，改发「" + g_roleName[pick] + "」。");
             }
         }
     }
@@ -93808,20 +93803,17 @@ void BOTC_Deal () {
         if (oc > 4) {
             tc = tc + (oc - 4);
             oc = 4;
-            BOTC_PmStore(g_teller, "【配比】外来者数量过多 → 已调整为 4 名（多出的名额改发镇民）。");
         }
         if (oc == 4) {
             if (RandomInt(1, 100) > 25) {
                 oc = 3;
                 tc = tc + 1;
-                BOTC_PmStore(g_teller, "【配比】外来者数量偏多 → 已调整为 3 名（多出的名额改发镇民）。");
             }
         }
         if (oc < 1 && tc > 1) {
             if (RandomInt(1, 100) > 25) {
                 oc = 1;
                 tc = tc - 1;
-                BOTC_PmStore(g_teller, "【配比】外来者数量过少 → 已调整为 1 名（少发的镇民改为外来者）。");
             }
         }
     }
@@ -93910,7 +93902,6 @@ void BOTC_Deal () {
             }
             outR[slot] = 38;
             g_scrUsed[38] = true;
-            BOTC_PmStore(g_teller, "【配比】疯子（38）本局登场（10% 概率）。");
         }
     }
     // 镇民（索引0..12）
@@ -93984,7 +93975,6 @@ void BOTC_Deal () {
         }
         if (g_scrRole[tc + ei] == 118 || g_scrRole[tc + ei] < 0) {
             g_scrRole[tc + ei] = 0;                    // 认知覆盖互斥：兜底洗衣妇
-            BOTC_PmStore(g_teller, "【认知覆盖】酒鬼的额外身份找不到合适的卡 → 兜底「洗衣妇」。");
         }
     }
     // 【军团局 · 酒鬼赏金猎人】（用户 2026-11-10）：8 / 9 名军团时极低概率的酒鬼认知
@@ -93996,7 +93986,6 @@ void BOTC_Deal () {
             g_scrRole[tc] = 90;
             g_scrUsed[90] = true;
         }
-        BOTC_PmStore(g_teller, "【配比】军团 " + IntToString(lg) + " 名 → 加入「酒鬼·赏金猎人」（酒鬼以为自己是赏金猎人）。");
     }
     // 军团局「不抽赏金猎人」只限制真实牌，酒鬼的认知处理完就放开。
     g_lgNoBounty = false;
@@ -94070,7 +94059,6 @@ void BOTC_Deal () {
             g_scrRole[pick] = 105;
             g_scrUsed[105] = true;
         }
-        BOTC_PmStore(g_teller, "【配比】村夫摇骰子 → +" + IntToString(g_villRoll) + " 名村夫（本局村夫共 " + IntToString(1 + g_villRoll) + " 名）。");
     }
     // 【无神论者】（用户 2026-11-12）：本局掷到无神论者 → 钉进一个镇民位（顶掉随机一名镇民）。
     //   放在气球驾驶员 / 村夫这些「钉进场」之后，避免被它们顶掉；上面的抽取已经跳过 83。
@@ -94203,12 +94191,10 @@ void BOTC_Deal () {
         }
         if (pick >= 0) {
             g_bluffInfRole = pick;
-            BOTC_PmStore(g_teller, "【配板 × 不在场】本局不在场身份将强制包含持续信息位：" + g_roleName[pick] + "。");
         }
         else {
             // 没有合适的持续信息位可预选 → 降级为不强制，让 BOTC_BluffRoll 自己处理
             g_bluffInfLock = 0;
-            BOTC_PmStore(g_teller, "【配板 × 不在场】本应强制不在场持续信息位，但剧本里没有合适候选，降级为普通随机。");
         }
     }
 
@@ -94398,7 +94384,6 @@ void BOTC_Deal () {
                 }
                 g_scrRole[slot] = 86;
                 g_scrUsed[86] = true;
-                BOTC_PmStore(g_teller, "【配比】有精神病患者 → 同时加入「罂粟种植者」。");
             }
             else {
                 if (pairPick == 81) {
@@ -94415,7 +94400,6 @@ void BOTC_Deal () {
                         g_scrRole[slot] = 81;
                     }
                     g_scrUsed[81] = true;
-                    BOTC_PmStore(g_teller, "【配比】有精神病患者 → 同时加入「魔像」。");
                 }
             }
         }
@@ -94445,7 +94429,6 @@ void BOTC_Deal () {
             }
             g_scrRole[slot] = 90;
             g_scrUsed[90] = true;
-            BOTC_PmStore(g_teller, "【配比】军团 7 名 → 加入「赏金猎人」。");
         }
     }
     // 【死亡能力者 + 无主动能力者 ≤ 2 · 配板层面】（用户 2026-11-24）：
@@ -94561,7 +94544,6 @@ void BOTC_Deal () {
             }
             goodR[i] = pick;
             g_scrUsed[pick] = true;
-            BOTC_PmStore(g_teller, "【配比】局内没有总场数 ≥ 20 场的善良玩家 → 本局不出现失忆者，改发「" + g_roleName[pick] + "」。");
         }
     }
     // 【场次门槛角色 · 先钉到合格座位】（用户 2026-11-21）：
@@ -94603,7 +94585,6 @@ void BOTC_Deal () {
             }
             goodR[slot] = pick;
             g_scrUsed[pick] = true;
-            BOTC_PmStore(g_teller, "【配比】局内没有总场数 ≥ " + IntToString(thr) + " 场的善良玩家 → 本局不出现「" + g_roleName[r] + "」，改发「" + g_roleName[pick] + "」。");
             continue;
         }
         pick = RandomInt(1, eligSum);
