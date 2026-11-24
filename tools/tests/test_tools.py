@@ -680,7 +680,7 @@ class BoardPaginationTests(unittest.TestCase):
         # 【2026-11-22】入殓师 × 痢蛭：改成天亮统一公布
         self.assertIn("BOTC_MarkDeathRowTok(q, BOTC_DeathRowOf(1, 0), -1, false);", source)
         # 【2026-11-22】悟道者「以为的外来者」只能来自本剧本
-        self.assertIn("悟道者 · 认知外来者只能来自本剧本", source)
+        self.assertIn("悟道者 · 认知外来者等概率", source)
         self.assertIn("g_boardRoleN[15] = 25;", source)
 
         roles = {
@@ -719,7 +719,7 @@ class BoardPaginationTests(unittest.TestCase):
         source = (PROJECT_ROOT / "scripts" / "BOTC.galaxy").read_text(
             encoding="utf-8-sig"
         )
-        start = source.index("            // 【悟道者 · 认知外来者只能来自本剧本且不得撞上在场角色】")
+        start = source.index("        // 【悟道者 · 认知外来者等概率】")
         end = source.index("    // 【气球驾驶员（72）】", start)
         block = source[start:end]
 
@@ -941,7 +941,15 @@ class IntroNameFlowTests(unittest.TestCase):
             custom_show,
         )
         self.assertIn("g_dispName[p] = name;", source)
-        self.assertGreaterEqual(source.count("BOTC_ResetPlayerNames();"), 3)
+        self.assertIn("BOTC_ResetPlayerNames();", board_open)
+
+        cancel_start = source[source.index("void BOTC_GameStartCancel () {"):]
+        cancel_start = cancel_start[: cancel_start.index("\n}\n") + 3]
+        self.assertNotIn("BOTC_ResetPlayerNames();", cancel_start)
+
+        win_finalize = source[source.index("void BOTC_WinFinalize (int side, string why1, string why2) {"):]
+        win_finalize = win_finalize[: win_finalize.index("\n}\n") + 3]
+        self.assertIn("BOTC_ResetPlayerNames();", win_finalize)
 
     def test_blacklist_and_special_character_checks_use_visible_name(self) -> None:
         source = (PROJECT_ROOT / "scripts" / "BOTC.galaxy").read_text(
@@ -1296,8 +1304,8 @@ class MergeRegressionTests(unittest.TestCase):
         source = (PROJECT_ROOT / "scripts" / "BOTC.galaxy").read_text(
             encoding="utf-8-sig"
         )
-        self.assertIn("BOTC_GuideOpen(p, s);", source)
-        self.assertIn("void BOTC_GuideOpen (int seat, string extra) {", source)
+        self.assertIn("BOTC_GuideOpen(p, s, gh);", source)
+        self.assertIn("void BOTC_GuideOpen (int seat, string extra, int autoHit) {", source)
         self.assertIn("g_miRole = 156;", source)
 
         gudiao_start = source.index("void BOTC_GudiaoOpen (int p) {")

@@ -1881,22 +1881,9 @@ int[167]     g_roleAlign;
 //   0=未分类/非镇民  1=一次性信息者  2=持续信息位  3=主动能力者  4=死亡能力者  6=无主动能力者
 //   7=其他镇民（保险机制：新镇民没来得及分类时默认落入此项）  8=一次性能力者
 int[167]     g_roleInfoClass;
-// 外来者「阵营影响分类」表（用户 2026-11-06）：只对外来者生效，非外来者恒为 0
-//   0=未分类/非外来者  1=对善良正面  2=对善良负面  3=对善良没什么影响  4=也许能获得信息
-//   5=其他外来者（保险机制：新外来者没来得及分类时默认落入此项）
-int[167]     g_roleOutClass;
-// 爪牙「上手难度分类」表（用户 2026-11-06）：只对爪牙生效，非爪牙恒为 0
-//   0=未分类/非爪牙  1=操作难度高（适合熟悉游戏的）  2=操作简单（萌新易上手）
-//   3=其他爪牙（保险机制：新爪牙没来得及分类时默认落入此项）
-int[167]     g_roleMinClass;
-// 恶魔「强度分级」表（用户 2026-11-06）：只对恶魔生效，非恶魔恒为 0
-//   0=未分类/非恶魔  1=T0 环境定义级  2=T0.5 准T0  3=T1 强势稳定  4=T2 中等/有明显短板  5=T3 偏弱/娱乐向
-//   6=其他恶魔（保险机制：新恶魔没来得及分类时默认落入此项）
-int[167]     g_roleDemClass;
 // 角色「能力类别」总览（用户 2026-11-06，数据来源：钟楼百科「角色能力类别总览」31 个分类页）
 //   这是一层独立的新数据，只记录 wiki 的能力标签并等待后续功能调用；
-//   不替代 g_roleTeam / g_roleInfoClass / g_roleOutClass / g_roleMinClass / g_roleDemClass
-//   等既有阵营与分类判定。
+//   不替代 g_roleTeam / g_roleInfoClass 等既有阵营与分类判定。
 //   下标 = 角色索引 * 31 + 类别索引；类别名见 g_abilCatName，顺序与 wiki 总览页一致。
 int          g_abilCatN;
 string[31]   g_abilCatName;
@@ -2390,12 +2377,6 @@ int         g_availN;
 //   A = 候选角色（1 基索引，0 = 已取走）；B = 对应优先级（0 持续信息位、1 夜间 / 白天能力、2 一次性信息 / 死亡能力 / 无主动能力、3 外来者兜底）
 int[167]     g_bfA;
 int[167]     g_bfB;
-// 【随机配板 × 不在场身份联动】（用户 2026-11-24）：
-//   BOTC_Deal 在持续信息位保底阶段决定「不在场身份里要不要强制塞一个持续信息位」，
-//   把结论存到这里；BOTC_BluffRoll 读它来决定要不要从候选池里挑一个持续信息位锁死。
-//   -1 = 未锁定（默认），0 = 不强制，1 = 强制
-int         g_bluffInfLock;
-int         g_bluffInfRole;     // 锁定时预选好的持续信息位角色（0 = 还没选）
 
 int[200]    g_mark;
 bool[50176] g_tokOn;          // 14 观察者 × 14 座位 × 256 个 token 槽（2026-10-10：128 -> 256，何方教众要加标记）
@@ -29388,68 +29369,9 @@ void BOTC_GrimInitData () {
         }
     }
     g_roleInfoClass[143] = 0;   // 失忆的镇民是全员追忆占位身份，不参与分类
-    // ---- 外来者「阵营影响分类」初始化（用户 2026-11-06）：g_roleOutClass 取值表 ----
-    //   1=对善良正面（2）：月之子/魔像
-    g_roleOutClass[36] = 1;   g_roleOutClass[81] = 1;
-    //   2=对善良负面（16）：陌客/圣徒/心上人/理发师/呆瓜/落难少女/告密者/政客/异端分子/逆臣/帽匠/瘟疫医生/食人魔/书生/使节/酒保
-    g_roleOutClass[15] = 2;   g_roleOutClass[16] = 2;   g_roleOutClass[61] = 2;   g_roleOutClass[62] = 2;
-    g_roleOutClass[63] = 2;   g_roleOutClass[82] = 2;   g_roleOutClass[92] = 2;   g_roleOutClass[97] = 2;
-    g_roleOutClass[101] = 2;  g_roleOutClass[119] = 2;  g_roleOutClass[120] = 2;  g_roleOutClass[137] = 2;
-    g_roleOutClass[148] = 2;  g_roleOutClass[152] = 2;  g_roleOutClass[157] = 2;  g_roleOutClass[160] = 2;
-    //   3=对善良没什么影响（4）：管家/修补匠/畸形秀演员/狂热者
-    g_roleOutClass[13] = 3;   g_roleOutClass[35] = 3;   g_roleOutClass[60] = 3;   g_roleOutClass[110] = 3;
-    //   4=也许能获得信息（4）：酒鬼/莽夫/疯子/解谜大师
-    g_roleOutClass[14] = 4;   g_roleOutClass[37] = 4;   g_roleOutClass[38] = 4;   g_roleOutClass[109] = 4;
-    //   5=其他外来者（保险机制）：是外来者但上面没归类的，一律兜底成 5，避免新角色忘记分类时落到 0 被跳过
-    for (i = 0; i <= 166; i += 1) {
-        if (g_roleTeam[i] == 1 && g_roleOutClass[i] == 0) {
-            g_roleOutClass[i] = 5;
-        }
-    }
-    g_roleOutClass[144] = 0;   // 失忆的外来者是全员追忆占位身份，不参与分类
-    // ---- 爪牙「上手难度分类」初始化（用户 2026-11-06）：g_roleMinClass 取值表 ----
-    //   1=操作难度高（6）：镜像双子/麻脸巫婆/提线木偶/巫师/召唤师/画皮
-    g_roleMinClass[64] = 1;   g_roleMinClass[67] = 1;   g_roleMinClass[93] = 1;
-    g_roleMinClass[98] = 1;   g_roleMinClass[150] = 1;  g_roleMinClass[155] = 1;
-    //   2=操作简单·萌新易上手（24）：投毒者/间谍/红唇女郎/男爵/教父/魔鬼代言人/刺客/主谋/女巫/洗脑师/寡妇/精神病患者/灵言师/哥布林/恐惧之灵/赶尸人/科学怪人/炸弹人/鹰身女妖/街头风琴手/维齐尔/限/狐媚娘/蛊雕
-    g_roleMinClass[17] = 2;   g_roleMinClass[18] = 2;   g_roleMinClass[19] = 2;   g_roleMinClass[20] = 2;
-    g_roleMinClass[39] = 2;   g_roleMinClass[40] = 2;   g_roleMinClass[41] = 2;   g_roleMinClass[42] = 2;
-    g_roleMinClass[65] = 2;   g_roleMinClass[66] = 2;   g_roleMinClass[75] = 2;   g_roleMinClass[84] = 2;
-    g_roleMinClass[85] = 2;   g_roleMinClass[99] = 2;   g_roleMinClass[102] = 2;  g_roleMinClass[126] = 2;
-    g_roleMinClass[132] = 2;  g_roleMinClass[138] = 2;  g_roleMinClass[139] = 2;  g_roleMinClass[140] = 2;
-    g_roleMinClass[141] = 2;  g_roleMinClass[147] = 2;  g_roleMinClass[153] = 2;  g_roleMinClass[162] = 2;
-    //   3=其他爪牙（保险机制）：是爪牙但上面没归类的，一律兜底成 3，避免新角色忘记分类时落到 0 被跳过
-    for (i = 0; i <= 166; i += 1) {
-        if (g_roleTeam[i] == 2 && g_roleMinClass[i] == 0) {
-            g_roleMinClass[i] = 3;
-        }
-    }
-    g_roleMinClass[145] = 0;   // 失忆的爪牙是全员追忆占位身份，不参与分类
-    // ---- 恶魔「强度分级」初始化（用户 2026-11-06）：g_roleDemClass 取值表 ----
-    //   1=T0 环境定义级（1）：混沌
-    g_roleDemClass[121] = 1;
-    //   2=T0.5 准T0（1）：方古
-    g_roleDemClass[68] = 2;
-    //   3=T1 强势稳定（9）：小恶魔/普卡/珀/涡流/小怪宝/奥赫/卡扎力/牙噶巴卜/饕餮
-    g_roleDemClass[21] = 3;   g_roleDemClass[44] = 3;   g_roleDemClass[46] = 3;   g_roleDemClass[71] = 3;
-    g_roleDemClass[112] = 3;  g_roleDemClass[134] = 3;  g_roleDemClass[135] = 3;  g_roleDemClass[133] = 3;
-    g_roleDemClass[154] = 3;
-    //   4=T2 中等/有明显短板（7）：沙巴洛斯/诺-达鲺/亡骨魔/痢蛭/哈迪寂亚/堤丰之首/典狱长
-    g_roleDemClass[45] = 4;   g_roleDemClass[70] = 4;   g_roleDemClass[69] = 4;   g_roleDemClass[100] = 4;
-    g_roleDemClass[87] = 4;   g_roleDemClass[111] = 4;  g_roleDemClass[163] = 4;
-    //   5=T3 偏弱/娱乐向（3）：僵怖/利维坦/军团
-    g_roleDemClass[43] = 5;   g_roleDemClass[127] = 5;  g_roleDemClass[94] = 5;
-    //   6=其他恶魔（保险机制）：是恶魔但上面没归类的，一律兜底成 6，避免新角色忘记分类时落到 0 被跳过
-    for (i = 0; i <= 166; i += 1) {
-        if (g_roleTeam[i] == 3 && g_roleDemClass[i] == 0) {
-            g_roleDemClass[i] = 6;
-        }
-    }
-    g_roleDemClass[146] = 0;   // 失忆的恶魔是全员追忆占位身份，不参与分类
     // ---- 角色「能力类别」总览初始化（用户 2026-11-06）----
     //   数据来源：钟楼百科「角色能力类别总览」31 个分类页；只收录本图已有的角色索引。
-    //   独立数据层，等待后续功能调用，**不替代** g_roleTeam / g_roleInfoClass /
-    //   g_roleOutClass / g_roleMinClass / g_roleDemClass 等既有分类。
+    //   独立数据层，等待后续功能调用，**不替代** g_roleTeam / g_roleInfoClass 等既有分类。
     //   类别顺序与 wiki 总览页一致；同一角色可同时属于多个类别。
     g_abilCatN = 31;
     g_abilCatName[0] = "拜访说书人";
@@ -90017,11 +89939,11 @@ void BOTC_BuildCustom () {
     g_cBootEdit = BOTC_NewEdit(g_cDlg, 1500, 52, 20, 1032);
     DialogControlSetVisible(g_cBootLbl, PlayerGroupAll(), false);
     DialogControlSetVisible(g_cBootEdit, PlayerGroupAll(), false);
-    // 左下：清空 / 返回；右下：保存 / 选用此剧本
+    // 左下：清空 / 返回；右下：保存（上）/ 选用此剧本（下）。按 16:10 的 1920 内部宽度右对齐，避免按钮越界。
     g_cClearBtn = BOTC_NewButton(g_cDlg, 150, 44, 20, 1120, "清空");
     g_cBackBtn = BOTC_NewButton(g_cDlg, 170, 44, 180, 1120, "返回选板子");
-    g_cSaveBtn = BOTC_NewButton(g_cDlg, 150, 48, 1760, 1116, "保存");
-    g_cStartBtn = BOTC_NewButton(g_cDlg, 170, 48, 1920, 1116, "选用此剧本");
+    g_cSaveBtn = BOTC_NewButton(g_cDlg, 150, 48, 1760, 1056, "保存");
+    g_cStartBtn = BOTC_NewButton(g_cDlg, 170, 48, 1740, 1116, "选用此剧本");
 }
 
 void BOTC_CustomShowEditor () {
@@ -92416,7 +92338,29 @@ bool BOTC_DealRoleSingleton (int r) {
     return false;
 }
 
-int BOTC_PickBoardRole (int t) {
+// 随机配板配额筛选：-1 不限；9 一次性信息/能力；10 死亡/无主动能力；11 主动能力及其他不限额镇民。
+bool BOTC_RoleDealKind (int r, int kind) {
+    int c;
+    if (kind < 0) {
+        return true;
+    }
+    if (r < 0 || r > 166) {
+        return false;
+    }
+    c = g_roleInfoClass[r];
+    if (kind == 9) {
+        return c == 1 || c == 8;
+    }
+    if (kind == 10) {
+        return c == 4 || c == 6;
+    }
+    if (kind == 11) {
+        return c == 0 || c == 3 || c == 7;
+    }
+    return c == kind;
+}
+
+int BOTC_PickBoardRoleKind (int t, int kind) {
     int i;
     int r;
     int n;
@@ -92440,6 +92384,9 @@ int BOTC_PickBoardRole (int t) {
             continue;
         }
         if (BOTC_RoleTeam(r) != t) {
+            continue;
+        }
+        if (!BOTC_RoleDealKind(r, kind)) {
             continue;
         }
         // 【麻脸巫婆（67）· 总场数 >= 20】（用户 2026-11-14）：局内没有 >= 20 场的玩家时，
@@ -92500,6 +92447,9 @@ int BOTC_PickBoardRole (int t) {
             if (BOTC_RoleTeam(r) != t) {
                 continue;
             }
+            if (!BOTC_RoleDealKind(r, kind)) {
+                continue;
+            }
             if (g_scrUsed[r] && !(g_athDeal && !BOTC_DealRoleSingleton(r))) {
                 continue;
             }
@@ -92534,6 +92484,9 @@ int BOTC_PickBoardRole (int t) {
             if (BOTC_RoleTeam(r) != t) {
                 continue;
             }
+            if (!BOTC_RoleDealKind(r, kind)) {
+                continue;
+            }
             if (g_scrUsed[r] && !(g_athDeal && !BOTC_DealRoleSingleton(r))) {
                 continue;
             }
@@ -92557,6 +92510,10 @@ int BOTC_PickBoardRole (int t) {
         g_scrUsed[pick] = true;
     }
     return pick;
+}
+
+int BOTC_PickBoardRole (int t) {
+    return BOTC_PickBoardRoleKind(t, -1);
 }
 
 void BOTC_SummonerInitialSetup () {
@@ -93106,9 +93063,13 @@ void BOTC_Deal () {
     int[16] wudSeats;              // 【多个悟道者】每个悟道者的座位
     int q;
     int candN;
-    int infCount;                  // 【持续信息角色】本局已选到的个数
-    int infTarget;                 // 【持续信息角色】目标个数
-    int infMode;                   // 0 = 持续信息位；1 = 一次性能力者 / 主动能力者补位
+    int infCount;                  // 持续信息位：本局已选数量
+    int infTarget;                 // 持续信息位：目标数量
+    int boardInfX;                 // 当前剧本的持续信息位总数
+    int onceCount;                 // 一次性信息位 + 一次性能力者：本局已选数量
+    int onceTarget;                // 一次性信息位 + 一次性能力者：目标数量
+    int boardOnceN;                // 当前剧本的一次性信息位 + 一次性能力者总数
+    int pass;                      // 配额调整时的补位优先级
     int deathN;                    // 【死亡 + 无主动能力者 ≤ 2】（用户 2026-11-24）：本局已发放的数量
     int tier;                      // 【解谜大师醉酒】目标优先级档位（用户 2026-11-03）
     int slot;
@@ -93183,9 +93144,6 @@ void BOTC_Deal () {
         g_bluffPick[i] = 0;
         g_bluffOut[i] = 0;
     }
-    // 【配板 × 不在场联动 · 重置】（用户 2026-11-24）：新一局开始时先清掉上一局的锁定
-    g_bluffInfLock = -1;
-    g_bluffInfRole = 0;
     // 【最新一份也要清】（用户 2026-11-04）：上一局按玩家记下的 3 个身份不能带进下一局
     for (i = 1; i <= 13; i += 1) {
         g_bluffGiveRole[(i * 3)] = 0;
@@ -94071,223 +94029,224 @@ void BOTC_Deal () {
         g_scrUsed[83] = true;
         BOTC_PmStore(g_teller, "【配比】无神论者（83）本局在场。");
     }
-    // 【配板 × 不在场 · 持续信息位总数决策】（用户 2026-11-24）：
-    //   先统计剧本里持续信息位总数 boardInfX，再据此同时决定
-    //   ① 配板里要有 infTarget 个持续信息位
-    //   ② 不在场身份里要不要强制塞一个持续信息位（g_bluffInfLock）
-    //
-    //   boardInfX >= 3：
-    //     - 不在场**必发 1 个**持续信息位 → g_bluffInfLock = 1
-    //     - 配板：70% 概率 2 个，30% 概率 1 个 → infTarget = 1 or 2
-    //
-    //   boardInfX < 3（即 1 或 2）：
-    //     - 不在场 50% 概率发 1 个 → g_bluffInfLock = 1 或 0
-    //     - 配板：50% 概率 1 个，50% 概率 2 个 → infTarget = 1 or 2
-    //     - 硬约束：infTarget + bluffInf(0/1) ≤ boardInfX
-    //       否则 infTarget 或 bluffInfLock 降级
-    //
-    //   最后受在场镇民 tc 限制：infTarget ≤ tc
-
-    // ---- Step 1: 计算剧本里持续信息位总数 boardInfX ----
-    infTarget = 0;                 // 暂时借用存放 boardInfX
+    // 【随机配板 · 信息类角色配额】（用户 2026-11-25）：
+    //   持续信息位只由当前剧本的可选数量决定，不再与三个不在场身份联动。
+    //   0 个：不调整；1 个：50% 发 1 个；2 个：70% 发 1 个、30% 发 2 个；
+    //   3 个及以上：50% 发 2 个、50% 发 3 个。
+    boardInfX = 0;
+    boardOnceN = 0;
     for (i = 0; i < g_boardRoleN[g_board]; i += 1) {
         r = g_boardRole[(g_board * 256) + i];
-        if (r >= 0 && r <= 166 && BOTC_RoleTeam(r) == 0 && BOTC_RoleRecurringInfo(r)) {
-            infTarget = infTarget + 1;
+        if (r < 0 || r > 166 || BOTC_RoleTeam(r) != 0) {
+            continue;
+        }
+        if (BOTC_RoleRecurringInfo(r)) {
+            boardInfX = boardInfX + 1;
+        }
+        if (g_roleInfoClass[r] == 1 || g_roleInfoClass[r] == 8) {
+            boardOnceN = boardOnceN + 1;
         }
     }
-    // infTarget 现在 = boardInfX
-    if (infTarget >= 3) {
-        // 剧本里持续信息位 ≥ 3 个
-        g_bluffInfLock = 1;        // 必发 1 个不在场持续信息位
-        k = RandomInt(1, 100);
-        if (k <= 70) {
-            infTarget = 2;          // 配板 70% → 2 个
-        }
-        else {
-            infTarget = 1;          // 配板 30% → 1 个
-        }
-    }
-    else {
-        // 剧本里持续信息位 < 3 个（1 或 2）
+    infTarget = 0;
+    if (boardInfX == 1) {
         if (RandomInt(1, 100) <= 50) {
-            g_bluffInfLock = 1;     // 50% 概率发 1 个不在场持续信息位
-        }
-        else {
-            g_bluffInfLock = 0;     // 50% 概率不发
-        }
-        if (RandomInt(1, 100) <= 50) {
-            infTarget = 1;          // 配板 50% → 1 个
-        }
-        else {
-            infTarget = 2;          // 配板 50% → 2 个
-        }
-        // 硬约束（见下面统一处理）
-    }
-
-    // ---- 重新统计 boardInfX（上面 infTarget 已被概率值覆盖），然后做硬约束 ----
-    pick = 0;                       // pick 作为 boardInfX 的临时存放
-    for (i = 0; i < g_boardRoleN[g_board]; i += 1) {
-        r = g_boardRole[(g_board * 256) + i];
-        if (r >= 0 && r <= 166 && BOTC_RoleTeam(r) == 0 && BOTC_RoleRecurringInfo(r)) {
-            pick = pick + 1;
+            infTarget = 1;
         }
     }
-    // pick 现在 = boardInfX
-    k = g_bluffInfLock;             // k = 不在场锁数（0 or 1）
-    // 硬约束 1：infTarget + k ≤ boardInfX
-    while (infTarget + k > pick) {
-        if (infTarget > 1) {
-            infTarget = infTarget - 1;    // 先砍配板
-        }
-        else if (k > 0) {
-            k = 0;                         // 再砍不在场
-            g_bluffInfLock = 0;
+    else if (boardInfX == 2) {
+        if (RandomInt(1, 100) <= 70) {
+            infTarget = 1;
         }
         else {
-            break;
+            infTarget = 2;
         }
     }
-    // 硬约束 2：infTarget ≤ tc（在场镇民格子数）
-    if (tc < infTarget) {
+    else if (boardInfX >= 3) {
+        infTarget = RandomInt(2, 3);
+    }
+    if (infTarget > tc) {
         infTarget = tc;
     }
-    // 硬约束 3：至少保证不在场锁数 ≤ boardInfX（极端边界）
-    if (k > pick) {
-        k = pick;
-        if (k == 0) {
-            g_bluffInfLock = 0;
-        }
-    }
-    // 最终回写
-    g_bluffInfLock = k;
 
-    // ---- Step 2: 预选不在场持续信息位角色（如果锁了 1 个）----
-    g_bluffInfRole = 0;
-    if (g_bluffInfLock == 1) {
-        pick = -1;
-        candN = 0;
-        for (i = 0; i < g_boardRoleN[g_board]; i += 1) {
-            r = g_boardRole[(g_board * 256) + i];
-            if (r < 0 || r > 166) {
-                continue;
-            }
-            if (BOTC_RoleTeam(r) != 0 || !BOTC_RoleRecurringInfo(r)) {
-                continue;
-            }
-            if (r == 83 || r == 14 || r == 38 || r == 118) {
-                continue;                 // 无神论者 / 酒鬼 / 疯子 / 悟道者 不参与
-            }
-            if (!BOTC_AtheistOn() && BOTC_RoleInPlay(r)) {
-                continue;                 // 已经在配板里了，不能再放到不在场里（无神论者局例外）
-            }
-            if (BOTC_RoleCogSeenInPlay(r)) {
-                continue;                 // 认知偏差假身份已在场
-            }
-            candN = candN + 1;
-            if (RandomInt(1, candN) == 1) {
-                pick = r;
-            }
-        }
-        if (pick >= 0) {
-            g_bluffInfRole = pick;
-        }
-        else {
-            // 没有合适的持续信息位可预选 → 降级为不强制，让 BOTC_BluffRoll 自己处理
-            g_bluffInfLock = 0;
-        }
+    // 一次性信息位 + 一次性能力者合计 0 / 1 / 2 / 3 各 25%；候选或镇民格不足时按上限缩减。
+    onceTarget = RandomInt(0, 3);
+    if (onceTarget > boardOnceN) {
+        onceTarget = boardOnceN;
+    }
+    if (onceTarget > tc - infTarget) {
+        onceTarget = tc - infTarget;
     }
 
-    // ---- Step 3: 现在 infTarget 已经确定，继续原有的缺额补位逻辑 ----
+    // 先把持续信息位双向调整到目标数。补位优先顶死亡/无主动能力者，
+    // 再顶主动能力及其他不限额镇民，最后才动一次性角色，避免影响后一组配额。
     infCount = 0;
     for (i = 0; i < tc; i += 1) {
         if (BOTC_RoleRecurringInfo(g_scrRole[i])) {
             infCount = infCount + 1;
         }
     }
-    infMode = 0;
     while (infCount < infTarget) {
-        pick = -1;
+        slot = -1;
+        pass = 0;
+        while (pass < 3 && slot < 0) {
+            candN = 0;
+            for (i = 0; i < tc; i += 1) {
+                r = g_scrRole[i];
+                if (r < 0 || BOTC_RoleRecurringInfo(r)) {
+                    continue;
+                }
+                if ((poppy == 1 && i == 0) || r == 73 || r == 83 || r == 118) {
+                    continue;
+                }
+                if (g_balPlus && balloon == 1 && r == 72) {
+                    continue;
+                }
+                if (pass == 0 && !BOTC_RoleDealKind(r, 10)) {
+                    continue;
+                }
+                if (pass == 1 && !BOTC_RoleDealKind(r, 11)) {
+                    continue;
+                }
+                if (pass == 2 && !BOTC_RoleDealKind(r, 9)) {
+                    continue;
+                }
+                candN = candN + 1;
+                if (RandomInt(1, candN) == 1) {
+                    slot = i;
+                }
+            }
+            pass = pass + 1;
+        }
+        if (slot < 0) {
+            break;
+        }
+        pick = BOTC_PickBoardRoleKind(0, 2);
+        if (pick < 0) {
+            break;
+        }
+        g_scrUsed[g_scrRole[slot]] = false;
+        g_scrRole[slot] = pick;
+        infCount = infCount + 1;
+    }
+    while (infCount > infTarget) {
+        slot = -1;
         candN = 0;
-        for (i = 0; i < g_boardRoleN[g_board]; i += 1) {
-            r = g_boardRole[(g_board * 256) + i];
-            if (r < 0 || r > 166) {
+        for (i = 0; i < tc; i += 1) {
+            r = g_scrRole[i];
+            if (r < 0 || !BOTC_RoleRecurringInfo(r)) {
                 continue;
             }
-            if (BOTC_RoleTeam(r) != 0) {
-                continue;                // 补位也只能占用镇民角色，不改变阵营配比
-            }
-            if (infMode == 0) {
-                if (!BOTC_RoleRecurringInfo(r)) {
-                    continue;
-                }
-            }
-            else {
-                if (g_roleInfoClass[r] != 8 && g_roleInfoClass[r] != 3) {
-                    continue;
-                }
-            }
-            if (g_scrUsed[r] && !(g_athDeal && !BOTC_DealRoleSingleton(r))) {
+            if ((poppy == 1 && i == 0) || r == 73 || r == 83 || r == 118) {
                 continue;
             }
-            // 【克星互斥 · 异端分子 × 痢蛭】（用户 2026-11-13）：兜底也不让两个克星同场
-            if (r == 101 && g_scrUsed[100]) {
-                continue;
-            }
-            if (r == 100 && g_scrUsed[101]) {
+            if (g_balPlus && balloon == 1 && r == 72) {
                 continue;
             }
             candN = candN + 1;
             if (RandomInt(1, candN) == 1) {
-                pick = r;
-            }
-        }
-        if (pick < 0) {
-            if (infMode == 0) {
-                infMode = 1;
-                continue;
-            }
-            break;                       // 持续信息位和补位角色都没有候选了
-        }
-        slot = -1;
-        for (i = 0; i < tc; i += 1) {
-            if (BOTC_RoleRecurringInfo(g_scrRole[i])) {
-                continue;
-            }
-            if (infMode == 1 && g_scrRole[i] >= 0) {
-                if (g_roleInfoClass[g_scrRole[i]] == 8 || g_roleInfoClass[g_scrRole[i]] == 3) {
-                    continue;            // 补位阶段不覆盖已有的一次性能力者 / 主动能力者
-                }
-            }
-            if (poppy == 1 && i == 0) {
-                continue;                // 【军团局】罂粟种植者固定保留
-            }
-            if (g_scrRole[i] == 118) {
-                continue;                // 保留悟道者，不拿它换
-            }
-            if (g_scrRole[i] == 73) {
-                continue;                // 【失忆者场次门槛】（用户 2026-11-24）：保留失忆者，
-                                           //   否则后续「失忆者只发给 20 场以上」的门槛检查会找不到失忆者
-            }
-            if (slot < 0) {
                 slot = i;
-            }
-            else {
-                if (RandomInt(1, 2) == 1) {
-                    slot = i;
-                }
             }
         }
         if (slot < 0) {
             break;
         }
-        if (g_scrRole[slot] >= 0) {
-            g_scrUsed[g_scrRole[slot]] = false;
+        pick = BOTC_PickBoardRoleKind(0, 11);
+        if (pick < 0) {
+            pick = BOTC_PickBoardRoleKind(0, 9);
         }
+        if (pick < 0) {
+            pick = BOTC_PickBoardRoleKind(0, 10);
+        }
+        if (pick < 0) {
+            break;
+        }
+        g_scrUsed[g_scrRole[slot]] = false;
         g_scrRole[slot] = pick;
-        g_scrUsed[pick] = true;
-        infCount = infCount + 1;
+        infCount = infCount - 1;
     }
+
+    // 再双向调整一次性信息位 + 一次性能力者；不再覆盖已达标的持续信息位。
+    onceCount = 0;
+    for (i = 0; i < tc; i += 1) {
+        r = g_scrRole[i];
+        if (r >= 0 && (g_roleInfoClass[r] == 1 || g_roleInfoClass[r] == 8)) {
+            onceCount = onceCount + 1;
+        }
+    }
+    while (onceCount < onceTarget) {
+        slot = -1;
+        pass = 0;
+        while (pass < 2 && slot < 0) {
+            candN = 0;
+            for (i = 0; i < tc; i += 1) {
+                r = g_scrRole[i];
+                if (r < 0 || BOTC_RoleRecurringInfo(r) || BOTC_RoleDealKind(r, 9)) {
+                    continue;
+                }
+                if ((poppy == 1 && i == 0) || r == 73 || r == 83 || r == 118) {
+                    continue;
+                }
+                if (g_balPlus && balloon == 1 && r == 72) {
+                    continue;
+                }
+                if (pass == 0 && !BOTC_RoleDealKind(r, 10)) {
+                    continue;
+                }
+                if (pass == 1 && !BOTC_RoleDealKind(r, 11)) {
+                    continue;
+                }
+                candN = candN + 1;
+                if (RandomInt(1, candN) == 1) {
+                    slot = i;
+                }
+            }
+            pass = pass + 1;
+        }
+        if (slot < 0) {
+            break;
+        }
+        pick = BOTC_PickBoardRoleKind(0, 9);
+        if (pick < 0) {
+            break;
+        }
+        g_scrUsed[g_scrRole[slot]] = false;
+        g_scrRole[slot] = pick;
+        onceCount = onceCount + 1;
+    }
+    while (onceCount > onceTarget) {
+        slot = -1;
+        candN = 0;
+        for (i = 0; i < tc; i += 1) {
+            r = g_scrRole[i];
+            if (r < 0 || !BOTC_RoleDealKind(r, 9)) {
+                continue;
+            }
+            if ((poppy == 1 && i == 0) || r == 73 || r == 83 || r == 118) {
+                continue;
+            }
+            if (g_balPlus && balloon == 1 && r == 72) {
+                continue;
+            }
+            candN = candN + 1;
+            if (RandomInt(1, candN) == 1) {
+                slot = i;
+            }
+        }
+        if (slot < 0) {
+            break;
+        }
+        pick = BOTC_PickBoardRoleKind(0, 11);
+        if (pick < 0) {
+            pick = BOTC_PickBoardRoleKind(0, 10);
+        }
+        if (pick < 0) {
+            break;
+        }
+        g_scrUsed[g_scrRole[slot]] = false;
+        g_scrRole[slot] = pick;
+        onceCount = onceCount - 1;
+    }
+    BOTC_PmStore(g_teller, "【随机配板】持续信息位 " + IntToString(infCount) + " 名（目标 " + IntToString(infTarget) + "，剧本共 " + IntToString(boardInfX) + " 名）；一次性信息位 + 一次性能力者 " + IntToString(onceCount) + " 名（目标 " + IntToString(onceTarget) + "）。");
     // 【精神病患者联动】（用户 2026-11-03）：剧本里有精神病患者（84）、魔像（81）、罂粟种植者（86），
     //   且本局确实分到了精神病患者时，极大概率再补一名魔像或罂粟种植者。
     //   用户 2026-11-04：改为优先补魔像，补不进再改罂粟种植者。
@@ -94335,7 +94294,7 @@ void BOTC_Deal () {
                 }
                 else {
                     for (i = 0; i < tc; i += 1) {
-                        if (BOTC_RoleRecurringInfo(g_scrRole[i])) {
+                        if (BOTC_RoleRecurringInfo(g_scrRole[i]) || BOTC_RoleDealKind(g_scrRole[i], 9)) {
                             continue;
                         }
                         if (g_scrRole[i] == 118) {
@@ -94355,11 +94314,11 @@ void BOTC_Deal () {
                     }
                 }
             }
-            // 再试罂粟种植者：顶掉一个非「持续信息」镇民（不动悟道者 118）
+            // 再试罂粟种植者：顶掉一个非信息位镇民（不动悟道者 118）
             if (pairPick < 0 && BOTC_BoardHasRole(86) && !g_scrUsed[86] && tc > 0) {
                 slot = -1;
                 for (i = 0; i < tc; i += 1) {
-                    if (BOTC_RoleRecurringInfo(g_scrRole[i])) {
+                    if (BOTC_RoleRecurringInfo(g_scrRole[i]) || BOTC_RoleDealKind(g_scrRole[i], 9)) {
                         continue;
                     }
                     if (g_scrRole[i] == 118) {
@@ -94411,6 +94370,9 @@ void BOTC_Deal () {
             if (poppy == 1 && i == 0) {
                 continue;                // 不动罂粟种植者
             }
+            if (BOTC_RoleRecurringInfo(g_scrRole[i]) || BOTC_RoleDealKind(g_scrRole[i], 9)) {
+                continue;                // 不动已达标的持续信息位 / 一次性角色
+            }
             if (g_scrRole[i] == 118) {
                 continue;                // 不动悟道者
             }
@@ -94434,8 +94396,8 @@ void BOTC_Deal () {
     // 【死亡能力者 + 无主动能力者 ≤ 2 · 配板层面】（用户 2026-11-24）：
     //   放在所有可能修改 g_scrRole 的逻辑（持续信息位补位 / 精神病患者联动 / 军团赏金猎人）
     //   之后、goodR 构建之前执行，确保最终进入发座的善良角色池里 死亡能力(4) + 无主动能力(6)
-    //   总数 ≤ 2。多余的替换成其他可用镇民（非 4/6，避免破坏 infTarget）。
-    //   酒鬼的死亡能力认知卡已先行占用名额（drunkDeath），真实角色只补到剩下的额度。
+    //   总数 ≤ 2。多余者优先替换成主动能力或其他不限额镇民（0/3/7），避免破坏持续信息与一次性角色配额。
+    //   只有没有合格补位角色时才保留超过 2 个，作为兜底。酒鬼的死亡能力认知卡已先行占用名额。
     deathN = 0;
     for (i = 0; i < tc; i += 1) {
         if (g_scrRole[i] >= 0 && (g_roleInfoClass[g_scrRole[i]] == 4 || g_roleInfoClass[g_scrRole[i]] == 6)) {
@@ -94463,39 +94425,12 @@ void BOTC_Deal () {
         if (slot < 0) {
             break;                       // 没有可替换的 4/6 了
         }
-        pick = -1;
-        candN = 0;
-        for (i = 0; i < g_boardRoleN[g_board]; i += 1) {
-            r = g_boardRole[(g_board * 256) + i];
-            if (r < 0 || r > 166) {
-                continue;
-            }
-            if (BOTC_RoleTeam(r) != 0) {
-                continue;
-            }
-            if (g_roleInfoClass[r] == 4 || g_roleInfoClass[r] == 6) {
-                continue;                // 不换 4/6
-            }
-            if (g_scrUsed[r] && !(g_athDeal && !BOTC_DealRoleSingleton(r))) {
-                continue;
-            }
-            if (r == 101 && g_scrUsed[100]) {
-                continue;
-            }
-            if (r == 100 && g_scrUsed[101]) {
-                continue;
-            }
-            candN = candN + 1;
-            if (RandomInt(1, candN) == 1) {
-                pick = r;
-            }
-        }
+        pick = BOTC_PickBoardRoleKind(0, 11);
         if (pick < 0) {
-            break;                       // 没有可用替换角色，放弃
+            break;                       // 没有不破坏前三项配额的替换角色，允许突破上限
         }
         g_scrUsed[g_scrRole[slot]] = false;
         g_scrRole[slot] = pick;
-        g_scrUsed[pick] = true;
         deathN = deathN - 1;
     }
     // ---- 把善良角色发到座位上（用户 2026-11-03）----
@@ -94538,7 +94473,10 @@ void BOTC_Deal () {
                 continue;
             }
             g_scrUsed[73] = true;
-            pick = BOTC_PickBoardRole(0);
+            pick = BOTC_PickBoardRoleKind(0, 11);
+            if (pick < 0) {
+                pick = BOTC_PickBoardRole(0);
+            }
             if (pick < 0) {
                 pick = BOTC_PickUnused(0, 12);
             }
@@ -94579,7 +94517,10 @@ void BOTC_Deal () {
         if (eligSum <= 0) {
             // 没有达到场次门槛的善良座位 → 本局不发这张角色，换成别的镇民
             g_scrUsed[r] = true;
-            pick = BOTC_PickBoardRole(0);
+            pick = BOTC_PickBoardRoleKind(0, 11);
+            if (pick < 0) {
+                pick = BOTC_PickBoardRole(0);
+            }
             if (pick < 0) {
                 pick = BOTC_PickUnused(0, 12);
             }
@@ -94700,16 +94641,17 @@ void BOTC_Deal () {
         roleNow = catR[(catPick * 16) + catJ];
         // 【死亡 + 无主动能力者 ≤ 2】（用户 2026-11-24）：
         //   类别 4（"其他"）里混了 一次性信息者(1) / 死亡能力(4) / 无主动能力(6) / 其他镇民(7)。
-        //   如果已发放的死亡+无主动数 ≥ 2，且本次抽到的是 4 或 6，则剔除它们后重抽（最多 5 次）。
+        //   如果已发放的死亡+无主动数 ≥ 2，且本次抽到的是 4 或 6，只改抽主动能力或其他不限额镇民，
+        //   不用持续信息位 / 一次性角色补位；没有合格角色时按保底规则允许突破。
         if (catPick == 4 && deathN + drunkDeath >= 2 && (g_roleInfoClass[roleNow] == 4 || g_roleInfoClass[roleNow] == 6)) {
             candN = 5;                // 最多重试 5 次
             while (candN > 0) {
-                // 从类别 4 里挑一个非 4/6 的角色
+                // 从类别 4 里挑主动能力或其他不限额镇民，保持前三项配额不变
                 pick = -1;
                 k = 0;
                 for (i = 0; i < catN[catPick]; i += 1) {
                     r = catR[(catPick * 16) + i];
-                    if (g_roleInfoClass[r] != 4 && g_roleInfoClass[r] != 6) {
+                    if (g_roleInfoClass[r] == 0 || g_roleInfoClass[r] == 3 || g_roleInfoClass[r] == 7) {
                         k = k + 1;
                         if (RandomInt(1, k) == 1) {
                             pick = r;
@@ -95395,14 +95337,15 @@ void BOTC_BluffRoll () {
     int best;
     int bestTier;
     int pick0;
+    int infN;
+    int infWant;
     bool dup;
     for (i = 0; i < 3; i += 1) {
         g_bluffPick[i] = 0;
     }
-    // 【随机不在场身份的分层规则】（用户 2026-11-06）：镇民改读游戏内镇民分类 g_roleInfoClass，
-    //   与随机发牌 / 认知偏差共用同一张表，不再按 g_roleAct 硬编码：
-    //   0 = 持续信息位（最优先，但 3 个里**至多 1 个**，用户 2026-11-14）；1 = 主动能力；
-    //   2 = 一次性信息 / 一次性能力 / 死亡能力 / 无主动能力 / 其他镇民；3 = 外来者（最后兜底，尽量少选）。
+    // 【随机不在场身份 · 独立分层】（用户 2026-11-25）：与随机配板完全解耦。
+    //   0 = 持续信息位，优先保证 1～2 个；1 = 其他镇民，随机补位；
+    //   2 = 外来者，只在镇民候选不足时凑满 3 个。
     n = 0;
     b = g_board;
     if (b < 1 || b > 16) {
@@ -95433,20 +95376,13 @@ void BOTC_BluffRoll () {
             continue;
         }
         if (BOTC_RoleTeam(r) == 1) {
-            t = 3;                     // 外来者：最后兜底
+            t = 2;                     // 外来者：只在镇民不足时兜底
+        }
+        else if (g_roleInfoClass[r] == 2) {
+            t = 0;                     // 持续信息位：优先保证 1～2 个
         }
         else {
-            if (g_roleInfoClass[r] == 2) {
-                t = 0;                 // 持续信息位
-            }
-            else {
-                if (g_roleInfoClass[r] == 3) {
-                    t = 1;             // 主动能力
-                }
-                else {
-                    t = 2;             // 一次性信息 / 死亡能力 / 无主动能力 / 其他镇民
-                }
-            }
+            t = 1;                     // 其余镇民等概率随机
         }
         // 【不在场身份不重复】（用户 2026-11-24）：即使剧本清单里出现重复条目，3 个身份也不会重复。
         dup = false;
@@ -95472,48 +95408,46 @@ void BOTC_BluffRoll () {
         g_bfB[k] = g_bfB[idx];
         g_bfB[idx] = t;
     }
-    // 【配板 × 不在场联动 · 强制锁定持续信息位】（用户 2026-11-24）：
-    //   BOTC_Deal 决定了本局不在场身份里**必须**有 1 个持续信息位，这里先把它锁到
-    //   g_bluffPick[0]，剩下 2 个从非持续信息位里按原优先级选。
+    // 先从洗牌后的持续信息位中保证 1～2 个；只有 1 个候选时必发 1 个，
+    // 有 2 个及以上候选时等概率发 1 个或 2 个。
+    infN = 0;
+    for (k = 0; k < n; k += 1) {
+        if (g_bfB[k] == 0) {
+            infN = infN + 1;
+        }
+    }
+    infWant = 0;
+    if (infN == 1) {
+        infWant = 1;
+    }
+    else if (infN >= 2) {
+        infWant = RandomInt(1, 2);
+    }
     pick0 = 0;
-    if (g_bluffInfLock == 1 && g_bluffInfRole > 0) {
+    for (i = 0; i < infWant; i += 1) {
         best = -1;
         for (k = 0; k < n; k += 1) {
-            if (g_bfA[k] == g_bluffInfRole + 1) {
+            if (g_bfA[k] > 0 && g_bfB[k] == 0) {
                 best = k;
                 break;
             }
         }
         if (best < 0) {
-            // 预选角色不在候选池里（被别的规则排除了）→ 退化为从池子里找任意持续信息位
-            for (k = 0; k < n; k += 1) {
-                if (g_bfA[k] <= 0) {
-                    continue;
-                }
-                if (g_bfB[k] == 0) {
-                    best = k;
-                    break;
-                }
-            }
+            break;
         }
-        if (best >= 0) {
-            g_bluffPick[0] = g_bfA[best];
-            g_bfA[best] = 0;
-            pick0 = 1;              // 标记已经放了一个持续信息位
-        }
-        // 如果 best 还是 < 0，说明候选池里根本没有持续信息位，放弃强制锁
+        g_bluffPick[i] = g_bfA[best];
+        g_bfA[best] = 0;
+        pick0 = pick0 + 1;
     }
-    // 【持续信息位至多 1 个】（用户 2026-11-14）：先跳过第 2 个及以后的 tier 0；
-    //   池子里只剩持续信息位时才兜底填满，避免 3 个伪装全是持续信息位。
+
+    // 剩余位置先从其他镇民随机补满，镇民不够再取外来者；不再增加持续信息位，
+    // 因此即使候选池只剩持续信息位，也不会超过前面确定的 1～2 个。
     for (i = pick0; i < 3; i += 1) {
         best = -1;
         bestTier = 9;
         for (k = 0; k < n; k += 1) {
-            if (g_bfA[k] <= 0) {
+            if (g_bfA[k] <= 0 || g_bfB[k] == 0) {
                 continue;
-            }
-            if (g_bfB[k] == 0 && pick0 >= 1) {
-                continue;              // 已经有一个持续信息位了，别再抽
             }
             if (g_bfB[k] < bestTier) {
                 bestTier = g_bfB[k];
@@ -95521,24 +95455,10 @@ void BOTC_BluffRoll () {
             }
         }
         if (best < 0) {
-            for (k = 0; k < n; k += 1) {
-                if (g_bfA[k] <= 0) {
-                    continue;
-                }
-                if (g_bfB[k] < bestTier) {
-                    bestTier = g_bfB[k];
-                    best = k;
-                }
-            }
-        }
-        if (best < 0) {
             break;
         }
-        if (g_bfB[best] == 0) {
-            pick0 = pick0 + 1;
-        }
         g_bluffPick[i] = g_bfA[best];
-        g_bfA[best] = 0;               // 取走，不再重复
+        g_bfA[best] = 0;
     }
     BOTC_BluffRender();
 }
