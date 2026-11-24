@@ -1878,8 +1878,8 @@ bool        g_fakeBias;            // 这次的假信息（中毒 / 酒鬼的信
 int[167]     g_roleTeam;
 int[167]     g_roleAlign;
 // 镇民「信息/能力分类」表（用户 2026-11-06）：只对镇民生效，非镇民恒为 0，供随机发牌等按分类挑身份的逻辑调用
-//   0=未分类/非镇民  1=一次性信息者  2=持续信息位  3=夜间能力者  4=死亡能力者  5=白天能力者  6=无主动能力者
-//   7=其他镇民（保险机制：新镇民没来得及分类时默认落入此项）
+//   0=未分类/非镇民  1=一次性信息者  2=持续信息位  3=主动能力者  4=死亡能力者  6=无主动能力者
+//   7=其他镇民（保险机制：新镇民没来得及分类时默认落入此项）  8=一次性能力者
 int[167]     g_roleInfoClass;
 // 外来者「阵营影响分类」表（用户 2026-11-06）：只对外来者生效，非外来者恒为 0
 //   0=未分类/非外来者  1=对善良正面  2=对善良负面  3=对善良没什么影响  4=也许能获得信息
@@ -2627,6 +2627,7 @@ void   BOTC_FaceNightRevert ();
 void   BOTC_FaceLoseNow (int p);
 void   BOTC_PixieAskOpen (int q, int role);
 bool   BOTC_PreGrantStep ();
+bool   BOTC_AmneFirstNightStep (int bestOrd);
 // 【分类按钮 · 单类分页】（用户 2026-11-03）
 void   BOTC_PickCatSet (int p, int t);
 void   BOTC_PickPageMove (int p, int d);
@@ -29344,34 +29345,34 @@ void BOTC_GrimInitData () {
     g_roleName[145] = "失忆的爪牙";    g_roleTeam[145] = 2; g_roleAlign[145] = 1;
     g_roleName[146] = "失忆的恶魔";    g_roleTeam[146] = 3; g_roleAlign[146] = 1;
     // ---- 镇民「信息/能力分类」初始化（用户 2026-11-06）：g_roleInfoClass 取值表 ----
-    //   1=一次性信息者（20）：洗衣妇/图书管理员/调查员/厨师/祖母/侍臣/教授/钟表匠/女裁缝/艺术家/杂耍艺人/贵族/工程师/渔夫/修行者/店小二/骑士/鸩/守夜人/事务官
+    //   1=一次性信息者（15）：洗衣妇/图书管理员/调查员/厨师/祖母/钟表匠/女裁缝/贵族/修行者/店小二/骑士/守夜人/事务官/阴阳师/钦天监
     g_roleInfoClass[0] = 1;   g_roleInfoClass[1] = 1;   g_roleInfoClass[2] = 1;   g_roleInfoClass[3] = 1;
-    g_roleInfoClass[22] = 1;  g_roleInfoClass[29] = 1;  g_roleInfoClass[30] = 1;  g_roleInfoClass[47] = 1;
-    g_roleInfoClass[55] = 1;  g_roleInfoClass[57] = 1;  g_roleInfoClass[58] = 1;  g_roleInfoClass[76] = 1;
-    g_roleInfoClass[78] = 1;  g_roleInfoClass[79] = 1;  g_roleInfoClass[114] = 1; g_roleInfoClass[115] = 1;
-    g_roleInfoClass[122] = 1; g_roleInfoClass[124] = 1; g_roleInfoClass[128] = 1; g_roleInfoClass[142] = 1;
-    g_roleInfoClass[164] = 1;   // 阴阳师：一次性信息者
-    g_roleInfoClass[165] = 1;   // 钦天监：一次性信息者
+    g_roleInfoClass[22] = 1;  g_roleInfoClass[47] = 1;  g_roleInfoClass[55] = 1;  g_roleInfoClass[76] = 1;
+    g_roleInfoClass[114] = 1; g_roleInfoClass[115] = 1; g_roleInfoClass[122] = 1; g_roleInfoClass[128] = 1;
+    g_roleInfoClass[142] = 1; g_roleInfoClass[164] = 1; g_roleInfoClass[165] = 1;
     //   2=持续信息位（18）：共情者/占卜师/送葬者/侍女/赌徒/造谣者/筑梦师/数学家/卖花女孩/城镇公告员/神谕者/博学者/食人族/将军/村夫/郎中/女祭司/引路人
     g_roleInfoClass[4] = 2;   g_roleInfoClass[5] = 2;   g_roleInfoClass[6] = 2;   g_roleInfoClass[24] = 2;
     g_roleInfoClass[27] = 2;  g_roleInfoClass[28] = 2;  g_roleInfoClass[48] = 2;  g_roleInfoClass[50] = 2;
     g_roleInfoClass[51] = 2;  g_roleInfoClass[52] = 2;  g_roleInfoClass[53] = 2;  g_roleInfoClass[54] = 2;
     g_roleInfoClass[74] = 2;  g_roleInfoClass[96] = 2;  g_roleInfoClass[105] = 2; g_roleInfoClass[116] = 2;
     g_roleInfoClass[125] = 2; g_roleInfoClass[156] = 2;
-    //   3=夜间能力者（20）：僧侣/水手/驱魔人/旅店老板/舞蛇人/哲学家/气球驾驶员/失忆者/巡山人/赏金猎人/炼金术士/传教士/国王/半兽人/悟道者/道士/杂技演员/熊孩子/掮客/和尚
+    //   3=主动能力者（23）：僧侣/水手/驱魔人/旅店老板/舞蛇人/哲学家/杂耍艺人/气球驾驶员/失忆者/赏金猎人/小精灵/炼金术士/传教士/国王/异教领袖/半兽人/变脸师/悟道者/道士/戏法师/熊孩子/掮客/和尚
     g_roleInfoClass[7] = 3;   g_roleInfoClass[23] = 3;  g_roleInfoClass[25] = 3;  g_roleInfoClass[26] = 3;
-    g_roleInfoClass[49] = 3;  g_roleInfoClass[56] = 3;  g_roleInfoClass[72] = 3;  g_roleInfoClass[73] = 3;
-    g_roleInfoClass[77] = 3;  g_roleInfoClass[90] = 3;  g_roleInfoClass[95] = 3;  g_roleInfoClass[103] = 3;
-    g_roleInfoClass[104] = 3; g_roleInfoClass[107] = 3; g_roleInfoClass[118] = 3; g_roleInfoClass[123] = 3;
-    g_roleInfoClass[129] = 3; g_roleInfoClass[151] = 3; g_roleInfoClass[159] = 3; g_roleInfoClass[161] = 3;
+    g_roleInfoClass[49] = 3;  g_roleInfoClass[56] = 3;  g_roleInfoClass[58] = 3;  g_roleInfoClass[72] = 3;
+    g_roleInfoClass[73] = 3;  g_roleInfoClass[90] = 3;  g_roleInfoClass[91] = 3;  g_roleInfoClass[95] = 3;
+    g_roleInfoClass[103] = 3; g_roleInfoClass[104] = 3; g_roleInfoClass[106] = 3; g_roleInfoClass[107] = 3;
+    g_roleInfoClass[117] = 3; g_roleInfoClass[118] = 3; g_roleInfoClass[123] = 3; g_roleInfoClass[149] = 3;
+    g_roleInfoClass[151] = 3; g_roleInfoClass[159] = 3; g_roleInfoClass[161] = 3;
     //   4=死亡能力者（3）：守鸦人/贤者/报丧女妖
     g_roleInfoClass[8] = 4;   g_roleInfoClass[59] = 4;  g_roleInfoClass[131] = 4;
-    //   5=白天能力者（5）：猎手/小精灵/异教领袖/变脸师/戏法师
-    g_roleInfoClass[10] = 5;  g_roleInfoClass[91] = 5;  g_roleInfoClass[106] = 5; g_roleInfoClass[117] = 5; g_roleInfoClass[149] = 5;
     //   6=无主动能力者（13）：贞洁者/士兵/镇长/吟游诗人/茶艺师/和平主义者/弄臣/农夫/无神论者/罂粟种植者/唱诗男孩/魔术师/半仙
     g_roleInfoClass[9] = 6;   g_roleInfoClass[11] = 6;  g_roleInfoClass[12] = 6;  g_roleInfoClass[31] = 6;
     g_roleInfoClass[32] = 6;  g_roleInfoClass[33] = 6;  g_roleInfoClass[34] = 6;  g_roleInfoClass[80] = 6;
     g_roleInfoClass[83] = 6;  g_roleInfoClass[86] = 6;  g_roleInfoClass[108] = 6; g_roleInfoClass[136] = 6; g_roleInfoClass[158] = 6;
+    //   8=一次性能力者（9）：猎手/侍臣/教授/艺术家/巡山人/工程师/渔夫/鸩/杂技演员
+    g_roleInfoClass[10] = 8;  g_roleInfoClass[29] = 8;  g_roleInfoClass[30] = 8;  g_roleInfoClass[57] = 8;
+    g_roleInfoClass[77] = 8;  g_roleInfoClass[78] = 8;  g_roleInfoClass[79] = 8;  g_roleInfoClass[124] = 8;
+    g_roleInfoClass[129] = 8;
     //   7=其他镇民（保险机制）：是镇民但上面没归类的，一律兜底成 7，避免新角色忘记分类时落到 0 被跳过
     for (i = 0; i <= 166; i += 1) {
         if (g_roleTeam[i] == 0 && g_roleInfoClass[i] == 0) {
@@ -34219,7 +34220,29 @@ void BOTC_PixieAskOpen (int q, int role) {
     BOTC_PmStore(cp, "【小精灵】" + BOTC_NameStr(q) + " 得知的镇民「" + g_roleName[role] + "」死亡：点角色 = 获得能力，取消 = 不获得。");
 }
 
+// 【失忆者（73）· 首夜夜序】科学怪人之后、哲学家之前，只让说书人决定他获得什么能力。
+// 此节点不唤醒、不私聊失忆者；选完由 g_grantActing 按所得能力自己的夜序安排后续行动。
+bool BOTC_AmneFirstNightStep (int bestOrd) {
+    int q;
+    int o;
+    if (!g_isNight || g_amneDoneNight > 0) {
+        return false;
+    }
+    q = BOTC_SeatOfRole(73);
+    if (q < 2 || q > 13 || BOTC_SeatDead(q)) {
+        return false;
+    }
+    o = BOTC_NightOrderOf(q);
+    if (o <= 0 || (bestOrd > 0 && (o * 10) > bestOrd)) {
+        return false;
+    }
+    g_amneDoneNight = g_nightNum;
+    BOTC_AmnePickOpen(q);
+    return true;
+}
+
 // 夜间唤醒之前的「非唤醒、非私聊」能力发放步骤（用户第 4 / 7 / 11 条）。
+// 失忆者不在这里：他在自己的首夜夜序只选能力，再由所得能力决定是否及何时唤醒。
 bool BOTC_PreGrantStep () {
     int q;
     int role;
@@ -34227,16 +34250,7 @@ bool BOTC_PreGrantStep () {
     if (!g_isNight) {
         return false;
     }
-    // 1. 失忆者首夜
-    if (g_amneDoneNight <= 0) {
-        q = BOTC_SeatOfRole(73);
-        if (q >= 2 && q <= 13 && BOTC_SeatDead(q) == false) {
-            g_amneDoneNight = 1;
-            BOTC_AmnePickOpen(q);
-            return true;
-        }
-    }
-    // 2. 食人族：今天有人死于处决
+    // 1. 食人族：今天有人死于处决
     //    【持续检测】（用户 2026-11-10）：中途被创造出来的食人族也按「饱餐」标记判断——
     //    只要最后一名死于处决的玩家就死在刚刚结束的这一天，就照样补发一次能力。
     //    【自动获得】（用户 2026-11-10）：食人族没中毒 / 醉酒时不再由说书人选，
@@ -37016,15 +37030,15 @@ void BOTC_BuildTimer () {
     g_tmHideBtn = BOTC_NewButton(g_tmDlg, 84, 22, 10, 6, "收起");
     libNtve_gf_SetDialogItemStyle(g_tmHideBtn, "ModLeftSize16", PlayerGroupAll());
     // 说明文字挪到「秒数」下面
-    g_tmTitle = BOTC_NewLabel(g_tmDlg, 224, 24, 10, 78, StringToText("时段计时（填秒数）"));
+    g_tmTitle = BOTC_NewLabel(g_tmDlg, 224, 24, 10, 96, StringToText("时段计时（填秒数）"));
     libNtve_gf_SetDialogItemStyle(g_tmTitle, "ModLeftSize16", PlayerGroupAll());
     libNtve_gf_SetDialogItemAcceptMouse(g_tmTitle, false, PlayerGroupAll());
     // 【取消手动切换时段】（用户 2026-11-01）：计时器自动跟着当前公聊 / 私聊阶段
-    // 只有一行输入
-    g_tmSecLbl = BOTC_NewLabel(g_tmDlg, 112, 24, 10, 48, StringToText("秒数"));
+    // 只有一行输入；40 高避免数字上下裁切（用户 2026-11-24）
+    g_tmSecLbl = BOTC_NewLabel(g_tmDlg, 112, 24, 10, 52, StringToText("秒数"));
     libNtve_gf_SetDialogItemStyle(g_tmSecLbl, "ModLeftSize16", PlayerGroupAll());
     libNtve_gf_SetDialogItemAcceptMouse(g_tmSecLbl, false, PlayerGroupAll());
-    g_tmEditPub = BOTC_NewEdit(g_tmDlg, 190, 30, 130, 44);
+    g_tmEditPub = BOTC_NewEdit(g_tmDlg, 190, 40, 130, 44);
     // 下面两个按钮：尺寸保持原样（130×30）
     g_tmBtnGo = BOTC_NewButton(g_tmDlg, 130, 30, 10, 156, "开始");
     libNtve_gf_SetDialogItemStyle(g_tmBtnGo, "ModLeftSize16", PlayerGroupAll());
@@ -52305,7 +52319,7 @@ void BOTC_PhiloPick (int p, int role) {
     BOTC_GrimRender(g_who[p]);
     // 【哲学家 → 失忆者（73）】（用户 2026-11-13）：失忆者本身是白板，真身换成 73 之后必须立刻
     //   按「失忆者首夜」那套让说书人再挑一项真正生效的能力；同时记下这次选择已经做过，
-    //   避免下次点【唤醒下一个】时 BOTC_PreGrantStep 又把他当成首夜失忆者弹一遍。
+    //   避免下次点【唤醒下一个】时 BOTC_AmneFirstNightStep 又把他当成首夜失忆者弹一遍。
     if (role == 73 && p >= 2 && p <= 13) {
         if (g_amneDoneNight < g_nightNum) {
             g_amneDoneNight = g_nightNum;
@@ -59107,6 +59121,9 @@ bool BOTC_WakeSkipNow (int q) {
         return true;                            // 教父：今天没有外来者死（也不是他的首夜）→ 今晚不唤醒
     }
     r2 = g_mark[(g_teller * 14) + q] - 1;
+    if (g_nightNum <= 1 && r2 == 73) {
+        return true;                    // 首夜只在自己的夜序选能力，不直接唤醒失忆者本人
+    }
     if (r2 == 155 && (g_skinTarget[q] >= 2 || g_skinChainBroken[q])) {
         return true;
     }
@@ -60129,8 +60146,8 @@ void BOTC_AutoWakeNext () {
         }
         BOTC_PmStore(g_teller, "【小怪宝】还没有有效的照看者：请先给照看者打「是恶魔（小怪宝）」，再手动结算今晚的死亡。");
     }
-    // 【失忆者 / 食人族 / 变脸师 / 小精灵】（用户 2026-11-03）：夜间唤醒之前先走一步
-    //   「不唤醒、不私聊」的能力发放，优先于所有角色和首夜固定信息。
+    // 【食人族 / 变脸师 / 小精灵】（用户 2026-11-03）：夜间唤醒之前先走一步
+    //   「不唤醒、不私聊」的能力发放；失忆者已改到自己的首夜夜序单独处理。
     if (BOTC_PreGrantStep()) {
         BOTC_WakeRender();
         return;
@@ -60564,6 +60581,11 @@ void BOTC_AutoWakeNext () {
     }
     // 【异教领袖（106）】到夜序时不唤醒、不私聊，弹窗让说书人选相邻存活玩家的阵营。
     if (BOTC_CultChoiceStep(bestOrd)) {
+        BOTC_WakeRender();
+        return;
+    }
+    // 【失忆者（73）· 首夜选能力】在自己的夜序只弹说书人角色网格，不唤醒本人。
+    if (BOTC_AmneFirstNightStep(bestOrd)) {
         BOTC_WakeRender();
         return;
     }
@@ -68890,7 +68912,7 @@ bool BOTC_IsCogRole (int r) {
     return false;
 }
 
-// 醉酒目标权重（用户 2026-11-21）：一次性信息者 70% / 持续信息位 20% / 夜间能力者 10%。
+// 醉酒目标权重（用户 2026-11-21）：一次性信息者 70% / 持续信息位 20% / 主动能力者 10%。
 //   其余角色不进加权池，只有这三类都没有候选时才等概率兜底。
 int BOTC_DxeDrunkWeight (int q) {
     int r;
@@ -91636,9 +91658,9 @@ bool BOTC_IsMarionette (int q) {
 }
 
 // 【酒鬼 / 提线木偶的认知偏差角色】（用户 2026-11-03；2026-11-06 改读分类表）
-//   分层：0 = 首夜信息位 / 只能发动一次技能 → g_roleInfoClass 1（一次性信息者）
+//   分层：0 = 首夜信息位 / 只能发动一次技能 → g_roleInfoClass 1 / 8（一次性信息者 / 一次性能力者）
 //         1 = 持续信息位（小概率，且不参与「持续信息角色保底」）→ g_roleInfoClass 2
-//         2 = 有夜间行动或白天能力 → g_roleInfoClass 3 / 5
+//         2 = 主动能力 → g_roleInfoClass 3
 //         3 = 死亡能力 / 无主动能力 / 其他镇民（最后才选）→ g_roleInfoClass 4 / 6 / 7
 //         98 = 无神论者（只有小概率被选中）
 //         99 = 不选（失忆者、悟道者、非镇民）
@@ -91661,14 +91683,14 @@ int BOTC_BiasRoleTier (int r) {
     if (r == 83) {
         return 98;                                     // 无神论者：只有小概率出现
     }
-    if (g_roleInfoClass[r] == 1) {
-        return 0;                                      // 一次性信息者
+    if (g_roleInfoClass[r] == 1 || g_roleInfoClass[r] == 8) {
+        return 0;                                      // 一次性信息者 / 一次性能力者
     }
     if (g_roleInfoClass[r] == 2) {
         return 1;                                      // 持续信息位（小概率）
     }
-    if (g_roleInfoClass[r] == 3 || g_roleInfoClass[r] == 5) {
-        return 2;                                      // 夜间行动 / 白天能力
+    if (g_roleInfoClass[r] == 3) {
+        return 2;                                      // 主动能力
     }
     return 3;                                          // 死亡能力 / 纯被动 / 其他镇民
 }
@@ -92344,15 +92366,15 @@ void BOTC_HfTyphonSetup () {
 }
 // 【随机发牌 · 萌新友好角色】（用户 2026-11-03；2026-11-06 改读分类表）：
 //   总场数少于 5 场的玩家优先拿到「无主动能力 / 只有首夜信息 / 只能被动触发」的善良角色。
-//   镇民改读 g_roleInfoClass：1=一次性信息者、6=无主动能力者 算萌新友好
-//   （死亡能力者 4 要死了才出信息、夜间/白天能力者 3/5 要主动操作，均不算）。
+//   镇民改读 g_roleInfoClass：1=一次性信息者、8=一次性能力者、6=无主动能力者 算萌新友好
+//   （死亡能力者 4 要死了才出信息、主动能力者 3 要主动操作，均不算）。
 //   外来者维持原规则：无主动能力 / 只被动触发，且避开认知覆盖类（酒鬼 / 疯子）。
 bool BOTC_RoleNewbieSafe (int r) {
     if (r < 0 || r > 166) {
         return false;
     }
     if (BOTC_RoleTeam(r) == 0) {
-        return (g_roleInfoClass[r] == 1 || g_roleInfoClass[r] == 6);
+        return (g_roleInfoClass[r] == 1 || g_roleInfoClass[r] == 8 || g_roleInfoClass[r] == 6);
     }
     if (BOTC_RoleTeam(r) != 1) {
         return false;
@@ -92377,7 +92399,7 @@ bool BOTC_RoleRecurringInfo (int r) {
 }
 
 // 【解谜大师（109）· 醉酒目标权重】（用户 2026-11-03；2026-11-21 改按权重随机）：
-//   一次性信息者 70% / 持续信息位 20% / 夜间能力者 10%。
+//   一次性信息者 70% / 持续信息位 20% / 主动能力者 10%。
 //   其余镇民不进加权池，只有这三类都没有候选时才等概率兜底。
 int BOTC_DrunkTargetWeight (int q) {
     int r;
@@ -92392,7 +92414,7 @@ int BOTC_DrunkTargetWeight (int q) {
         return 20;                                     // 持续信息位
     }
     if (g_roleAct[r] == 1 || g_roleAct[r] == 2 || g_roleInfoClass[r] == 3) {
-        return 10;                                     // 夜间能力者
+        return 10;                                     // 主动能力者
     }
     return 0;
 }
@@ -92473,7 +92495,7 @@ void BOTC_OpeningMarkSync () {
             BOTC_PmStore(g_teller, "【半兽人】失足标记：" + BOTC_NameStr(pick));
         }
     }
-    // 解谜大师（109）：醉酒（一次性信息者 70% / 持续信息位 20% / 夜间能力者 10%）
+    // 解谜大师（109）：醉酒（一次性信息者 70% / 持续信息位 20% / 主动能力者 10%）
     for (i = 2; i <= 13; i += 1) {
         g_tokOn[(((g_teller * 14) + i) * 256) + 129] = false;
     }
@@ -92705,13 +92727,13 @@ void BOTC_DealSeatOrder (int demonRole) {
 
 // 【善良角色的场次概率发座】（用户 2026-11-21）：删除「总场数 < 5 场优先拿萌新友好角色」，
 //   改为按座位总场数决定发放的善良角色类别；参与对应类型竞选仍然 ×2。
-//   类别：0 外来者 / 1 一次性能力者 / 2 夜间能力者 / 3 持续信息位 / 4 其他。
+//   类别：0 外来者 / 1 一次性能力者 / 2 主动能力者 / 3 持续信息位 / 4 其他。
 int BOTC_GoodCat (int r) {
     if (BOTC_RoleTeam(r) == 1) {
         return 0;
     }
     if (r >= 0 && r <= 166) {
-        if (g_roleInfoClass[r] == 1) {
+        if (g_roleInfoClass[r] == 8) {
             return 1;
         }
         if (g_roleInfoClass[r] == 3) {
@@ -92813,6 +92835,7 @@ void BOTC_Deal () {
     int candN;
     int infCount;                  // 【持续信息角色】本局已选到的个数
     int infTarget;                 // 【持续信息角色】目标个数
+    int infMode;                   // 0 = 持续信息位；1 = 一次性能力者 / 主动能力者补位
     int tier;                      // 【解谜大师醉酒】目标优先级档位（用户 2026-11-03）
     int slot;
     int goodN;
@@ -92869,7 +92892,7 @@ void BOTC_Deal () {
     // 【无神论者】（用户 2026-11-12）：配板前先掷一次，决定本局有没有无神论者（83）。
     //   有无神论者时本局没有邪恶，会改变阵营的角色只保留 5% 概率（见 BOTC_PickBoardRole）。
     g_athDeal = false;
-    if (BOTC_BoardHasRole(83) && BOTC_DealAtheistKeep(25)) {
+    if (BOTC_BoardHasRole(83) && BOTC_DealAtheistKeep(5)) {
         g_athDeal = true;
     }
     poppy = 0;                     // 重新发牌：军团局的罂粟种植者标记先清掉
@@ -93742,10 +93765,16 @@ void BOTC_Deal () {
         g_scrUsed[83] = true;
         BOTC_PmStore(g_teller, "【配比】无神论者（83）本局在场。");
     }
-    // 【持续信息角色保障】（用户 2026-11-03）：随机发牌时尽量保证善良阵营有 1~2 个
-    //   每个夜晚 / 每个白天都能获得信息的角色；剧本里没有这类角色时自动跳过。
-    infTarget = 2;
-    if (tc < 2) {
+    // 【持续信息角色保障】（用户 2026-11-24）：目标数量按 2 个 70%、3 个 30% 抽取。
+    //   持续信息角色不足时，缺额改用一次性能力者 / 主动能力者补位。
+    k = RandomInt(1, 100);
+    if (k <= 70) {
+        infTarget = 2;
+    }
+    else {
+        infTarget = 3;
+    }
+    if (tc < infTarget) {
         infTarget = tc;
     }
     infCount = 0;
@@ -93754,6 +93783,7 @@ void BOTC_Deal () {
             infCount = infCount + 1;
         }
     }
+    infMode = 0;
     while (infCount < infTarget) {
         pick = -1;
         candN = 0;
@@ -93762,8 +93792,18 @@ void BOTC_Deal () {
             if (r < 0 || r > 166) {
                 continue;
             }
-            if (!BOTC_RoleRecurringInfo(r)) {
-                continue;
+            if (BOTC_RoleTeam(r) != 0) {
+                continue;                // 补位也只能占用镇民角色，不改变阵营配比
+            }
+            if (infMode == 0) {
+                if (!BOTC_RoleRecurringInfo(r)) {
+                    continue;
+                }
+            }
+            else {
+                if (g_roleInfoClass[r] != 8 && g_roleInfoClass[r] != 3) {
+                    continue;
+                }
             }
             if (g_scrUsed[r] && !(g_athDeal && !BOTC_DealRoleSingleton(r))) {
                 continue;
@@ -93781,12 +93821,21 @@ void BOTC_Deal () {
             }
         }
         if (pick < 0) {
-            break;                       // 剧本里没有更多能持续获得信息的角色
+            if (infMode == 0) {
+                infMode = 1;
+                continue;
+            }
+            break;                       // 持续信息位和补位角色都没有候选了
         }
         slot = -1;
         for (i = 0; i < tc; i += 1) {
             if (BOTC_RoleRecurringInfo(g_scrRole[i])) {
                 continue;
+            }
+            if (infMode == 1 && g_scrRole[i] >= 0) {
+                if (g_roleInfoClass[g_scrRole[i]] == 8 || g_roleInfoClass[g_scrRole[i]] == 3) {
+                    continue;            // 补位阶段不覆盖已有的一次性能力者 / 主动能力者
+                }
             }
             if (poppy == 1 && i == 0) {
                 continue;                // 【军团局】罂粟种植者固定保留
@@ -94578,7 +94627,7 @@ void BOTC_BountySetupEvil () {
     if (BOTC_BountyEvilSeat() >= 2) {
         return;
     }
-    // 【优先一次性技能 / 夜间能力者】（用户 2026-11-15）：先在这两类镇民里随机挑一名，
+    // 【优先一次性技能 / 主动能力者】（用户 2026-11-15）：先在这两类镇民里随机挑一名，
     //   场上没有这类角色时再退回全部镇民随机；赏金猎人本人不参与。
     priN = 0;
     pick = 0;
@@ -94587,7 +94636,7 @@ void BOTC_BountySetupEvil () {
         if (i == bs) { continue; }
         r = BOTC_SeatTrueRole(i);
         if (BOTC_RoleTeam(r) != 0) { continue; }
-        if (g_roleInfoClass[r] != 1 && g_roleInfoClass[r] != 3) { continue; }
+        if (g_roleInfoClass[r] != 8 && g_roleInfoClass[r] != 3) { continue; }
         pri[priN] = i;
         priN = priN + 1;
     }
@@ -94839,8 +94888,8 @@ void BOTC_BluffRoll () {
     }
     // 【随机不在场身份的分层规则】（用户 2026-11-06）：镇民改读游戏内镇民分类 g_roleInfoClass，
     //   与随机发牌 / 认知偏差共用同一张表，不再按 g_roleAct 硬编码：
-    //   0 = 持续信息位（最优先，但 3 个里**至多 1 个**，用户 2026-11-14）；1 = 夜间能力 / 白天能力；
-    //   2 = 一次性信息 / 死亡能力 / 无主动能力 / 其他镇民；3 = 外来者（最后兜底，尽量少选）。
+    //   0 = 持续信息位（最优先，但 3 个里**至多 1 个**，用户 2026-11-14）；1 = 主动能力；
+    //   2 = 一次性信息 / 一次性能力 / 死亡能力 / 无主动能力 / 其他镇民；3 = 外来者（最后兜底，尽量少选）。
     n = 0;
     b = g_board;
     if (b < 1 || b > 16) {
@@ -94878,8 +94927,8 @@ void BOTC_BluffRoll () {
                 t = 0;                 // 持续信息位
             }
             else {
-                if (g_roleInfoClass[r] == 3 || g_roleInfoClass[r] == 5) {
-                    t = 1;             // 夜间能力 / 白天能力
+                if (g_roleInfoClass[r] == 3) {
+                    t = 1;             // 主动能力
                 }
                 else {
                     t = 2;             // 一次性信息 / 死亡能力 / 无主动能力 / 其他镇民
@@ -98678,8 +98727,10 @@ void BOTC_Init () {
     //   因为上面的「汉字预热」要用它填的 g_roleName / g_grimNameStyle
     BOTC_BuildGrim();              // 魔典
     BOTC_BuildFakeGrim();          // 【伪造魔典】（用户 2026-11-07）：说书人专用
-    // 【日志层级】（用户 2026-11-22）：日志与魔典不再互斥，层次要求「剧本角色表之下、魔典之上」。
-    //   对话框后建的在上，所以日志必须建在魔典之后；剧本角色表（BOTC_BuildAbNew）在 BOTC_Init
+    // 【计时面板层级】（用户 2026-11-24）：时段计时先于日志创建，说书人填秒数的面板不再盖住日志。
+    BOTC_BuildTimer();         // 时段计时：说书人面板 + 全屏倒计时条（用户 2026-09-19）
+    // 【日志层级】（用户 2026-11-22）：日志与魔典不再互斥，层次要求「剧本角色表之下、魔典与计时面板之上」。
+    //   对话框后建的在上，所以日志必须建在魔典与时段计时之后；剧本角色表（BOTC_BuildAbNew）在 BOTC_Init
     //   末尾才建，天然压在日志上面。
     BOTC_BuildLog();
     BOTC_BuildLogPick();       // 【看某玩家】的下拉列表
@@ -98687,7 +98738,6 @@ void BOTC_Init () {
     // 【汉字预热搬走了】（用户 2026-10-04）：它现在建在最前面（黑布之后、聊天之前），见 BOTC_Init 开头
     BOTC_BuildRoleSet();
     BOTC_BuildPreNotice();     // 开局前那行提示（用户 2026-09-19）
-    BOTC_BuildTimer();         // 时段计时：说书人面板 + 全屏倒计时条（用户 2026-09-19）           // 【手动配板】按钮 + 面板（用户 2026-09-19）
     BOTC_BuildEvil();              // 邪恶小窗（建在魔典之后：压在魔典上面）
     BOTC_BuildPick();
     BOTC_BuildWakeChoice();        // 多重能力专用选择框（和身份网格完全分离）
