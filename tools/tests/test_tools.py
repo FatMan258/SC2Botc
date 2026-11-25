@@ -901,11 +901,11 @@ class IntroNameFlowTests(unittest.TestCase):
         self.assertIn("BOTC_ValidColorName(name)", source)
         self.assertIn("BOTC_IsHexChar(StringSub(code, j, j + 1))", source)
         self.assertIn("bool BOTC_NameUsesOfficialName (string s)", source)
-        self.assertIn("StringCompare(s, g_namePool[i], false) == 0", source)
-        self.assertIn("StringCompare(visible, g_namePool[i], false) == 0", source)
+        self.assertIn("if (s == g_namePool[i])", source)
+        self.assertIn("visible == g_namePool[i]", source)
         self.assertIn("return BOTC_ChatNoColor(s);", source)
         self.assertIn(
-            "StringCompare(BOTC_NameVisibleText(g_introName[q]), visible, false) == 0",
+            "BOTC_NameVisibleText(g_introName[q]) == visible",
             source,
         )
         self.assertIn("positions[m] = i;", source)
@@ -997,8 +997,7 @@ class IntroNameFlowTests(unittest.TestCase):
             "BOTC_NameUsesOfficialName(visible)",
             "BOTC_NameIsSeatNumber(visible)",
             "BOTC_NameIsTellerName(visible)",
-            "BOTC_NameIsOtherBattleName(p, visible)",
-            "StringCompare(BOTC_NameVisibleText(g_introName[q]), visible, false) == 0",
+            "BOTC_NameVisibleText(g_introName[q]) == visible",
             "if (!BOTC_NameCharsValid(visible))",
             "if (BOTC_NameBanned(visible))",
             "g_introName[p] = name;",
@@ -1013,21 +1012,6 @@ class IntroNameFlowTests(unittest.TestCase):
             "BOTC_NameVisibleText(g_introName[q]) == BOTC_NameVisibleText(name)",
             try_name,
         )
-
-        seat_number = function_body("bool BOTC_NameIsSeatNumber (string s)")
-        self.assertIn('StringFind("0123456789", ch, true)', seat_number)
-        self.assertIn("value = (value * 10) + (digit - 1);", seat_number)
-        self.assertIn("if (value > 999)", seat_number)
-        self.assertNotIn("IntToString(i)", seat_number)
-
-        other_battle_name = function_body(
-            "bool BOTC_NameIsOtherBattleName (int p, string s)"
-        )
-        self.assertIn("if (q == p)", other_battle_name)
-        self.assertIn("PlayerType(q) != 1", other_battle_name)
-        self.assertIn("PlayerStatus(q) == 2", other_battle_name)
-        self.assertIn("BOTC_BattleNameText(q)", other_battle_name)
-        self.assertIn("false)", other_battle_name)
 
 
 class AmnesiaViewTests(unittest.TestCase):

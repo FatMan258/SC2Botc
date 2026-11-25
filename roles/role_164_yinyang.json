@@ -35,7 +35,7 @@
     {
       "kind": "custom",
       "id": "storyteller_select_four_roles",
-      "notes": "说书人使用教父同款共享角色网格多选两个善良角色和两个邪恶角色（四个不重复，只限当前剧本）；不自动校验在场数量，由说书人按官网自行决定。"
+      "notes": "说书人用四格技能面板依次选择两个善良角色和两个邪恶角色（四个不重复，只限当前剧本）；不自动校验在场数量，由说书人按官网自行决定。"
     },
     {
       "kind": "send_information",
@@ -47,41 +47,42 @@
     "notes": "由说书人手动选择，不使用随机数。"
   },
   "tests": [
-    "首夜唤醒或手动技能直接打开教父同款多选角色网格，不再经过四格技能面板。",
-    "网格只列当前剧本的善恶角色；已选角色保持显示并带绿色大勾，再次点击取消选中。",
-    "四个角色必须互不重复；善良与邪恶各最多选择 2 个，标题实时显示配额和名单。",
-    "选满 2 个善良 + 2 个邪恶后点【确定（发送）】，向阴阳师私聊发送四个角色名；未选满时确认不关闭面板。",
+    "首夜唤醒说书人弹出四格技能面板：前两格善良、后两格邪恶。",
+    "点某一格打开角色网格，只列当前剧本、对应阵营、且未被选过的角色。",
+    "四个角色必须互不重复；善恶按格子校验。",
+    "四个角色都选完后点【确认（发送）】，向阴阳师私聊发送四个角色名。",
     "信息文本格式：【信息】你得知，侍女，送葬者，蛊雕，方古。",
     "不自动校验在场数量（中毒 / 醉酒 / 假能力时直接发错误信息）。",
-    "取消或说书人收回唤醒时关闭多选网格并清除本次选择状态。",
+    "说书人收回唤醒时关闭四格面板与未完成的角色网格并清除本次选择状态。",
     "不改动当前剧本角色名单，不修改其他角色的能力逻辑。"
   ],
   "implementation": {
     "required_functions": [
       "BOTC_YydOpen",
-      "BOTC_YydTitle",
+      "BOTC_YydPanel",
+      "BOTC_YydPanelRender",
+      "BOTC_YydEdit",
       "BOTC_YydPickRole",
       "BOTC_YydSend",
       "BOTC_YydClearSeat",
-      "BOTC_YydAbort",
-      "BOTC_PickChoose",
-      "BOTC_GfPickChecks"
+      "BOTC_YydAbort"
     ],
     "required_symbols": [
       "g_yydRole",
-      "g_pickWho",
-      "g_pickMode[p] == 56",
-      "BOTC_RoleOnBoard"
+      "g_yydSeat",
+      "g_yydEdit",
+      "g_pickMode[g_teller] == 56",
+      "BOTC_RoleInPlay"
     ],
     "state_fields": [
-      "g_yydRole[teller * 4 + slot]",
-      "g_pickWho[teller]"
+      "g_yydRole[seat * 4 + slot]",
+      "g_yydSeat",
+      "g_yydEdit"
     ],
     "reset_points": [
       "选择成功发送后",
-      "取消选择或说书人收回该座位唤醒时",
-      "新一次阴阳师首夜流程开始时",
-      "新一局开始时"
+      "说书人收回该座位唤醒时",
+      "新一次阴阳师首夜流程开始时"
     ]
   }
 }
