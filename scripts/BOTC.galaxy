@@ -585,8 +585,10 @@ bool[14]    g_abOpen;
 // 【日志容量】（用户 2026-11-21）：容量集中在这里维护，避免散落魔数漏改。
 //   数组长度仍需字面量（Galaxy 定长数组），改容量时必须同步下方数组声明与两处清空循环。
 //   写满后按环形缓冲覆盖最旧一格，不再搬移整段记录。
+//   ⚠ 单个数组长度必须 < 65536：超过后运行时按 16 位截断，初始化清空时直接报「数组索引越界」，
+//     整个 BOTC_Init 中断 → 地图里所有自定义按钮都不出现（用户 2026-11-26 实测）。
 const int   c_pubLogCap = 10000;     // 公聊日志容量（string[10000]）
-const int   c_pmLogCap = 5000;       // 每人私聊日志容量（14 × 5000 = string[70000]）
+const int   c_pmLogCap = 4600;       // 每人私聊日志容量（14 × 4600 = string[64400]，不能再往上加）
 const int   c_voteLogCap = 1000;     // 投票日志容量（string[1000]）
 string[10000] g_pubLog;
 int         g_pubLogCount;
@@ -595,13 +597,13 @@ int[10000]  g_pubSeq;          // 公聊记录每行的写入序号（用户 202
 int         g_pubSeqN;         // 下一条公聊记录的序号（单调递增，回绕滚动时随行一起搬家）
 int[196]    g_blockSeq;        // 屏蔽起点：索引 (屏蔽者 * 14) + 被屏蔽者，值为屏蔽发生时的 g_pubSeqN
 int[196]    g_blockHideTo;     // 屏蔽终点（用户 2026-11-08）：解除屏蔽时的 g_pubSeqN；屏蔽期间的公聊行永久隐藏
-string[70000] g_pmLog;         // 私聊记录：每人 5000 条（14 × 5000 = 70000），写满后覆盖最旧一条
+string[64400] g_pmLog;         // 私聊记录：每人 4600 条（14 × 4600 = 64400），写满后覆盖最旧一条
 int[14]     g_pmLogCount;
-int[70000]   g_pmWho;           // 私聊记录同上（下标和 g_pmLog 一一对应，步长 5000）
-int[70000]   g_pmWith;          // 这一行"属于跟谁的对话"（忽略说书人；0 = 不知道/系统行）
-bool[70000]  g_pmCont;          // 【随机配板 · 清空旧提示】这行是上一条消息自动换行出来的续行（用户 2026-11-17）
+int[64400]   g_pmWho;           // 私聊记录同上（下标和 g_pmLog 一一对应，步长 4600）
+int[64400]   g_pmWith;          // 这一行"属于跟谁的对话"（忽略说书人；0 = 不知道/系统行）
+bool[64400]  g_pmCont;          // 【随机配板 · 清空旧提示】这行是上一条消息自动换行出来的续行（用户 2026-11-17）
 bool        g_pmContNow;        // 存这一行时打的续行标记
-bool[70000]  g_pmBoxOnly;       // 【只进聊天框、不进日志】的行（用户 2026-09-30：按 Tab 那类提示）
+bool[64400]  g_pmBoxOnly;       // 【只进聊天框、不进日志】的行（用户 2026-09-30：按 Tab 那类提示）
 bool        g_pmBoxOnlyNow;    // 存这一行时打的标记
 // 投票统计日志：每天每条提名一行（全体可见）
 string[1000] g_voteLog;
@@ -2121,7 +2123,8 @@ int[14]     g_claimBtnP;
 int[14]     g_claimBtnDlg;
 // 【竞选角色】（用户 2026-11-26）：剧本页右上角入口 + 每个玩家一份的单选下拉框。
 //   0 不竞选 / 1 善良阵营 / 2 邪恶阵营 / 3 镇民 / 4 外来者 / 5 爪牙 / 6 恶魔。
-//   默认不竞选；点【关闭（保存）】写入玩家本地 bank（opts 章节 jrs），下一局随机配板读取快照。
+//   默认不竞选；点【关闭（保存）】写入玩家本地 bank（opts 章节 jrs），
+//   下一次【随机配板】时重新同步存档，保存后立即生效。
 int[14]     g_jrBtnDlg;
 int[14]     g_jrOpenBtn;
 int[14]     g_jrDlg;
@@ -6865,7 +6868,7 @@ void BOTC_LogPickRender (int p) {
         }
     }
     // 【复盘日志】仅在胜负结算阶段追加在最后一行，内容为说书人的本局私聊日志。
-    if (g_gameOver && g_logStage == 3 && g_stage == 6) {
+    if (g_gameOver) {
         DialogControlAddItem(g_logPickList, PlayerGroupSingle(p), BOTC_LineText("复盘日志", 0));
     }
 }
@@ -6920,7 +6923,7 @@ void BOTC_LogPickTake (int p) {
         }
     }
     // 【复盘日志】最后一行 = 5 个固定项 + 在场玩家数 + 1，仅胜负结算阶段接受。
-    if (g_gameOver && g_logStage == 3 && g_stage == 6 && sel == n + 1) {
+    if (g_gameOver && sel == n + 1) {
         BOTC_LogSetMode(p, 5);
         return;
     }
@@ -7187,7 +7190,7 @@ void BOTC_LogSetMode (int p, int mode) {
         return;
     }
     // 模式 5 直接读取说书人的本局私聊，只允许在胜负结算阶段进入。
-    if (mode == 5 && (!g_gameOver || g_logStage != 3 || g_stage != 6)) {
+    if (mode == 5 && !g_gameOver) {
         return;
     }
     if (mode == 5) {
@@ -10608,7 +10611,7 @@ bool BOTC_ClickDo (bool testConds, bool runActions) {
     // 胜负面板上的【复盘日志】（用户 2026-11-20）：所有人都能点，直接打开
     //   「日志 → 复盘日志」页，内容是说书人本局收到的全部私聊信息；不再单独记录复盘。
     if (c == g_replayBtn) {
-        if (!g_gameOver || g_logStage != 3 || g_stage != 6) {
+        if (!g_gameOver) {
             return true;
         }
         // 【复盘日志】打开前先把结算相关的弹窗全部收起来，避免盖住日志列表：
@@ -15708,7 +15711,7 @@ void BOTC_BuildNotes (int p) {
 // 【竞选角色】（用户 2026-11-26）：剧本页右上角入口，每个玩家一份七选项下拉框。
 //   0 不竞选 / 1 善良阵营 / 2 邪恶阵营 / 3 镇民 / 4 外来者 / 5 爪牙 / 6 恶魔。
 //   默认不竞选。状态保存在玩家本地 bank 的 opts 章节（键 jrs），只有点【关闭（保存）】才写入；
-//   随机配板读的是保存后的状态，所以本局配板之后再改只影响下一局。
+//   随机配板会重新同步一次在场真人的存档（见 BOTC_JrFreshLoad），所以保存后再配板立即生效。
 //==================================================================================================
 // 读玩家本地保存的竞选选项；没存过、旧版位掩码或非法值都按不竞选处理。
 int BOTC_JrLoad (int p) {
@@ -15741,6 +15744,31 @@ void BOTC_JrSave (int p) {
     BOTC_BankEnsure(p);
     BankValueSetFromInt(g_bank[p], "opts", "jrs", v);
     BankSave(g_bank[p]);
+}
+
+// 【竞选角色 · 保存后立即生效】（用户 2026-11-26）：随机配板时重新同步一次在场真人的存档，
+//   不再只读开局快照；玩家在选剧本页 / 进入剧本后刚点【关闭（保存）】的选项当场参与加权。
+//   已退出（PlayerStatus == 2）与电脑座位不重读：`BankWait` 没有超时参数，掉线玩家的同步
+//   不返回会卡死整条脚本线程。读到的值只用于本次配板，不覆盖 g_bank 里的开局缓存。
+int BOTC_JrFreshLoad (int pid) {
+    bank bk;
+    int v;
+    if (pid < 1 || pid > 13) {
+        return 0;
+    }
+    if (PlayerType(pid) != 1 || PlayerStatus(pid) == 2) {
+        return 0;
+    }
+    bk = BankLoad("BOTCSave2", pid);
+    BankWait(bk);
+    v = 0;
+    if (BankKeyExists(bk, "opts", "jrs")) {
+        v = BankValueGetAsInt(bk, "opts", "jrs");
+        if (v < 0 || v > 6) {
+            v = 0;
+        }
+    }
+    return v;
 }
 
 // 把竞选选项换算成基础权重百分比：不竞选 100，阵营竞选 150，指定角色类型竞选 200。
@@ -15800,7 +15828,7 @@ void BOTC_BuildJoinRole (int p) {
     g_jrTitle[p] = BOTC_NewLabel(g_jrDlg[p], 520, 30, 20, 12, StringToText("竞选角色"));
     libNtve_gf_SetDialogItemStyle(g_jrTitle[p], "ModLeftSize20", PlayerGroupAll());
     libNtve_gf_SetDialogItemAcceptMouse(g_jrTitle[p], false, PlayerGroupAll());
-    BOTC_NewLabel(g_jrDlg[p], 520, 40, 20, 42, StringToText("阵营竞选使对应角色基础权重 ×1.5，角色类型竞选 ×2；关闭（保存）后生效。"));
+    BOTC_NewLabel(g_jrDlg[p], 520, 40, 20, 42, StringToText("阵营竞选使对应角色基础权重 ×1.5，角色类型竞选 ×2；关闭（保存）后，下一次【随机配板】立即生效。"));
     BOTC_NewLabel(g_jrDlg[p], 520, 56, 20, 82, StringToText("特殊归类：酒鬼 → 善良 / 镇民；悟道者 → 善良 / 外来者；疯子 → 邪恶 / 恶魔；提线木偶 → 善良 / 镇民 / 外来者。"));
     DialogControlCreate(g_jrDlg[p], c_triggerControlTypePulldown);
     g_jrPull[p] = DialogControlLastCreated();
@@ -18965,7 +18993,7 @@ void BOTC_ClearAllLogs () {
         g_pubWho[i] = 0;
         g_pubSeq[i] = 0;
     }
-    // 私聊记录每人 5000 条（14 人 = 70000）；聊天窗那两份还是每人 300 个坑（4200）
+    // 私聊记录每人 4600 条（14 人 = 64400）；聊天窗那两份还是每人 300 个坑（4200）
     for (i = 0; i < 14 * c_pmLogCap; i += 1) {
         g_pmLog[i] = "";
         g_pmWho[i] = 0;
@@ -37578,7 +37606,7 @@ void BOTC_PedantSyncState () {
             g_pedantGainState[q] = 0;
         }
         else if (g_pedantGainState[q] == 0) {
-            if (!g_started || (g_alive[q] && !BOTC_SeatDead(q))) {
+            if (!g_started || !BOTC_SeatDead(q)) {
                 g_pedantGainState[q] = 2;
             }
             else {
@@ -51525,7 +51553,7 @@ void BOTC_PedantResolve (int p, int target) {
     if (BOTC_IsDemonSeat(p) && !BOTC_IsLunatic(p)) {
         demonNegative = 1;
     }
-    if (demonNegative == 1 && BOTC_Alive(target)) {
+    if (demonNegative == 1 && !BOTC_SeatDead(target)) {
         if (BOTC_HasAbility(target, 11) && BOTC_AbilityWorks(target, 11)) {
             BOTC_GrimRender(g_teller);
             BOTC_PmStore(g_teller, "【书生】" + BOTC_NameStr(target) + " 的士兵能力生效 → 免受恶魔的负面能力影响，本次额外死亡无效。");
@@ -58883,13 +58911,13 @@ bool BOTC_WakeSkipNow (int q) {
         return true;
     }
     // 复活当夜：夜序早于实际复活来源的角色不再补醒；夜序在来源之后的角色仍照常行动。
-    if (BOTC_HasTok(q, 42) && BOTC_NightOrderOf(q) < BOTC_NoOtherOf(30)) {
+    if (BOTC_ProtectTokOn(q, 42) && BOTC_NightOrderOf(q) < BOTC_NoOtherOf(30)) {
         return true;                            // 教授
     }
-    if (BOTC_HasTok(q, 43) && BOTC_NightOrderOf(q) < BOTC_NoOtherOf(45)) {
+    if (BOTC_ProtectTokOn(q, 43) && BOTC_NightOrderOf(q) < BOTC_NoOtherOf(45)) {
         return true;                            // 沙巴洛斯
     }
-    if (BOTC_HasTok(q, 113) && BOTC_NightOrderOf(q) < BOTC_NoOtherOf(87)) {
+    if (BOTC_ProtectTokOn(q, 113) && BOTC_NightOrderOf(q) < BOTC_NoOtherOf(87)) {
         return true;                            // 哈迪寂亚
     }
     if (BOTC_ProtectTokOn(q, 31)) {
@@ -60187,7 +60215,7 @@ void BOTC_AutoWakeNext () {
         pedantOrd = BOTC_NightOrder(152);
         pedantOwnOrd = BOTC_NightOrderOf(pedantSeat);
         pedantAfterOwn = (g_pedantAfterWakeNight[pedantSeat] == g_nightNum);
-        pedantWaitOwn = (!pedantAfterOwn && g_alive[pedantSeat] && !g_autoWoke[pedantSeat]
+        pedantWaitOwn = (!pedantAfterOwn && !BOTC_SeatDead(pedantSeat) && !g_autoWoke[pedantSeat]
             && pedantOwnOrd >= pedantOrd && pedantOwnOrd > 0);
         if (pedantOrd > 0 && !pedantWaitOwn) {
             if (pedantAfterOwn) {
@@ -92576,18 +92604,13 @@ void BOTC_DealSeatOrder (int demonRole) {
         t = 0;
         jm = 0;
         if (pid >= 1 && pid <= 13 && PlayerType(pid) == 1) {
-            // 【缓存优先 · 不阻塞读档】（用户 2026-11-11）：随机发牌的场次权重只读开局缓存，
-            //   BankInit 之后是空操作；发牌时不再 BankLoad + BankWait，掉线同步也不会卡住全场。
-            // 【兜底补加载】（用户 2026-11-13）：句柄缺失时先补一次，否则按 0 场 / 默认偏好参与配板。
+            // 【缓存优先】（用户 2026-11-11）：场次权重只读开局缓存，BankInit 之后是空操作。
+            // 【兜底补加载】（用户 2026-11-13）：句柄缺失时先补一次，否则按 0 场参与配板。
             BOTC_BankEnsure(pid);
             t = BOTC_StatsOwnGet(g_bank[pid], "t");
-            // 【竞选角色】（用户 2026-11-26）：读玩家本地保存的七选项竞选值（默认 0 = 不竞选）。
-            if (BankKeyExists(g_bank[pid], "opts", "jrs")) {
-                jm = BankValueGetAsInt(g_bank[pid], "opts", "jrs");
-                if (jm < 0 || jm > 6) {
-                    jm = 0;
-                }
-            }
+            // 【竞选角色 · 保存后立即生效】（用户 2026-11-26）：配板时重新同步一次该玩家的存档，
+            //   刚点【关闭（保存）】的选项立即参与加权；只读不写回 g_bank 缓存。
+            jm = BOTC_JrFreshLoad(pid);
         }
         tot[i] = t;
         join[i] = jm;
@@ -94352,15 +94375,17 @@ void BOTC_Deal () {
             candN = 5;                // 最多重试 5 次
             while (candN > 0) {
                 // 从类别 4 里挑主动能力或其他不限额镇民，保持前三项配额不变
+                // 【不能覆盖座位下标】（用户 2026-11-26）：这里原来用 i 当内层下标，会把外层
+                //   「按座位发牌」的 i 改掉，导致跳过 / 重复处理座位，最终有座位没发到身份。
                 pick = -1;
                 k = 0;
-                for (i = 0; i < catN[catPick]; i += 1) {
-                    r = catR[(catPick * 16) + i];
+                for (pass = 0; pass < catN[catPick]; pass += 1) {
+                    r = catR[(catPick * 16) + pass];
                     if (g_roleInfoClass[r] == 0 || g_roleInfoClass[r] == 3 || g_roleInfoClass[r] == 7) {
                         k = k + 1;
                         if (RandomInt(1, k) == 1) {
                             pick = r;
-                            catJ = i;
+                            catJ = pass;
                         }
                     }
                 }
@@ -94390,6 +94415,28 @@ void BOTC_Deal () {
                 drunkN = drunkN + 1;
             }
         }
+    }
+    // 【兜底 · 不留空座位】（用户 2026-11-26）：善良角色池与善良座位数万一对不上，
+    //   上面那圈发座会提前 break，留下没写身份的座位；这里把仍然是空身份的善良座位补满，
+    //   优先用本局没用过的镇民，实在没有再退回已有身份，绝不把座位留成空身份。
+    for (i = pos; i < n; i += 1) {
+        q = g_scrSeat[i];
+        if (g_mark[(g_teller * 14) + q] != 0) {
+            continue;
+        }
+        pick = BOTC_PickBoardRoleKind(0, 11);
+        if (pick < 0) {
+            pick = BOTC_PickBoardRole(0);
+        }
+        if (pick < 0) {
+            pick = BOTC_PickUnused(0, 12);
+        }
+        if (pick < 0) {
+            pick = 0;
+        }
+        g_mark[(g_teller * 14) + q] = pick + 1;
+        g_scrUsed[pick] = true;
+        BOTC_PmStore(g_teller, "【随机配板】兜底补发：" + BOTC_NameStr(q) + " → " + g_roleName[pick] + "。");
     }
     for (ei = 0; ei < extra && ei < drunkN; ei += 1) {
         q = drunkSeats[ei];
