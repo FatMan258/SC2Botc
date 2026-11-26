@@ -328,6 +328,18 @@ class RoleSpecTests(unittest.TestCase):
                 self.assertEqual(struct.unpack_from("<I", raw, 88)[0], 32)
                 self.assertEqual(len(raw), size * size * 4 + 128)
 
+    def test_execution_variants_use_standard_uncompressed_dds_headers(self) -> None:
+        for name in ("botc_exec_blue.dds", "botc_exec_black.dds"):
+            with self.subTest(texture=name):
+                data = (PROJECT_ROOT / "assets" / "game" / name).read_bytes()
+                self.assertEqual(data[:4], b"DDS ")
+                self.assertEqual(struct.unpack_from("<III", data, 8), (0x100F, 128, 128))
+                self.assertEqual(struct.unpack_from("<I", data, 20)[0], 128 * 4)
+                self.assertEqual(len(data), 128 + 128 * 128 * 4)
+                pixel_format = struct.unpack_from("<8I", data, 76)
+                self.assertEqual(pixel_format[:4], (32, 0x41, 0, 32))
+                self.assertEqual(pixel_format[4:], (0x00FF0000, 0x0000FF00, 0x000000FF, 0xFF000000))
+
     def test_heshang_runtime_entrypoints_match_spec(self) -> None:
         spec = json.loads(
             (PROJECT_ROOT / "roles" / "role_161_heshang.json").read_text(
@@ -668,7 +680,7 @@ class BoardPaginationTests(unittest.TestCase):
         # 【2026-11-22】入殓师 × 痢蛭：改成天亮统一公布
         self.assertIn("BOTC_MarkDeathRowTok(q, BOTC_DeathRowOf(1, 0), -1, false);", source)
         # 【2026-11-22】悟道者「以为的外来者」只能来自本剧本
-        self.assertIn("悟道者 · 认知外来者只能来自本剧本", source)
+        self.assertIn("悟道者 · 认知外来者等概率", source)
         self.assertIn("g_boardRoleN[15] = 25;", source)
 
         roles = {
@@ -701,6 +713,25 @@ class BoardPaginationTests(unittest.TestCase):
         self.assertEqual(struct.unpack_from("<I", raw, 84)[0], 0)
         self.assertEqual(struct.unpack_from("<I", raw, 88)[0], 32)
         self.assertEqual(len(raw), 256 * 256 * 4 + 128)
+
+
+    def test_wudao_bias_fallback_excludes_roles_in_play(self) -> None:
+        source = (PROJECT_ROOT / "scripts" / "BOTC.galaxy").read_text(
+            encoding="utf-8-sig"
+        )
+        start = source.index("        // 【悟道者 · 认知外来者等概率】")
+        end = source.index("    // 【气球驾驶员（72）】", start)
+        block = source[start:end]
+
+        self.assertIn(
+            "if (g_scrUsed[pick] && !(g_athDeal && !BOTC_DealRoleSingleton(pick))) { continue; }",
+            block,
+        )
+        self.assertIn("if (wudRole < 0 && !g_athDeal) {", block)
+        self.assertIn("pick = BOTC_PickBoardRole(0);", block)
+        self.assertIn("while (pick == 72 || pick == 73 || pick == 83) {", block)
+        self.assertIn("g_mark[(g_teller * 14) + wudSeat] = pick + 1;", block)
+        self.assertIn("g_scrUsed[wudRole] = true;", block)
 
 
 class LogViewerTests(unittest.TestCase):
@@ -910,7 +941,15 @@ class IntroNameFlowTests(unittest.TestCase):
             custom_show,
         )
         self.assertIn("g_dispName[p] = name;", source)
-        self.assertGreaterEqual(source.count("BOTC_ResetPlayerNames();"), 3)
+        self.assertIn("BOTC_ResetPlayerNames();", board_open)
+
+        cancel_start = source[source.index("void BOTC_GameStartCancel () {"):]
+        cancel_start = cancel_start[: cancel_start.index("\n}\n") + 3]
+        self.assertNotIn("BOTC_ResetPlayerNames();", cancel_start)
+
+        win_finalize = source[source.index("void BOTC_WinFinalize (int side, string why1, string why2) {"):]
+        win_finalize = win_finalize[: win_finalize.index("\n}\n") + 3]
+        self.assertIn("BOTC_ResetPlayerNames();", win_finalize)
 
     def test_blacklist_and_special_character_checks_use_visible_name(self) -> None:
         source = (PROJECT_ROOT / "scripts" / "BOTC.galaxy").read_text(
@@ -1265,8 +1304,8 @@ class MergeRegressionTests(unittest.TestCase):
         source = (PROJECT_ROOT / "scripts" / "BOTC.galaxy").read_text(
             encoding="utf-8-sig"
         )
-        self.assertIn("BOTC_GuideOpen(p, s);", source)
-        self.assertIn("void BOTC_GuideOpen (int seat, string extra) {", source)
+        self.assertIn("BOTC_GuideOpen(p, s, gh);", source)
+        self.assertIn("void BOTC_GuideOpen (int seat, string extra, int autoHit) {", source)
         self.assertIn("g_miRole = 156;", source)
 
         gudiao_start = source.index("void BOTC_GudiaoOpen (int p) {")
@@ -1284,7 +1323,7 @@ class MergeRegressionTests(unittest.TestCase):
         self.assertIn("BOTC_GudiaoAnswer(p, true);", source)
         self.assertIn("BOTC_GudiaoAnswer(p, false);", source)
 
-    def test_private_chat_navigation_is_not_hidden_by_length_guess(self) -> None:
+    def test_private_chat_navigation_uses_buttons_without_legacy_scrollbar(self) -> None:
         source = (PROJECT_ROOT / "scripts" / "BOTC.galaxy").read_text(
             encoding="utf-8-sig"
         )
@@ -1294,31 +1333,25 @@ class MergeRegressionTests(unittest.TestCase):
             source,
         )
         for marker in (
-            "int[14]     g_sessBar;",
-            "int[14]     g_sessKnob;",
             "int[14]     g_sessPrevBtn;",
             "int[14]     g_sessNextBtn;",
-            "trigger     g_tSessBarDown;",
             "void BOTC_SessNavRender (int p) {",
             "void BOTC_SessNavStep (int p, int d) {",
-            "void BOTC_SessBarRender (int p) {",
-            "bool BOTC_SessBarDown_Func (bool testConds, bool runActions) {",
-            'g_sessBar[p] = BOTC_NewImageItem(DialogLastCreated(), 480, 8, 10, 82, "ui_sess_track.dds");',
-            'g_sessKnob[p] = BOTC_NewImageItem(DialogLastCreated(), 44, 12, 10, 81, "ui_sess_knob.dds");',
             'g_sessPrevBtn[p] = BOTC_NewButton(DialogLastCreated(), 40, 22, 350, 62, "<");',
             'g_sessNextBtn[p] = BOTC_NewButton(DialogLastCreated(), 40, 22, 395, 62, ">");',
-            'g_tSessBarDown = TriggerCreate("BOTC_SessBarDown_Func");',
             "g_sessXOff[p] = g_sessXOff[p] + d;",
-            "g_sessKnobX[p] = v;",
-            "DialogControlSetPosition(g_sessKnob[p], PlayerGroupSingle(p), c_anchorTopLeft, 10 + v, 81);",
         ):
             self.assertIn(marker, source)
-        for name in ("ui_sess_track", "ui_sess_knob"):
-            self.assertTrue((PROJECT_ROOT / "assets" / "source" / f"{name}.png").is_file())
-            raw = (PROJECT_ROOT / "assets" / "game" / f"{name}.dds").read_bytes()
-            self.assertEqual(raw[:4], b"DDS ")
-            self.assertEqual(struct.unpack_from("<I", raw, 12)[0], 64)
-            self.assertEqual(struct.unpack_from("<I", raw, 16)[0], 16)
+        for marker in (
+            "g_sessBar",
+            "g_sessKnob",
+            "g_sessDrag",
+            "g_tSessBar",
+            "BOTC_SessBar",
+            "ui_sess_track.dds",
+            "ui_sess_knob.dds",
+        ):
+            self.assertNotIn(marker, source)
         self.assertNotIn("TriggerAddEventMouseWheel(", source)
         self.assertNotIn(
             "need = (g_sessXOff[p] > 0 || (g_sessMaxSkip[p] > 0 && g_sessLong[p] > 60));",
@@ -1487,6 +1520,46 @@ class MergeRegressionTests(unittest.TestCase):
         self.assertIn(
             "DialogSetVisible(g_bluffDlg, PlayerGroupSingle(g_teller), true);",
             source,
+        )
+
+
+class SetupCompositionTests(unittest.TestCase):
+    def test_cognitive_roles_do_not_change_outsider_composition(self) -> None:
+        source = (PROJECT_ROOT / "scripts" / "BOTC.galaxy").read_text(
+            encoding="utf-8-sig"
+        )
+        true_start = source.index("int BOTC_SeatTrueRole (int q) {")
+        true_end = source.index("int BOTC_SeatOfRole (int r) {", true_start)
+        true_role = source[true_start:true_end]
+        for marker in (
+            "g_tokOn[(((g_teller * 14) + q) * 256) + 8]",
+            "g_tokOn[(((g_teller * 14) + q) * 256) + 140]",
+            "g_tokOn[(((g_teller * 14) + q) * 256) + 49]",
+            "g_tokOn[(((g_teller * 14) + q) * 256) + 118]",
+        ):
+            self.assertIn(marker, true_role)
+
+        lookup_end = source.index("int BOTC_SeatOfRoleNot", true_end)
+        lookup = source[true_end:lookup_end]
+        self.assertIn("if (!g_seatOn[i]) { continue; }", lookup)
+        self.assertIn("if (BOTC_SeatRealRole(i) == r) { return i; }", lookup)
+        self.assertNotIn("g_mark[(g_teller * 14) + i] - 1 == r", lookup)
+
+        deal_start = source.index("void BOTC_Deal () {")
+        deal_end = source.index("void BOTC_Init", deal_start)
+        deal = source[deal_start:deal_end]
+        self.assertEqual(
+            set(re.findall(r"BOTC_MarionetteFakeIs\((\d+)\)", deal)),
+            {"72", "77"},
+        )
+
+        comp_start = source.index("bool BOTC_StartCompCheck () {")
+        comp_end = source.index("void BOTC_GameStart () {", comp_start)
+        comp_check = source[comp_start:comp_end]
+        self.assertIn("BOTC_SeatOfRole(69)", comp_check)
+        self.assertEqual(
+            set(re.findall(r"BOTC_MarionetteFakeIs\((\d+)\)", comp_check)),
+            {"72", "77"},
         )
 
 
