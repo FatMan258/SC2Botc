@@ -2370,6 +2370,7 @@ bool[14]    g_joinPending;
 bool[196]   g_joinVote;
 bool[14]    g_hidden;
 int[14]     g_reqSec;            // 私聊请求剩余拍数（30 拍 = 15 秒，超时自动拒绝）
+int[14]     g_pmGen;             // 【请求代次】（用户 2026-11-27）：批量清理请求时 +1，用来丢弃已经过期的延迟取消提示
 int[14]     g_askSec;            // 换座位请求剩余拍数（30 拍 = 15 秒，超时自动拒绝）
 int[14]     g_seatPickSec;       // 【选座超时】屏蔽 / 踢出 / 换座位 / 发起私聊 / 邀请私聊 剩余拍数（30 拍 = 15 秒）
 int[196]    g_pmCool;            // 私聊拒绝冷却：索引 (发起人 * 14) + 目标
@@ -2383,6 +2384,7 @@ int         g_pmTimeoutTo;
 int         g_pmTimeoutSec;
 int         g_pmTimeoutCoolTo;   // 【失败冷却归属】（用户 2026-11-27）：提示送达时才记 5 秒发起冷却
 int         g_pmTimeoutDropIn;   // 【送达时已聊上就丢弃】（用户 2026-11-27）：1 = 等新会话 / 等加入房间
+int         g_pmTimeoutGen;      // 【送达时校验请求代次】（用户 2026-11-27）：期间请求被批量清理过就丢弃
 trigger     g_tDlgDragDown;      // 【面板拖动·按下】（用户 2026-11-04）
 trigger     g_tDlgDragUp;        // 松开
 trigger     g_tDlgDragMove;      // 拖动
@@ -7297,11 +7299,16 @@ void BOTC_NoticeSub (int p, string s) {
 //   （用户 2026-11-27：失败冷却统一 5 秒，并从收到这条提示开始计时）。
 //   dropIn = 1：等新会话 / 等加入房间这类请求；送达时发起人已经在别的私聊里就静默丢弃
 //   （用户 2026-11-27：15 秒内已经聊上了，不再弹过期提示）。
+//   代次校验：期间若发生阶段切换 / 换座位 / 重开等批量清理，请求其实已经作废，同样丢弃。
 void BOTC_PmFailCore (int p, int sec, int coolTo, int dropIn) {
     g_pmTimeoutTo = p;
     g_pmTimeoutSec = sec;
     g_pmTimeoutCoolTo = coolTo;
     g_pmTimeoutDropIn = dropIn;
+    g_pmTimeoutGen = 0;
+    if (p >= 1 && p <= 13) {
+        g_pmTimeoutGen = g_pmGen[p];
+    }
     TriggerExecute(g_tPmTimeout, false, true);
 }
 
@@ -7322,16 +7329,23 @@ bool BOTC_PmRequestTimeout_Func (bool testCond, bool runActions) {
     int sec;
     int coolTo;
     int dropIn;
+    int gen;
     // 每个独立线程先接住自己的参数再 Wait，多个并发请求不会互相覆盖剩余时间。
     p = g_pmTimeoutTo;
     sec = g_pmTimeoutSec;
     coolTo = g_pmTimeoutCoolTo;
     dropIn = g_pmTimeoutDropIn;
+    gen = g_pmTimeoutGen;
     if (sec > 0) {
         Wait(IntToFixed(sec) * 0.5, c_timeGame);
     }
     // 延迟期间若玩家退出或回到禁用私聊的页面，不再补发，尤其不能因此落到公聊。
     if (BOTC_PlayerHere(p) && !BOTC_PmOff()) {
+        // 【请求已被批量清理就丢掉】（用户 2026-11-27）：阶段切换 / 换座位 / 重开时
+        //   请求已被直接作废，到点不再弹这条过期提示，也不补冷却。
+        if (p >= 1 && p <= 13 && gen != g_pmGen[p]) {
+            return true;
+        }
         // 【已经聊上了就丢掉】（用户 2026-11-27）：等待期间发起人可能已经和别人建立了私聊，
         //   这条过期提示不再弹出，也不再补记冷却。
         if (dropIn != 0 && p >= 1 && p <= 13 && g_mySess[p] != 0) {
@@ -9539,6 +9553,9 @@ void BOTC_DeclineInvite (int p, bool timeout) {
     if (timeout) {
         BOTC_Notice(p, "邀请已超时，自动拒绝。");
     }
+    // 【统一等待 → 15 秒统一取消】（用户 2026-11-27）：邀请被拒 / 超时也先回同一句等待提示，
+    //   到原邀请的 15 秒超时点再统一提示取消。
+    BOTC_NoticeSub(from, BOTC_PmWaitMsg(p));
     // 【统一 5 秒冷却】（用户 2026-11-27）：不再区分手动拒绝 / 超时，
     //   冷却等邀请人收到「对方没有在 15 秒内回应」时才开始计时。
     BOTC_PmFailNotice(from, sec, p);
@@ -9740,6 +9757,7 @@ void BOTC_DissolveAllSess (bool keepTeller) {
         g_invSess[i] = 0;
         g_invFrom[i] = 0;
         BOTC_ClearReq(i);
+        g_pmGen[i] += 1;     // 【请求作废】之前排队的延迟取消提示一律丢弃
     }
     g_sessSilent = false;
     g_bulkLeave = false;
@@ -10115,7 +10133,9 @@ void BOTC_RequestJoinSessTo (int p, int s, int tell) {
     // 【房间满员】（用户 2026-11-17）：满员后不再让房主审批，但仍然提醒被点的那位玩家
     //   「谁想和他私聊」；【统一等待提示】（用户 2026-11-27）：发起人只看到正常的等待信息，
     //   到 15 秒超时点再统一提示取消，不暴露满员。
-    if (BOTC_SessFull(s)) {
+    // 【说书人加入无视人数】（用户 2026-11-27）：说书人自己加入时不受房间人数上限限制
+    //   （说书人当房主时上限本来就不生效，见 BOTC_SessCap）。
+    if (BOTC_SessFull(s) && p != g_teller) {
         BOTC_SessOwnerFix(s);
         BOTC_PmCoolShort(p, BOTC_PmCoolTarget(s, tell));
         if (tell >= 1 && tell <= 13 && tell != p && g_member[(s * 14) + tell]) {
@@ -31704,6 +31724,7 @@ void BOTC_PhaseUiForceClose (bool keepPanels) {
             g_reqJoinSess[q] = 0;
             g_invSess[q] = 0;
             BOTC_ClearReq(q);
+            g_pmGen[q] += 1;     // 【请求作废】之前排队的延迟取消提示一律丢弃
         }
         g_askPick[q] = false;
         g_askFrom[q] = 0;
@@ -73862,6 +73883,7 @@ void BOTC_SeatChangeUiCancel () {
             g_reqJoinSess[q] = 0;
             g_invSess[q] = 0;
             BOTC_ClearReq(q);
+            g_pmGen[q] += 1;     // 【请求作废】之前排队的延迟取消提示一律丢弃
         }
         g_askPick[q] = false;
         g_askFrom[q] = 0;
@@ -98962,6 +98984,7 @@ void BOTC_Init () {
         g_invSess[p] = 0;
         g_invFrom[p] = 0;
         g_joinWho[p] = 0;
+        g_pmGen[p] += 1;     // 【请求作废】之前排队的延迟取消提示一律丢弃
         g_joinTell[p] = 0;
         g_joinPending[p] = false;
         g_hidden[p] = false;
