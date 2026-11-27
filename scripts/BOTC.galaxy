@@ -2378,6 +2378,11 @@ bool        g_sessSilent;        // 批量解散私聊时不播「退出私聊�
 trigger     g_tClick;
 trigger     g_tChat;
 trigger     g_tHotKey;
+trigger     g_tPmTimeout;        // 【私聊失败 · 原15秒超时点通知】（用户 2026-11-27）
+int         g_pmTimeoutTo;
+int         g_pmTimeoutSec;
+int         g_pmTimeoutCoolTo;   // 【失败冷却归属】（用户 2026-11-27）：提示送达时才记 5 秒发起冷却
+int         g_pmTimeoutDropIn;   // 【送达时已聊上就丢弃】（用户 2026-11-27）：1 = 等新会话 / 等加入房间
 trigger     g_tDlgDragDown;      // 【面板拖动·按下】（用户 2026-11-04）
 trigger     g_tDlgDragUp;        // 松开
 trigger     g_tDlgDragMove;      // 拖动
@@ -2421,6 +2426,7 @@ void   BOTC_NoticeKeep (int p, string s);      // 跟 Notice 一样，但"点界
 void   BOTC_NoticeBox (int p, string s);       // 只进私聊框、不进日志页（同时弹字幕；点按钮那类即时反馈用它）
 void   BOTC_PmStore (int p, string s);
 bool   BOTC_PmOff ();                    // 剧本以外（选板页 / 取名页 / 自定义剧本页）禁用私聊与关键词上色
+bool   BOTC_PlayerHere (int p);
 void   BOTC_MezeListen (int p, string msg);    // 【灵言师】关键词监听（公聊 / 含说书人的私聊，定义在聊天区之后）
 int    BOTC_LineCut (string s, int pos, int budget, int extra, int n);   // 角色详情等固定字节额度的旧断行
 int    BOTC_TextWidth (string s);                       // 渲染可见宽度：全角 2 / 半角 1，忽略颜色和样式标签
@@ -3638,8 +3644,10 @@ void   BOTC_CreateSess (int a, int b);
 void   BOTC_JoinSess (int who, int s);
 void   BOTC_InviteClear (int p);      // 【邀请加入·单条清理】（用户 2026-11-05）：强制拉人前清掉对方弹窗
 void   BOTC_InviteClearSess (int s);   // 【邀请加入·会话结束清理】（用户 2026-11-04）：JoinSess 之前会调用
-void   BOTC_PmCooldown (int from, int to);   // 【私聊拒绝冷却】（用户 2026-11-04）：邀请拒绝也要用
-void   BOTC_PmCoolShort (int from, int to);  // 【私聊发起冷却】（用户 2026-11-17）：发起即 5 秒，被拒绝再变 15 秒
+string BOTC_PmWaitMsg (int who);             // 【私聊等待提示统一】（用户 2026-11-27）：不向发起人暴露内部状态
+void   BOTC_PmFailNotice (int p, int sec, int coolTo);   // 【私聊失败提示】（用户 2026-11-27）：送达时才记 5 秒冷却
+void   BOTC_PmWaitFailNotice (int p, int sec, int coolTo);   // 同上，但发起人送达时已在私聊中就丢弃
+void   BOTC_PmCoolShort (int from, int to);  // 【私聊发起冷却】（用户 2026-11-17）：统一 5 秒
 int    BOTC_PmCoolTarget (int s, int tell);  // 【冷却归属】（用户 2026-11-17）：记在被发起私聊的玩家身上
 void   BOTC_Leave (int p);
 void   BOTC_SessRepair ();
@@ -3656,9 +3664,9 @@ void   BOTC_BlockEnd (int p);
 void   BOTC_KickBtnPickDo (int p);    // 【踢出玩家】（用户 2026-11-07）：身份面板底部按钮，走已有的投票踢人
 void   BOTC_KickPickStart (int p);    // 【踢出玩家】选座入口（声称/猜测面板里的按钮也走它；再点一次 = 取消）
 void   BOTC_VoteJoin (int p, bool yes, bool timeout);
-void   BOTC_FinishJoin (int s);
-void   BOTC_RejectJoin (int s, bool timeout);
-void   BOTC_JoinVoid (int s, int p);   // 【房间状态变化 → 默认拒绝】（用户 2026-11-10）：旧审批框作废
+void   BOTC_FinishJoin (int s, int sec);
+void   BOTC_RejectJoin (int s, bool timeout, int sec);
+void   BOTC_JoinVoid (int s, int p, int sec);   // 【房间状态变化 → 默认拒绝】（用户 2026-11-10）：旧审批框作废
 void   BOTC_InviteVoid (int p);        // 【房间状态变化 → 默认拒绝】（用户 2026-11-10）：邀请失效
 void   BOTC_ToggleHide (int p);
 
@@ -7282,6 +7290,61 @@ void BOTC_NoticeSub (int p, string s) {
     BOTC_Notice(p, s);
 }
 
+// 【发起私聊失败提示统一】（用户 2026-11-27）：拒绝、实际超时、房间满员、
+//   房间状态变化均在原请求的 15 秒超时点向发起者显示同一提示；内部清理立即执行。
+//   sec 是原请求剩余的 0.5 秒拍数；真实超时时为 0，满员但未建立审批框时传 30。
+//   coolTo > 0：等提示真正送到发起者手上时，才给 (p → coolTo) 记 5 秒发起冷却
+//   （用户 2026-11-27：失败冷却统一 5 秒，并从收到这条提示开始计时）。
+//   dropIn = 1：等新会话 / 等加入房间这类请求；送达时发起人已经在别的私聊里就静默丢弃
+//   （用户 2026-11-27：15 秒内已经聊上了，不再弹过期提示）。
+void BOTC_PmFailCore (int p, int sec, int coolTo, int dropIn) {
+    g_pmTimeoutTo = p;
+    g_pmTimeoutSec = sec;
+    g_pmTimeoutCoolTo = coolTo;
+    g_pmTimeoutDropIn = dropIn;
+    TriggerExecute(g_tPmTimeout, false, true);
+}
+
+void BOTC_PmFailNotice (int p, int sec, int coolTo) {
+    BOTC_PmFailCore(p, sec, coolTo, 0);
+}
+
+void BOTC_PmWaitFailNotice (int p, int sec, int coolTo) {
+    BOTC_PmFailCore(p, sec, coolTo, 1);
+}
+
+void BOTC_PmRequestTimeoutNotice (int p, int sec) {
+    BOTC_PmFailNotice(p, sec, 0);
+}
+
+bool BOTC_PmRequestTimeout_Func (bool testCond, bool runActions) {
+    int p;
+    int sec;
+    int coolTo;
+    int dropIn;
+    // 每个独立线程先接住自己的参数再 Wait，多个并发请求不会互相覆盖剩余时间。
+    p = g_pmTimeoutTo;
+    sec = g_pmTimeoutSec;
+    coolTo = g_pmTimeoutCoolTo;
+    dropIn = g_pmTimeoutDropIn;
+    if (sec > 0) {
+        Wait(IntToFixed(sec) * 0.5, c_timeGame);
+    }
+    // 延迟期间若玩家退出或回到禁用私聊的页面，不再补发，尤其不能因此落到公聊。
+    if (BOTC_PlayerHere(p) && !BOTC_PmOff()) {
+        // 【已经聊上了就丢掉】（用户 2026-11-27）：等待期间发起人可能已经和别人建立了私聊，
+        //   这条过期提示不再弹出，也不再补记冷却。
+        if (dropIn != 0 && p >= 1 && p <= 13 && g_mySess[p] != 0) {
+            return true;
+        }
+        BOTC_NoticeBox(p, "对方没有在 15 秒内回应，私聊请求已自动取消。");
+        if (p >= 1 && p <= 13 && coolTo >= 1 && coolTo <= 13) {
+            g_pmCool[(p * 14) + coolTo] = 10;   // 【失败冷却 5 秒】从收到提示这一刻开始计时
+        }
+    }
+    return true;
+}
+
 void BOTC_ShowReq (int p, string msg) {
     libNtve_gf_SetDialogItemText(g_reqLabel[p], BOTC_NameSubst(msg), PlayerGroupSingle(p));   // 请求框里的名字换成真名
     DialogControlSetVisible(g_reqLabel[p], PlayerGroupSingle(p), true);
@@ -8985,7 +9048,8 @@ void BOTC_RequestChat (int p, int q) {
         return;
     }
     // 【同一名玩家 5 秒发起冷却】（用户 2026-11-17）：无论请求成功、失败还是被拒绝，
-    //   5 秒内都不能再向同一个人发起；被拒绝 / 超时仍按 15 秒覆盖（BOTC_PmCooldown）。
+    //   5 秒内都不能再向同一个人发起；被拒绝 / 超时不再加 15 秒，统一在收到取消提示时
+    //   重新记 5 秒（用户 2026-11-27，见 BOTC_PmFailNotice）。
     if (g_pmCool[(p * 14) + q] > 0) {
         BOTC_NoticeSub(p, "请 " + IntToString((g_pmCool[(p * 14) + q] + 1) / 2) + " 秒后再向 " + BOTC_NameStr(BOTC_PosOf(q)) + " 发起私聊。");
         return;
@@ -8998,9 +9062,12 @@ void BOTC_RequestChat (int p, int q) {
         return;
     }
     // 【15 秒应答窗口内不得被顶掉】（用户 2026-11-02）：对方正在处理别的请求时先别发。
+    //   【统一成等待中提示】（用户 2026-11-27）：不向发起人暴露「对方在忙」，
+    //   只回正常的等待信息，到原请求的 15 秒超时点再统一提示取消。
     if (g_reqFrom[q] != 0 || g_reqJoinSess[q] != 0 || g_reqSec[q] > 0 || g_invSess[q] != 0) {
         BOTC_PmCoolShort(p, q);           // 【没发出去也算一次发起】（用户 2026-11-17）
-        BOTC_NoticeSub(p, BOTC_NameStr(BOTC_PosOf(q)) + " 正在处理另一个请求，请稍后再试。");
+        BOTC_NoticeSub(p, BOTC_PmWaitMsg(q));
+        BOTC_PmWaitFailNotice(p, 30, q);
         return;
     }
     g_reqFrom[q] = p;
@@ -9024,7 +9091,15 @@ void BOTC_CreateSess (int a, int b) {
         }
     }
     if (s == 0) {
-        BOTC_Notice(a, "当前私聊数量已达上限。");
+        // 【统一成等待中提示】（用户 2026-11-27）：普通玩家发起时不再暴露「私聊数量已达上限」，
+        //   只说等待对方同意，到 15 秒超时点再统一提示取消。
+        if (a == g_teller) {
+            BOTC_Notice(a, "当前私聊数量已达上限。");
+        }
+        else {
+            BOTC_NoticeSub(a, BOTC_PmWaitMsg(b));
+            BOTC_PmWaitFailNotice(a, 30, b);
+        }
         return;
     }
     g_sessAlive[s] = true;
@@ -9124,7 +9199,7 @@ void BOTC_JoinSess (int who, int s) {
     }
     // 【说书人直入时先清掉还在排队的加入请求】（用户 2026-11-02）：不能让房主再点一个已经没意义的框。
     if (g_joinPending[s]) {
-        BOTC_RejectJoin(s, false);
+        BOTC_RejectJoin(s, false, g_reqSec[g_sessOwner[s]]);
     }
     BOTC_ForceLeave(who);
     g_member[(s * 14) + who] = true;
@@ -9354,34 +9429,41 @@ void BOTC_InviteAt (int q) {
         return;
     }
     // 【房间人数上限】（用户 2026-11-14 / 2026-11-17）：满员房间房主不能再邀请；说书人不受影响。
-    //   满员后不再向发起者提示具体人数上限。
+    //   【统一等待提示】（用户 2026-11-27）：邀请人也只看到正常的等待信息，不暴露满员。
     if (p != g_teller && BOTC_SessFull(s)) {
-        BOTC_NoticeSub(p, "私聊房间人数已满，不能再邀请。");
+        BOTC_NoticeSub(p, BOTC_PmWaitMsg(who));
+        BOTC_PmFailNotice(p, 30, who);
         return;
     }
     // 私聊阶段：只能邀请不在其他私聊里的玩家；失败时不暴露对方正在和谁私聊
+    //   【统一等待提示】（用户 2026-11-27）：房主邀请同样不暴露对方在别处、对方忙、房间忙。
     if (g_mySess[who] != 0) {
-        BOTC_NoticeSub(p, "邀请失败：" + BOTC_NameStr(BOTC_PosOf(who)) + " 现在无法加入私聊。");
+        BOTC_NoticeSub(p, BOTC_PmWaitMsg(who));
+        BOTC_PmFailNotice(p, 30, who);
         BOTC_NoticeSub(who, BOTC_NameStr(BOTC_PosOf(p)) + " 邀请你加入私聊，但你已在其他私聊中，无法加入。");
         return;
     }
     // 对方正在处理别的私聊请求 / 邀请：不能顶掉他的弹窗
     if (g_reqFrom[who] != 0 || g_reqJoinSess[who] != 0 || g_reqSec[who] > 0 || g_invSess[who] != 0) {
-        BOTC_NoticeSub(p, "邀请失败：对方正在处理另一个请求，请稍后再试。");
+        BOTC_NoticeSub(p, BOTC_PmWaitMsg(who));
+        BOTC_PmFailNotice(p, 30, who);
         return;
     }
     if (g_joinPending[s]) {
-        BOTC_NoticeSub(p, "这条私聊正在处理另一个加入请求，请稍后再试。");
+        BOTC_NoticeSub(p, BOTC_PmWaitMsg(who));
+        BOTC_PmFailNotice(p, 30, who);
         return;
     }
     if (g_pmCool[(p * 14) + who] > 0) {
-        BOTC_NoticeSub(p, "对方刚拒绝过邀请，请 " + IntToString((g_pmCool[(p * 14) + who] + 1) / 2) + " 秒后再试。");
+        // 【不暴露拒绝】（用户 2026-11-27）：冷却提示不写「被拒绝」，跟发起冷却同一口径。
+        BOTC_NoticeSub(p, "请 " + IntToString((g_pmCool[(p * 14) + who] + 1) / 2) + " 秒后再试。");
         return;
     }
     g_invSess[who] = s;
     g_invFrom[who] = p;
     BOTC_ShowReq(who, BOTC_NameStr(BOTC_PosOf(p)) + " 邀请你加入私聊，是否同意？");
-    BOTC_NoticeSub(p, "已邀请 " + BOTC_NameStr(BOTC_PosOf(who)) + " 加入私聊，等待对方同意。");
+    // 【统一等待提示】（用户 2026-11-27）：邀请成功发出的提示跟发起私聊用同一句话。
+    BOTC_NoticeSub(p, BOTC_PmWaitMsg(who));
     BOTC_PlaySfxTo(g_sfxReqName, who);
 }
 
@@ -9398,39 +9480,42 @@ void BOTC_InviteClear (int p) {
 void BOTC_AcceptInvite (int p) {
     int s;
     int from;
+    int sec;
     s = g_invSess[p];
     from = g_invFrom[p];
+    sec = g_reqSec[p];
     BOTC_InviteClear(p);
     if (s < 1 || s > 13 || !g_sessAlive[s]) {
         if (from >= 1 && from <= 13) {
-            BOTC_NoticeSub(from, "邀请失败：该私聊已经结束。");
+            BOTC_PmRequestTimeoutNotice(from, sec);
         }
         BOTC_NoticeSub(p, "该私聊已经结束，邀请已失效。");
         return;
     }
     if (g_mySess[p] != 0) {
         if (from >= 1 && from <= 13) {
-            BOTC_NoticeSub(from, BOTC_NameStr(BOTC_PosOf(p)) + " 已在其他私聊中，邀请失败。");
+            BOTC_PmRequestTimeoutNotice(from, sec);
         }
         BOTC_NoticeSub(p, "你正在其他私聊中，无法接受邀请。");
         return;
     }
     // 【邀请人已离开房间】（用户 2026-11-10）：邀请方不在这个私聊里了，接受也没有意义。
     if (from >= 1 && from <= 13 && !BOTC_SessIn(s, from)) {
+        BOTC_PmRequestTimeoutNotice(from, sec);
         BOTC_NoticeSub(p, "邀请方已离开该私聊，邀请已失效。");
         return;
     }
     // 【屏蔽】（用户 2026-11-06）：邀请方与接受方存在屏蔽关系时自动拒绝。
     if (from >= 1 && from <= 13 && BOTC_BlockEither(p, from)) {
         BOTC_NoticeSub(p, "你们之间存在屏蔽关系，邀请已自动拒绝。");
-        BOTC_NoticeSub(from, "邀请已自动拒绝。");
+        BOTC_PmRequestTimeoutNotice(from, sec);
         return;
     }
     // 【房间人数上限】（用户 2026-11-14）：等待同意期间房间可能已经满员 → 自动拒绝；
     //   说书人邀请或说书人本人加入不受影响。
     if (p != g_teller && from != g_teller && BOTC_SessFull(s)) {
         if (from >= 1 && from <= 13) {
-            BOTC_NoticeSub(from, "邀请失败：私聊房间人数已满。");
+            BOTC_PmRequestTimeoutNotice(from, sec);
         }
         BOTC_NoticeSub(p, "该私聊房间人数已满，邀请已自动拒绝。");
         return;
@@ -9444,20 +9529,19 @@ void BOTC_AcceptInvite (int p) {
 // 拒绝邀请（手动点【否】或超时）
 void BOTC_DeclineInvite (int p, bool timeout) {
     int from;
+    int sec;
     from = g_invFrom[p];
+    sec = g_reqSec[p];
     BOTC_InviteClear(p);
     if (from < 1 || from > 13) {
         return;
     }
     if (timeout) {
-        BOTC_PmCoolShort(from, p);     // 【超时 5 秒冷却】（用户 2026-11-17）
         BOTC_Notice(p, "邀请已超时，自动拒绝。");
-        BOTC_Notice(from, BOTC_NameStr(BOTC_PosOf(p)) + " 没有在 15 秒内回应，邀请已自动取消。");
     }
-    else {
-        BOTC_PmCooldown(from, p);      // 手动拒绝仍是 15 秒
-        BOTC_Notice(from, BOTC_NameStr(BOTC_PosOf(p)) + " 拒绝了你加入私聊的邀请。");
-    }
+    // 【统一 5 秒冷却】（用户 2026-11-27）：不再区分手动拒绝 / 超时，
+    //   冷却等邀请人收到「对方没有在 15 秒内回应」时才开始计时。
+    BOTC_PmFailNotice(from, sec, p);
 }
 
 // 会话结束时清掉指向它的全部邀请
@@ -9470,7 +9554,7 @@ void BOTC_InviteClearSess (int s) {
             if (!g_sessSilent) {
                 BOTC_Notice(i, "私聊已结束，邀请已失效。");
                 if (g_invFrom[i] >= 1 && g_invFrom[i] <= 13) {
-                    BOTC_Notice(g_invFrom[i], "邀请失败：该私聊已经结束。");
+                    BOTC_PmRequestTimeoutNotice(g_invFrom[i], g_reqSec[i]);
                 }
             }
             BOTC_InviteClear(i);
@@ -9830,16 +9914,18 @@ void BOTC_ForceLeave (int p) {
 //--------------------------------------------------------------------------------------------------
 // 请求应答
 //--------------------------------------------------------------------------------------------------
-// 【拒绝后的 15 秒冷却】（用户 2026-11-02）：同一名发起人对同一名玩家不能立刻重复发起。
-void BOTC_PmCooldown (int from, int to) {
-    if (from < 1 || from > 13 || to < 1 || to > 13) {
-        return;
+// 【私聊等待提示统一】（用户 2026-11-27）：对方正在处理别的请求 / 房间人数满 /
+//   对方已在别的私聊里，一律只回这一句，不向发起人暴露房主、满员或对方忙等内部状态。
+string BOTC_PmWaitMsg (int who) {
+    if (who < 1 || who > 13) {
+        return "已发出私聊请求，等待对方同意。";
     }
-    g_pmCool[(from * 14) + to] = 30;
+    return "已向 " + BOTC_NameStr(BOTC_PosOf(who)) + " 发出私聊请求，等待对方同意。";
 }
 
 // 【发起即 5 秒冷却】（用户 2026-11-17）：对同一名玩家发起私聊，无论成功与否都先记 10 拍；
-//   被拒绝 / 超时再被 BOTC_PmCooldown 覆盖成 30 拍（15 秒）。
+//   失败（拒绝 / 超时 / 满员 / 状态变化）不再额外加 15 秒，统一在发起人收到取消提示时
+//   重新记 5 秒（用户 2026-11-27，见 BOTC_PmFailNotice）。
 void BOTC_PmCoolShort (int from, int to) {
     if (from < 1 || from > 13 || to < 1 || to > 13) {
         return;
@@ -9877,6 +9963,7 @@ bool BOTC_PmStageBlocked () {
 
 void BOTC_OnYes (int p) {
     int from;
+    int sec;
     if (g_invSess[p] != 0) {
         BOTC_AcceptInvite(p);
         return;
@@ -9889,13 +9976,13 @@ void BOTC_OnYes (int p) {
     if (from == 0) {
         return;
     }
+    sec = g_reqSec[p];
     // 【屏蔽】（用户 2026-11-06）：存在屏蔽关系时自动拒绝这条私聊请求。
     if (BOTC_BlockEither(p, from)) {
         g_reqFrom[p] = 0;
         BOTC_ClearReq(p);
-        BOTC_PmCooldown(from, p);
         BOTC_Notice(p, "你们之间存在屏蔽关系，私聊请求已自动拒绝。");
-        BOTC_Notice(from, "你的私聊请求已被自动拒绝。");
+        BOTC_PmWaitFailNotice(from, sec, p);
         return;
     }
     // 【阶段拦截】：白天遗留下来的请求在夜里 / 公聊 / 提名阶段一率不能同意。
@@ -9903,9 +9990,8 @@ void BOTC_OnYes (int p) {
     if (p != g_teller && BOTC_PmStageBlocked()) {
         g_reqFrom[p] = 0;
         BOTC_ClearReq(p);
-        BOTC_PmCooldown(from, p);
         BOTC_Notice(p, "当前时段不能接受私聊请求，已自动拒绝。");
-        BOTC_Notice(from, BOTC_NameStr(BOTC_PosOf(p)) + " 拒绝了你的私聊请求。");
+        BOTC_PmWaitFailNotice(from, sec, p);
         return;
     }
     g_reqFrom[p] = 0;
@@ -9919,6 +10005,7 @@ void BOTC_OnYes (int p) {
 
 void BOTC_OnNo (int p) {
     int from;
+    int sec;
     if (g_invSess[p] != 0) {
         BOTC_DeclineInvite(p, false);
         return;
@@ -9931,10 +10018,11 @@ void BOTC_OnNo (int p) {
     if (from == 0) {
         return;
     }
+    sec = g_reqSec[p];
     g_reqFrom[p] = 0;
     BOTC_ClearReq(p);
-    BOTC_PmCooldown(from, p);
-    BOTC_AppendPm(from, BOTC_NameStr(BOTC_PosOf(p)) + " 拒绝了你的私聊请求。");
+    // 【失败冷却 5 秒】（用户 2026-11-27）：等发起人收到取消提示时再从那一刻开始计时。
+    BOTC_PmWaitFailNotice(from, sec, p);
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -10025,40 +10113,45 @@ void BOTC_RequestJoinSessTo (int p, int s, int tell) {
         return;
     }
     // 【房间满员】（用户 2026-11-17）：满员后不再让房主审批，但仍然提醒被点的那位玩家
-    //   「谁想和他私聊」；发起人这边也不再被告知具体人数上限。
+    //   「谁想和他私聊」；【统一等待提示】（用户 2026-11-27）：发起人只看到正常的等待信息，
+    //   到 15 秒超时点再统一提示取消，不暴露满员。
     if (BOTC_SessFull(s)) {
         BOTC_SessOwnerFix(s);
         BOTC_PmCoolShort(p, BOTC_PmCoolTarget(s, tell));
         if (tell >= 1 && tell <= 13 && tell != p && g_member[(s * 14) + tell]) {
             BOTC_NoticeKeep(tell, BOTC_NameStr(BOTC_PosOf(p)) + " 想与你私聊，但私聊房间人数已满，暂时无法加入。");
             BOTC_PlaySfxTo(g_sfxReqName, tell);
-            BOTC_NoticeSub(p, "该私聊房间人数已满，已提醒 " + BOTC_NameStr(BOTC_PosOf(tell)) + " 你想与他私聊。");
         }
-        else {
-            BOTC_NoticeSub(p, "该私聊房间人数已满，暂时无法加入。");
-        }
+        BOTC_NoticeSub(p, BOTC_PmWaitMsg(tell));
+        BOTC_PmWaitFailNotice(p, 30, BOTC_PmCoolTarget(s, tell));
         return;
     }
+    // 【统一等待提示】（用户 2026-11-27）：房间正在处理别的加入请求 / 没有可审批的房主 /
+    //   房主正在忙，一律只回等待信息，不向发起人暴露房间内部状态。
     if (g_joinPending[s]) {
         BOTC_PmCoolShort(p, BOTC_PmCoolTarget(s, tell));
-        BOTC_NoticeSub(p, "该私聊正在处理另一个加入请求，请稍后再试。");
+        BOTC_NoticeSub(p, BOTC_PmWaitMsg(tell));
+        BOTC_PmWaitFailNotice(p, 30, BOTC_PmCoolTarget(s, tell));
         return;
     }
     // 找房主：房主不在了就由剩余非说书人成员里第一个顶上。
     BOTC_SessOwnerFix(s);
     ow = g_sessOwner[s];
     if (ow < 1) {
-        BOTC_NoticeSub(p, "该私聊已经没有可审批的房主。");
+        BOTC_PmCoolShort(p, BOTC_PmCoolTarget(s, tell));
+        BOTC_NoticeSub(p, BOTC_PmWaitMsg(tell));
+        BOTC_PmWaitFailNotice(p, 30, BOTC_PmCoolTarget(s, tell));
         return;
     }
     // 【15 秒应答窗口内不得被顶掉】：房主正在处理别的请求就等一等。
     if (g_reqFrom[ow] != 0 || g_reqJoinSess[ow] != 0 || g_reqSec[ow] > 0) {
         // 【不暴露房主】（用户 2026-11-03）：申请加入时不让发起人知道房主是谁。
         BOTC_PmCoolShort(p, BOTC_PmCoolTarget(s, tell));
-        BOTC_NoticeSub(p, "对方正在处理另一个请求，请稍后再试。");
+        BOTC_NoticeSub(p, BOTC_PmWaitMsg(tell));
+        BOTC_PmWaitFailNotice(p, 30, BOTC_PmCoolTarget(s, tell));
         return;
     }
-    // 【被拒绝后的 15 秒冷却】：同一名发起人不能立刻重复申请。
+    // 【被拒绝后的 5 秒冷却】：同一名发起人不能立刻重复申请。
     //   【冷却归属被点的人】（用户 2026-11-17）：点某个成员发起私聊被房主拒绝后，
     //   冷却记在被点的成员身上，不记在帮忙审批的房主头上；从列表加入时记房主。
     if (tell >= 1 && tell <= 13 && tell != ow && g_pmCool[(p * 14) + tell] > 0) {
@@ -10066,7 +10159,8 @@ void BOTC_RequestJoinSessTo (int p, int s, int tell) {
         return;
     }
     if (g_pmCool[(p * 14) + ow] > 0) {
-        BOTC_NoticeSub(p, "房主刚拒绝过你的请求，请 " + IntToString((g_pmCool[(p * 14) + ow] + 1) / 2) + " 秒后再试。");
+        // 【不暴露拒绝】（用户 2026-11-27）：冷却提示不写「被拒绝」，跟发起冷却同一口径。
+        BOTC_NoticeSub(p, "请 " + IntToString((g_pmCool[(p * 14) + ow] + 1) / 2) + " 秒后再试。");
         return;
     }
     g_joinPending[s] = true;
@@ -10082,7 +10176,8 @@ void BOTC_RequestJoinSessTo (int p, int s, int tell) {
     BOTC_PlaySfxTo(g_sfxReqName, ow);
     // 【不暴露房主 / 只通知房主】（用户 2026-11-03）：申请只提示「已发出」，不写房主名字；
     //   房间里其他成员一律不弹提醒，只有房主知道自己收到了谁的加入申请。
-    BOTC_NoticeSub(p, "已发出加入请求，等待房主同意。");
+    //   【统一等待提示】（用户 2026-11-27）：跟一对一发起用同一句话。
+    BOTC_NoticeSub(p, BOTC_PmWaitMsg(tell));
     // 【被点成员本人也要收到提醒】（用户 2026-11-08）：加入审批只发给房主，
     //   被点的人同样要知道是谁想找他；他正好是房主时上面已经弹过请求框，不重复提醒。
     if (tell >= 1 && tell <= 13 && tell != p && tell != ow && g_member[(s * 14) + tell]) {
@@ -10095,7 +10190,9 @@ void BOTC_VoteJoin (int p, bool yes, bool timeout) {
     int s;
     int i;
     int ow;
+    int sec;
     s = g_reqJoinSess[p];
+    sec = g_reqSec[p];
     g_reqJoinSess[p] = 0;
     BOTC_ClearReq(p);
     if (s == 0 || s < 1 || s > 13 || !g_joinPending[s]) {
@@ -10106,28 +10203,28 @@ void BOTC_VoteJoin (int p, bool yes, bool timeout) {
     // 【只有房主能拍板】（用户 2026-11-02）：其他人收到的旧请求框不再算票。
     if (p != ow) {
         // 【房主已经换人】（用户 2026-11-10）：旧审批框直接作废，别让房间卡在「正在处理另一个加入请求」。
-        BOTC_JoinVoid(s, p);
+        BOTC_JoinVoid(s, p, sec);
         return;
     }
     // 【屏蔽】（用户 2026-11-06）：房主与申请人存在屏蔽关系时自动拒绝。
     if (BOTC_BlockEither(p, g_joinWho[s])) {
-        BOTC_RejectJoin(s, false);
+        BOTC_RejectJoin(s, false, sec);
         BOTC_Notice(p, "你们之间存在屏蔽关系，加入请求已自动拒绝。");
         return;
     }
     if (p != g_teller && BOTC_PmStageBlocked()) {
-        BOTC_RejectJoin(s, false);
+        BOTC_RejectJoin(s, false, sec);
         BOTC_Notice(p, "当前时段不能接受加入私聊的请求，已自动拒绝。");
         return;
     }
     if (!yes) {
-        BOTC_RejectJoin(s, timeout);
+        BOTC_RejectJoin(s, timeout, sec);
         return;
     }
-    BOTC_FinishJoin(s);
+    BOTC_FinishJoin(s, sec);
 }
 
-void BOTC_FinishJoin (int s) {
+void BOTC_FinishJoin (int s, int sec) {
     int who;
     int i;
     who = g_joinWho[s];
@@ -10138,11 +10235,11 @@ void BOTC_FinishJoin (int s) {
     }
     // 【屏蔽】（用户 2026-11-06）：最终入会前再查一次，防止期间新增屏蔽关系。
     if (BOTC_SessBlocks(s, who)) {
-        BOTC_Notice(who, "你与该私聊中的玩家存在屏蔽关系，加入请求已取消。");
+        BOTC_PmWaitFailNotice(who, sec, 0);
         return;
     }
     if (g_mySess[who] != 0) {
-        BOTC_Notice(who, "你已经在其他私聊里，加入请求已取消。");
+        BOTC_PmWaitFailNotice(who, sec, 0);
         return;
     }
     // 【房间人数上限】（用户 2026-11-14）：等待审批期间房间可能已经满员 → 自动取消。
@@ -10150,7 +10247,7 @@ void BOTC_FinishJoin (int s) {
         if (g_sessOwner[s] >= 1 && g_sessOwner[s] <= 13) {
             BOTC_Notice(g_sessOwner[s], "私聊房间人数已满，加入请求已自动取消。");
         }
-        BOTC_Notice(who, "该私聊房间人数已满，加入请求已自动取消。");
+        BOTC_PmWaitFailNotice(who, sec, 0);
         return;
     }
     g_member[(s * 14) + who] = true;
@@ -10170,7 +10267,7 @@ void BOTC_FinishJoin (int s) {
     BOTC_RefreshSessListAll();
 }
 
-void BOTC_RejectJoin (int s, bool timeout) {
+void BOTC_RejectJoin (int s, bool timeout, int sec) {
     int who;
     int i;
     int t;
@@ -10186,17 +10283,10 @@ void BOTC_RejectJoin (int s, bool timeout) {
     if (who >= 1 && who <= 13) {
         // 【冷却归属被点的人】（用户 2026-11-17）：点成员发起私聊被房主拒绝时，
         //   冷却记在被点成员身上，而不是房主；从列表加入仍记房主。
-        //   手动拒绝 15 秒，超时自动拒绝只记 5 秒（用户 2026-11-17）。
+        //   【统一 5 秒冷却】（用户 2026-11-27）：不再区分手动拒绝 / 超时，
+        //   等发起人收到取消提示时才开始计时。
         t = BOTC_PmCoolTarget(s, g_joinTell[s]);
-        if (t >= 1 && t <= 13) {
-            if (timeout) {
-                BOTC_PmCoolShort(who, t);
-            }
-            else {
-                BOTC_PmCooldown(who, t);
-            }
-        }
-        BOTC_Notice(who, "加入私聊的请求被拒绝了。");
+        BOTC_PmWaitFailNotice(who, sec, t);
     }
     g_joinTell[s] = 0;
 }
@@ -10204,7 +10294,7 @@ void BOTC_RejectJoin (int s, bool timeout) {
 // 【房间状态变化 → 默认拒绝·加入申请】（用户 2026-11-10）：房主离开房间、申请人
 //   或被点成员进出别的私聊后，审批框里的【是 / 否】已经没有意义。直接作废请求框，
 //   不给申请人记拒绝冷却（房间状态变化不是他造成的），两边各收一条提示。
-void BOTC_JoinVoid (int s, int p) {
+void BOTC_JoinVoid (int s, int p, int sec) {
     int i;
     int who;
     who = 0;
@@ -10227,7 +10317,7 @@ void BOTC_JoinVoid (int s, int p) {
         }
     }
     if (who >= 1 && who <= 13) {
-        BOTC_Notice(who, "私聊房间的状态已改变，加入请求已自动取消。");
+        BOTC_PmWaitFailNotice(who, sec, 0);
     }
     if (p >= 1 && p <= 13 && p != who) {
         BOTC_Notice(p, "私聊房间的状态已改变，加入请求已自动取消。");
@@ -10235,16 +10325,20 @@ void BOTC_JoinVoid (int s, int p) {
 }
 
 // 【房间状态变化 → 默认拒绝·邀请】（用户 2026-11-10）：发出邀请的房主离开房间，
-//   或被邀请人已经进了别的私聊，邀请直接失效，不等 15 秒超时，也不记拒绝冷却。
+//   或被邀请人已经进了别的私聊，邀请内部直接失效，不记拒绝冷却；
+//   发起者看到的统一提示仍在原请求的 15 秒超时点发送。
 void BOTC_InviteVoid (int p) {
     int from;
+    int sec;
     from = 0;
+    sec = 0;
     if (p >= 1 && p <= 13) {
         from = g_invFrom[p];
+        sec = g_reqSec[p];
         BOTC_InviteClear(p);
     }
     if (from >= 1 && from <= 13) {
-        BOTC_Notice(from, "私聊房间的状态已改变，邀请已自动取消。");
+        BOTC_PmRequestTimeoutNotice(from, sec);
     }
     if (p >= 1 && p <= 13) {
         BOTC_Notice(p, "私聊房间的状态已改变，邀请已失效。");
@@ -10319,6 +10413,7 @@ void BOTC_BlockKickShared (int a, int b) {
 // 【屏蔽 / 解除屏蔽】（用户 2026-11-06）：a 点魔典座位选中 b 后调用。
 void BOTC_BlockToggle (int a, int b) {
     int s;
+    int sec;
     if (a < 1 || a > 13 || b < 1 || b > 13 || a == b) {
         return;
     }
@@ -10369,30 +10464,35 @@ void BOTC_BlockToggle (int a, int b) {
     BOTC_BlockKickShared(a, b);
     // 双方之间还没处理完的请求立刻作废，不再等对方点确认。
     if (g_reqFrom[a] == b) {
+        sec = g_reqSec[a];
         g_reqFrom[a] = 0;
         BOTC_ClearReq(a);
-        BOTC_NoticeSub(b, "你的私聊请求已被自动拒绝。");
+        BOTC_PmRequestTimeoutNotice(b, sec);
     }
     if (g_reqFrom[b] == a) {
+        sec = g_reqSec[b];
         g_reqFrom[b] = 0;
         BOTC_ClearReq(b);
-        BOTC_NoticeSub(a, "你对他的私聊请求已自动取消。");
+        BOTC_PmRequestTimeoutNotice(a, sec);
     }
     if (g_invSess[a] != 0 && g_invFrom[a] == b) {
+        sec = g_reqSec[a];
         BOTC_InviteClear(a);
-        BOTC_NoticeSub(b, "你的私聊邀请已被自动拒绝。");
+        BOTC_PmRequestTimeoutNotice(b, sec);
     }
     if (g_invSess[b] != 0 && g_invFrom[b] == a) {
+        sec = g_reqSec[b];
         BOTC_InviteClear(b);
+        BOTC_PmRequestTimeoutNotice(a, sec);
         BOTC_NoticeSub(b, "该私聊邀请已自动取消。");
     }
     if (g_reqJoinSess[a] != 0 && g_joinWho[g_reqJoinSess[a]] == b) {
         s = g_reqJoinSess[a];
-        BOTC_RejectJoin(s, false);
+        BOTC_RejectJoin(s, false, g_reqSec[a]);
     }
     if (g_reqJoinSess[b] != 0 && g_joinWho[g_reqJoinSess[b]] == a) {
         s = g_reqJoinSess[b];
-        BOTC_RejectJoin(s, false);
+        BOTC_RejectJoin(s, false, g_reqSec[b]);
     }
     BOTC_NoticeSub(a, "已屏蔽 " + BOTC_NameStr(BOTC_PosOf(b)) + "。再点【屏蔽】并选中他即可解除屏蔽。");
     BOTC_NoticeSub(b, "【屏蔽】" + BOTC_NameStr(BOTC_PosOf(a)) + " 屏蔽了你，之后你无法与他私聊。");
@@ -74286,6 +74386,7 @@ void BOTC_SeatAskTimeout (int p) {
 // 【私聊请求 15 秒超时】（用户 2026-11-02）：无操作默认拒绝；超时只记 5 秒发起冷却（用户 2026-11-17）。
 void BOTC_ReqTimeout (int p) {
     int from;
+    int sec;
     if (g_invSess[p] != 0) {
         BOTC_DeclineInvite(p, true);
         return;
@@ -74298,11 +74399,12 @@ void BOTC_ReqTimeout (int p) {
     if (from == 0) {
         return;
     }
+    sec = g_reqSec[p];
     g_reqFrom[p] = 0;
     BOTC_ClearReq(p);
-    BOTC_PmCoolShort(from, p);
     BOTC_NoticeSub(p, "私聊请求已超时，自动拒绝。");
-    BOTC_AppendPm(from, BOTC_NameStr(BOTC_PosOf(p)) + " 没有在 15 秒内回应，私聊请求已自动取消。");
+    // 【失败冷却 5 秒】（用户 2026-11-27）：等发起人收到取消提示时再从那一刻开始计时。
+    BOTC_PmWaitFailNotice(from, sec, p);
 }
 
 // 【防刷屏 · 声称 / 快进 / 屏蔽冷却 + 公聊禁言】（用户 2026-11-06）
@@ -74437,7 +74539,7 @@ void BOTC_ReqTick () {
                 }
             }
             if (!ok) {
-                BOTC_JoinVoid(s, p);
+                BOTC_JoinVoid(s, p, g_reqSec[p]);
             }
         }
         // 【邀请同理】（用户 2026-11-10）：邀请人离开房间，或被邀请人进了别的私聊，邀请立即失效。
@@ -97590,12 +97692,12 @@ void BOTC_LeftCleanup (int q) {
     // ③ 加入申请：他作为申请人 / 审批人时都作废，避免把已经退出的人拉进房间。
     for (s = 1; s <= 13; s += 1) {
         if (g_joinWho[s] == p) {
-            BOTC_JoinVoid(s, p);
+            BOTC_JoinVoid(s, p, g_reqSec[g_sessOwner[s]]);
         }
     }
     if (g_reqJoinSess[p] != 0) {
         s = g_reqJoinSess[p];
-        BOTC_JoinVoid(s, p);
+        BOTC_JoinVoid(s, p, g_reqSec[p]);
     }
     // ④ 邀请加入：他收到的邀请作废；他发出的邀请也一起作废。
     if (g_invSess[p] != 0) {
@@ -99080,6 +99182,7 @@ void BOTC_Init () {
     TriggerAddEventTimer(g_tCultTrig, g_tCult);
     g_tTickTrig = TriggerCreate("BOTC_Tick_Func");
     TriggerAddEventTimer(g_tTickTrig, g_tTick);
+    g_tPmTimeout = TriggerCreate("BOTC_PmRequestTimeout_Func");
     g_tDawn = TimerCreate();
     g_tDawnTrig = TriggerCreate("BOTC_DawnFunc");
     TriggerAddEventTimer(g_tDawnTrig, g_tDawn);
